@@ -7,7 +7,7 @@ import { ChronoLanguageSettings } from './settings';
  * Determines the appropriate alias for a daily note link based on settings
  * @param app The Obsidian app instance
  * @param settings Plugin settings
- * @param currentDate The current date string
+ * @param dateString The date string in the daily note format
  * @param dailyNoteFormat The format used for daily notes
  * @param filePath The file path for the daily note
  * @returns The alias to use for the link, or undefined if no alias should be used
@@ -15,30 +15,34 @@ import { ChronoLanguageSettings } from './settings';
 export function determineDailyNoteAlias(
     app: App,
     settings: ChronoLanguageSettings, 
-    currentDate: string,
+    dateString: string,
     dailyNoteFormat: string,
     filePath: string
 ): string | undefined {
     const usingWikilinks = ObsidianSettings.shouldUseWikilinks(app);
     
-    let alias: string | undefined;
+    // Case 1: Use readable format if specified and different from daily note format
     if (settings.readableFormat && dailyNoteFormat !== settings.readableFormat) {
-        // Always use readable format if it differs from the daily note format
-        alias = window.moment().format(settings.readableFormat);
-    } else if (settings.includeFolderInLinks && settings.HideFolders) {
-        // Check if we should hide folders - only hide if using wikilinks or HideFolders is true
-        if (usingWikilinks || settings.HideFolders) {
-            alias = currentDate;
-        }
-    } else if (!usingWikilinks && settings.includeFolderInLinks && !settings.HideFolders) {
-        // Very cursed case - using markdown links, no human-readable alias, include folder, not hiding folders with alias
-        alias = filePath; // Show the folder path in the link alias
-    } else {
-        // If not including folders, use currentDate as alias
-        alias = !settings.includeFolderInLinks ? currentDate : undefined;
+        return window.moment().format(settings.readableFormat);
     }
     
-    return alias;
+    // Case 2: Not including folders in links -> just use the date
+    if (!settings.includeFolderInLinks) {
+        return dateString;
+    }
+    
+    // Case 3: Including folders but want to hide them -> use date as alias
+    if (settings.HideFolders) {
+        return dateString;
+    }
+    
+    // Case 4: Using markdown links and showing folders -> use full path as alias
+    if (!usingWikilinks && settings.includeFolderInLinks) {
+        return filePath;
+    }
+    
+    // Default case: No alias needed (undefined)
+    return undefined;
 }
 
 /**
