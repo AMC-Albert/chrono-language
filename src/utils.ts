@@ -55,9 +55,11 @@ export function determineDailyNoteAlias(
 export function createDailyNoteLink(app: App, settings: ChronoLanguageSettings, sourceFile: any): string {
     const dailyNoteSettings = getDailyNoteSettings();
     const currentDate = window.moment().format(dailyNoteSettings.format || "YYYY-MM-DD");
+    const usingRelativeLinks = ObsidianSettings.shouldUseRelativeLinks(app);
     
-    // Use the appropriate path based on the includeFolderInLinks setting
-    const targetPath = settings.includeFolderInLinks 
+    // includeFolderInLinks -> full path
+    // usingRelativeLinks -> full path, otherwise output relative paths point to the root of the vault, which is just confusing
+    const targetPath = settings.includeFolderInLinks || usingRelativeLinks
         ? normalizePath(`${dailyNoteSettings.folder}/${currentDate}`)
         : currentDate;
     

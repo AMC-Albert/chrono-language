@@ -53,6 +53,9 @@ export class ChronoLanguageSettingsTab extends PluginSettingTab {
         .onChange(async (value) => {
           this.plugin.settings.readableFormat = value || "";
           await this.plugin.saveSettings();
+          
+          // Check if we should show the "Hide folders" setting
+          this.updateHideFoldersSettingVisibility(value);
         })
     );
 
@@ -66,9 +69,7 @@ export class ChronoLanguageSettingsTab extends PluginSettingTab {
         .onChange(async (value) => {
           this.plugin.settings.includeFolderInLinks = value;
           // Show/hide the "Hide folders" setting based on this toggle
-          value
-          ? this.hideFoldersSetting.show()
-          : this.hideFoldersSetting.hide();
+          this.updateHideFoldersSettingVisibility(this.plugin.settings.readableFormat);
           await this.plugin.saveSettings();
         })
     );
@@ -88,8 +89,16 @@ export class ChronoLanguageSettingsTab extends PluginSettingTab {
     
     this.hideFoldersSetting = hideFoldersSetting.settingEl;
     
-    if (!this.plugin.settings.includeFolderInLinks) {
-      this.hideFoldersSetting.hide();
-    }
+    // Initial visibility state
+    this.updateHideFoldersSettingVisibility(this.plugin.settings.readableFormat);
+  }
+  
+  // Helper method to determine visibility of the "Hide folders" setting
+  private updateHideFoldersSettingVisibility(readableFormat: string): void {
+    const dailyNoteFormat = getDailyNoteSettings().format || "YYYY-MM-DD";
+    const shouldShow = this.plugin.settings.includeFolderInLinks && 
+                       (readableFormat === "" || readableFormat === dailyNoteFormat);
+
+    this.hideFoldersSetting.toggle(shouldShow);
   }
 }
