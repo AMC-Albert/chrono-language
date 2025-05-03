@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-sample-plugin",
+	"name": "chrono-language",
 	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"description": "Rewrite/overhaul of Natural Language Dates plugin, for learning and satisfying my own needs.",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
@@ -20,5 +20,11 @@
 		"obsidian": "latest",
 		"tslib": "2.4.0",
 		"typescript": "4.7.4"
+	},
+	"dependencies": {
+		"chrono": "^1.0.5",
+		"moment": "^2.30.1",
+		"obsidian-daily-notes-interface": "^0.9.4",
+		"obsidian-dev-utils": "^26.22.0"
 	}
 }
