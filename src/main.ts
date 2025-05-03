@@ -23,7 +23,6 @@ export default class ChronoLanguage extends Plugin {
 	}
 }
 
-// Suggestion for @ trigger
 class ChronoSuggester extends EditorSuggest<string> {
 	plugin: ChronoLanguage;
 	
