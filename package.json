@@ -1,6 +1,6 @@
 {
 	"name": "chrono-language",
-	"version": "1.0.0",
+	"version": "0.0.2",
 	"description": "Rewrite/overhaul of Natural Language Dates plugin, for learning and satisfying my own needs.",
 	"main": "main.js",
 	"scripts": {
