@@ -32,6 +32,13 @@ export class EditorSuggester extends EditorSuggest<string> {
             this.suggestions.useSelectedItem(event);
             return false;
         });
+
+        // Register Alt+Enter to capture alt key during keyboard selection
+        this.scope.register(["Alt"], "Enter", (event: KeyboardEvent) => {
+            // @ts-ignore
+            this.suggestions.useSelectedItem(event);
+            return false;
+        });
     }
     
     onTrigger(cursor: EditorPosition, editor: Editor): EditorSuggestContext | null {
@@ -70,7 +77,8 @@ export class EditorSuggester extends EditorSuggest<string> {
         if (this.context) {
             const { editor, start, end } = this.context;
             const forceTextAsAlias = event.shiftKey;
-            const link = createDailyNoteLink(this.app, this.plugin.settings, this.context.file, item, forceTextAsAlias);
+            const useAlternateFormat = event.altKey;
+            const link = createDailyNoteLink(this.app, this.plugin.settings, this.context.file, item, forceTextAsAlias, useAlternateFormat);
             editor.replaceRange(link, start, end);
         }
     }

@@ -52,45 +52,54 @@ export function getDailyNotePreview(dateText: string): string {
  * Determines the appropriate alias for a daily note link based on settings
  * @param app The Obsidian app instance
  * @param settings Plugin settings
- * @param dateString The date string in the daily note format
+ * @param momentDate Moment.js date object
  * @param dailyNoteFormat The format used for daily notes
  * @param filePath The file path for the daily note
  * @param forceTextAsAlias If true, uses the original text as alias regardless of settings
  * @param originalText The original text to use as alias when forceTextAsAlias is true
+ * @param useAlternateFormat If true, uses the alternate format for alias
  * @returns The alias to use for the link, or undefined if no alias should be used
  */
 export function determineDailyNoteAlias(
     app: App,
     settings: ChronoLanguageSettings, 
-    dateString: string,
+    momentDate: moment.Moment, // Accept the moment object directly
     dailyNoteFormat: string,
     filePath: string,
     forceTextAsAlias: boolean = false,
-    originalText?: string
+    originalText?: string,
+    useAlternateFormat: boolean = false
 ): string | undefined {
     // Case 1: Force original text as alias
     if (forceTextAsAlias && originalText) {
         return originalText;
     }
         
-    // Case 2: Use readable format if specified and different from daily note format
+    // Case 2: Use alternate format if specified and useAlternateFormat is true
+    if (useAlternateFormat && settings.alternateFormat) {
+        // Directly format using the alternate format
+        return momentDate.format(settings.alternateFormat);
+    }
+
+    // Case 3: Use readable format if specified and different from daily note format
     if (settings.primaryFormat && dailyNoteFormat !== settings.primaryFormat) {
-        // Parse the dateString back to a moment object using the dailyNoteFormat
-        const momentDate = window.moment(dateString, dailyNoteFormat);
+        // Directly format using the primary format
         return momentDate.format(settings.primaryFormat);
     }
     
-    // Case 3: Not including folders in links -> just use the date
+    // Case 4: Not including folders in links -> just use the date
     if (!settings.includeFolderInLinks) {
-        return dateString;
+        // Directly format using the daily note format
+        return momentDate.format(dailyNoteFormat);
     }
     
-    // Case 4: Including folders but want to hide them -> use date as alias
+    // Case 5: Including folders but want to hide them -> use date as alias
     if (settings.HideFolders) {
-        return dateString;
+        // Directly format using the daily note format
+        return momentDate.format(dailyNoteFormat);
     }
     
-    // Case 5: Using markdown links and showing folders -> use full path as alias
+    // Case 6: Using markdown links and showing folders -> use full path as alias
     if (!ObsidianSettings.shouldUseWikilinks(app) && settings.includeFolderInLinks) {
         return filePath;
     }
@@ -134,6 +143,7 @@ export function getDailyNotePath(
  * @param sourceFile The source file where the link will be placed
  * @param dateText Optional text to parse as a date (defaults to today)
  * @param forceTextAsAlias If true, uses the dateText as alias regardless of settings
+ * @param useAlternateFormat If true, uses the alternate format for alias
  * @returns The generated markdown link
  */
 export function createDailyNoteLink(
@@ -141,7 +151,8 @@ export function createDailyNoteLink(
     settings: ChronoLanguageSettings, 
     sourceFile: any, 
     dateText?: string, 
-    forceTextAsAlias: boolean = false
+    forceTextAsAlias: boolean = false,
+    useAlternateFormat?: boolean
 ): string {
     const dailyNoteSettings = getDailyNoteSettings();
     
@@ -159,20 +170,22 @@ export function createDailyNoteLink(
     
     // Format the parsed date according to daily note settings
     const momentDate = window.moment(parsedDate);
-    const formattedDate = momentDate.format(dailyNoteSettings.format || "YYYY-MM-DD");
+    // Keep dailyNoteFormat for path generation
+    const dailyNoteFormat = dailyNoteSettings.format || "YYYY-MM-DD"; 
     
-    // Get the path to the daily note
+    // Get the path to the daily note (uses dailyNoteFormat internally)
     const targetPath = getDailyNotePath(app, settings, momentDate);
     
     // Get the appropriate alias for the link
     const alias = determineDailyNoteAlias(
         app,
         settings,
-        formattedDate,
-        dailyNoteSettings.format || "YYYY-MM-DD",
+        momentDate, // Pass the moment object directly
+        dailyNoteFormat, // Pass the daily note format separately
         targetPath,
         forceTextAsAlias,
-        dateText
+        dateText,
+        useAlternateFormat
     );
     
     const linkOptions: Link.GenerateMarkdownLinkOptions = {

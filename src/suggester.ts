@@ -14,19 +14,15 @@ export class Suggester {
     constructor(app: App, plugin: ChronoLanguage) {
         this.app = app;
         this.plugin = plugin;
-        
-        // Set up key event listeners
         this.setupKeyEventListeners();
     }
     
     setupKeyEventListeners() {
-        // Listen for Alt key press events
         document.addEventListener('keydown', this.handleKeyDown);
         document.addEventListener('keyup', this.handleKeyUp);
     }
 
     onUnload() {
-        // Clean up event listeners when the suggester is unloaded
         document.removeEventListener('keydown', this.handleKeyDown);
         document.removeEventListener('keyup', this.handleKeyUp);
     }
@@ -86,18 +82,11 @@ export class Suggester {
             existingPreview.remove();
         }
         
-        // Get both previews
+        // Get daily note preview
         const dailyNotePreview = getDailyNotePreview(item);
         
-        // Get the date preview based on whether Alt is pressed
-        const formatToUse = this.isAltKeyPressed ? 
-            this.plugin.settings.alternateFormat : 
-            this.plugin.settings.primaryFormat;
-        
-        const readableDatePreview = getDatePreview(item, {
-            ...this.plugin.settings,
-            primaryFormat: formatToUse
-        });
+        // Get the readable date preview, passing the Alt key state correctly
+        const readableDatePreview = getDatePreview(item, this.plugin.settings, this.isAltKeyPressed);
         
         if (dailyNotePreview) {
             // Only show dailyNotePreview if they're the same
