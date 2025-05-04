@@ -8,9 +8,10 @@ import { EnhancedDateParser } from './parser';
  * Returns a human readable preview of the parsed date
  * @param dateText Text to parse as a date
  * @param settings Plugin settings
+ * @param useAlternateFormat If true, uses the alternate format instead of primary
  * @returns Human readable date preview
  */
-export function getDatePreview(dateText: string, settings: ChronoLanguageSettings): string {
+export function getDatePreview(dateText: string, settings: ChronoLanguageSettings, useAlternateFormat: boolean = false): string {
     const dailyNoteSettings = getDailyNoteSettings();
     
     if (!dateText) return '';
@@ -18,8 +19,14 @@ export function getDatePreview(dateText: string, settings: ChronoLanguageSetting
     const parsedDate = EnhancedDateParser.parseDate(dateText);
     if (!parsedDate) return '';
     
-    // Use readable format from settings, or default to daily note format
-    const format = settings.readableFormat || dailyNoteSettings.format || "YYYY-MM-DD";
+    // Determine which format to use
+    let format;
+    if (useAlternateFormat && settings.alternateFormat) {
+        format = settings.alternateFormat;
+    } else {
+        format = settings.primaryFormat || dailyNoteSettings.format || "YYYY-MM-DD";
+    }
+    
     return window.moment(parsedDate).format(format);
 }
 
@@ -67,10 +74,10 @@ export function determineDailyNoteAlias(
     }
         
     // Case 2: Use readable format if specified and different from daily note format
-    if (settings.readableFormat && dailyNoteFormat !== settings.readableFormat) {
+    if (settings.primaryFormat && dailyNoteFormat !== settings.primaryFormat) {
         // Parse the dateString back to a moment object using the dailyNoteFormat
         const momentDate = window.moment(dateString, dailyNoteFormat);
-        return momentDate.format(settings.readableFormat);
+        return momentDate.format(settings.primaryFormat);
     }
     
     // Case 3: Not including folders in links -> just use the date

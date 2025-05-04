@@ -19,6 +19,10 @@ export class EditorSuggester extends EditorSuggest<string> {
             {
                 command: "Shift",
                 purpose: "Force selected text as alias"
+            },
+            {
+                command: "Alt",
+                purpose: "Use alternate date format"
             }
         ]);
 

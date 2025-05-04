@@ -4,7 +4,8 @@ import { MultipleTextComponent } from 'obsidian-dev-utils/obsidian/Components/Se
 import ChronoLanguage from './main';
 
 export interface ChronoLanguageSettings {
-	readableFormat: string;
+	primaryFormat: string;
+  alternateFormat: string;
   includeFolderInLinks: boolean;
   HideFolders: boolean;
   triggerPhrase: string;
@@ -13,7 +14,8 @@ export interface ChronoLanguageSettings {
 }
 
 export const DEFAULT_SETTINGS: ChronoLanguageSettings = {
-	readableFormat: '',
+	primaryFormat: '',
+  alternateFormat: '',
   includeFolderInLinks: true,
   HideFolders: true,
   triggerPhrase: '@',
@@ -36,11 +38,11 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     new Setting(containerEl)
-    .setName("Human-readable date format")
+    .setName("Primary date format")
     .setDesc((() => {
       const fragment = document.createDocumentFragment();
       fragment.createSpan({
-        text: "Specify your preferred human-readable date format. Refer to "
+        text: "Specify your primary human-readable date format. Refer to "
       });
       fragment.createEl("a", {
         text: "format reference",
@@ -48,21 +50,33 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
         attr: { target: "_blank", rel: "noopener" }
       });
       fragment.createSpan({
-        text: ". This will be used for link aliases and plain text dates. \
-        By default, matches the format of your daily notes."
+        text: ". It will be used for link aliases and plain text dates. \
+        It does not need to match your daily note format."
       });
       return fragment;
     })())
     .addText((text) =>
       text
         .setPlaceholder(getDailyNoteSettings().format || "YYYY-MM-DD")
-        .setValue(this.plugin.settings.readableFormat)
+        .setValue(this.plugin.settings.primaryFormat)
         .onChange(async (value) => {
-          this.plugin.settings.readableFormat = value || "";
+          this.plugin.settings.primaryFormat = value || "";
           await this.plugin.saveSettings();
-          
-          // Check if we should show the "Hide folders" setting
-          this.updateHideFoldersSettingVisibility(value);
+        })
+    );
+
+    new Setting(containerEl)
+    .setName("Alternate date format")
+    .setDesc("Specify your alternate human-readable date format. \
+      It will be used for link aliases and plain text dates (when holding Alt while using the editor suggester). \
+      It does not need to match your daily note format.")
+    .addText((text) =>
+      text
+        .setPlaceholder(getDailyNoteSettings().format || "YYYY-MM-DD")
+        .setValue(this.plugin.settings.alternateFormat)
+        .onChange(async (value) => {
+          this.plugin.settings.alternateFormat = value || "";
+          await this.plugin.saveSettings();
         })
     );
 
@@ -75,15 +89,13 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.includeFolderInLinks)
         .onChange(async (value) => {
           this.plugin.settings.includeFolderInLinks = value;
-          // Show/hide the "Hide folders" setting based on this toggle
-          this.updateHideFoldersSettingVisibility(this.plugin.settings.readableFormat);
           await this.plugin.saveSettings();
         })
     );
 
     const hideFoldersSetting = new Setting(containerEl)
     .setName("Hide folders in links using aliases")
-    .setDesc("If including folders in links, and no human-readable date format is set (no preferred alias), \
+    .setDesc("If including folders in links, and no alias is being used, \
       use an alias anyway (the note name) to hide the folder path.")
     .addToggle((toggle) =>
       toggle
@@ -95,9 +107,6 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
     );
     
     this.hideFoldersSetting = hideFoldersSetting.settingEl;
-    
-    // Initial visibility state
-    this.updateHideFoldersSettingVisibility(this.plugin.settings.readableFormat);
 
     new Setting(containerEl).setName('Editor suggester').setHeading();
 
@@ -149,14 +158,5 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
             : DEFAULT_SETTINGS.initialOpenDailyNoteSuggestions;
           await this.plugin.saveSettings();
         });
-  }
-  
-  // Helper method to determine visibility of the "Hide folders" setting
-  private updateHideFoldersSettingVisibility(readableFormat: string): void {
-    const dailyNoteFormat = getDailyNoteSettings().format || "YYYY-MM-DD";
-    const shouldShow = this.plugin.settings.includeFolderInLinks && 
-                       (readableFormat === "" || readableFormat === dailyNoteFormat);
-
-    this.hideFoldersSetting.toggle(shouldShow);
   }
 }
