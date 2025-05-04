@@ -1,20 +1,27 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
+import { MultipleTextComponent } from 'obsidian-dev-utils/obsidian/Components/SettingComponents/MultipleTextComponent';
 import ChronoLanguage from './main';
 
 export interface ChronoLanguageSettings {
 	readableFormat: string;
   includeFolderInLinks: boolean;
   HideFolders: boolean;
+  initialSuggestions: string[];
+  triggerPhrase: string;
+  forceTextAsAlias: boolean;
 }
 
 export const DEFAULT_SETTINGS: ChronoLanguageSettings = {
 	readableFormat: '',
   includeFolderInLinks: true,
-  HideFolders: true
+  HideFolders: true,
+  initialSuggestions: ['Today', 'Tomorrow', 'Yesterday'],
+  triggerPhrase: '@',
+  forceTextAsAlias: false,
 }
 
-export class ChronoLanguageSettingsTab extends PluginSettingTab {
+export class ChronoLanguageSettingTab extends PluginSettingTab {
   plugin: ChronoLanguage;
   hideFoldersSetting: HTMLElement;
 
@@ -91,6 +98,39 @@ export class ChronoLanguageSettingsTab extends PluginSettingTab {
     
     // Initial visibility state
     this.updateHideFoldersSettingVisibility(this.plugin.settings.readableFormat);
+
+    new Setting(containerEl).setName('Editor suggester').setHeading();
+
+    // Add the trigger phrase setting
+    new Setting(containerEl)
+      .setName("Trigger phrase")
+      .setDesc("Customize the trigger phrase to activate the editor suggester. If empty, the suggester will be disabled.")
+      .addText((text) => 
+        text
+          .setPlaceholder("@")
+          .setValue(this.plugin.settings.triggerPhrase)
+          .onChange(async (value) => {
+            this.plugin.settings.triggerPhrase = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    const initialSuggestionsSettings = new Setting(containerEl)
+    .setName("Initial suggestions")
+    .setDesc("Enter initial suggestions for the editor suggester. Each suggestion should be on a new line.");
+    // Initial suggestions text entry box
+    const initialSuggestionsBox = new MultipleTextComponent(initialSuggestionsSettings.controlEl);
+    initialSuggestionsBox
+      .setPlaceholder("Today\nTomorrow\nYesterday")
+      .setValue(this.plugin.settings.initialSuggestions)
+      .onChange(async (value) => {
+        // Ensure we always have at least the default suggestions if the array is empty
+        const suggestions = value.filter(item => item.trim().length > 0); // Filter out empty strings
+        this.plugin.settings.initialSuggestions = suggestions.length > 0 
+          ? [...suggestions] 
+          : DEFAULT_SETTINGS.initialSuggestions;
+        await this.plugin.saveSettings();
+      });
   }
   
   // Helper method to determine visibility of the "Hide folders" setting

@@ -12,3 +12,13 @@
   font-size: 0.9em;
   font-style: italic;
 }
+
+.multiple-text-component {
+    min-width: 164.8px; /* Not sure if there is a non-hardcoded way */
+}
+
+.multiple-text-component textarea {
+    field-sizing: content;
+    resize: none;
+    min-width: 164.8px; 
+}
