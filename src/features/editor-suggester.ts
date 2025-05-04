@@ -1,6 +1,6 @@
 import { Editor, EditorPosition, EditorSuggest, EditorSuggestContext, App } from 'obsidian';
 import ChronoLanguage from '../main';
-import { createDailyNoteLink } from '../utils';
+import { createDailyNoteLink, getDatePreview } from '../utils';
 import { Suggester } from '../suggester';
 
 /**
@@ -18,26 +18,61 @@ export class EditorSuggester extends EditorSuggest<string> {
         this.setInstructions([
             {
                 command: "Shift",
-                purpose: "Force selected text as alias"
+                purpose: "Selected text as alias"
+            },
+            {
+                command: "Ctrl",
+                purpose: "Insert as plain text"
             },
             {
                 command: "Alt",
-                purpose: "Use alternate date format"
-            }
+                purpose: "Alternate format"
+            },
         ]);
 
-        // Register Shift+Enter to capture shift key during keyboard selection
         this.scope.register(["Shift"], "Enter", (event: KeyboardEvent) => {
-            // @ts-ignore
             this.suggestions.useSelectedItem(event);
             return false;
         });
 
-        // Register Alt+Enter to capture alt key during keyboard selection
-        this.scope.register(["Alt"], "Enter", (event: KeyboardEvent) => {
-            // @ts-ignore
+        this.scope.register(["Ctrl"], "Enter", (event: KeyboardEvent) => {
             this.suggestions.useSelectedItem(event);
             return false;
+        });
+
+        this.scope.register(["Alt"], "Enter", (event: KeyboardEvent) => {
+            this.suggestions.useSelectedItem(event);
+            return false;
+        });
+
+        this.scope.register(["Ctrl", "Alt"], "Enter", (event: KeyboardEvent) => {
+            this.suggestions.useSelectedItem(event);
+            return false;
+        });
+
+        this.scope.register(["Shift", "Alt"], "Enter", (event: KeyboardEvent) => {
+            this.suggestions.useSelectedItem(event);
+            return false;
+        });
+
+        this.scope.register(["Ctrl", "Shift"], "Enter", (event: KeyboardEvent) => {
+            this.suggestions.useSelectedItem(event);
+            return false;
+        });
+
+        this.scope.register(["Ctrl", "Shift", "Alt"], "Enter", (event: KeyboardEvent) => {
+            this.suggestions.useSelectedItem(event);
+            return false;
+        });
+
+        this.scope.register(null, "ArrowDown", (event: KeyboardEvent) => {
+            this.suggestions.moveDown(event);
+            return false; // Prevent default behavior, allow movement while modifier keys are held
+        });
+
+        this.scope.register(null, "ArrowUp", (event: KeyboardEvent) => {
+            this.suggestions.moveUp(event);
+            return false; // Prevent default behavior, allow movement while modifier keys are held
         });
     }
     
@@ -77,9 +112,20 @@ export class EditorSuggester extends EditorSuggest<string> {
         if (this.context) {
             const { editor, start, end } = this.context;
             const forceTextAsAlias = event.shiftKey;
+            const insertPlaintext = event.ctrlKey;
             const useAlternateFormat = event.altKey;
-            const link = createDailyNoteLink(this.app, this.plugin.settings, this.context.file, item, forceTextAsAlias, useAlternateFormat);
-            editor.replaceRange(link, start, end);
+
+            let insertText: string = "";
+            if (insertPlaintext && forceTextAsAlias) {
+                insertText = item;
+            } else {
+                insertText = insertPlaintext
+                ? getDatePreview(item, this.plugin.settings, useAlternateFormat)
+                : createDailyNoteLink(
+                    this.app, this.plugin.settings, this.context.file, item, forceTextAsAlias, useAlternateFormat
+                );
+            }
+            editor.replaceRange(insertText, start, end);
         }
     }
 }

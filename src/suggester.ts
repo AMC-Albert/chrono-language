@@ -9,6 +9,8 @@ export class Suggester {
     app: App;
     plugin: ChronoLanguage;
     isAltKeyPressed: boolean = false;
+    isCtrlKeyPressed: boolean = false; // Add Ctrl key state
+    isShiftKeyPressed: boolean = false; // Add Shift key state
     currentElements: Map<string, HTMLElement> = new Map();
 
     constructor(app: App, plugin: ChronoLanguage) {
@@ -31,12 +33,24 @@ export class Suggester {
         if (e.key === 'Alt') {
             this.isAltKeyPressed = true;
             this.updateAllPreviews();
+        } else if (e.key === 'Control') { // Handle Ctrl key down
+            this.isCtrlKeyPressed = true;
+            this.updateAllPreviews();
+        } else if (e.key === 'Shift') { // Handle Shift key down
+            this.isShiftKeyPressed = true;
+            this.updateAllPreviews();
         }
     };
 
     handleKeyUp = (e: KeyboardEvent) => {
         if (e.key === 'Alt') {
             this.isAltKeyPressed = false;
+            this.updateAllPreviews();
+        } else if (e.key === 'Control') { // Handle Ctrl key up
+            this.isCtrlKeyPressed = false;
+            this.updateAllPreviews();
+        } else if (e.key === 'Shift') { // Handle Shift key up
+            this.isShiftKeyPressed = false;
             this.updateAllPreviews();
         }
     };
@@ -49,6 +63,11 @@ export class Suggester {
     }
 
     getDateSuggestions(context: { query: string }, initialSuggestions?: string[]): string[] {
+        // Reset modifier key states when suggestions are requested
+        this.isAltKeyPressed = false;
+        this.isCtrlKeyPressed = false;
+        this.isShiftKeyPressed = false;
+        
         const suggestions = initialSuggestions || this.plugin.settings.initialEditorSuggestions;
         const filtered = suggestions.filter(
             c => c.toLowerCase().startsWith(context.query.toLowerCase())
@@ -81,26 +100,49 @@ export class Suggester {
         if (existingPreview) {
             existingPreview.remove();
         }
-        
+
         // Get daily note preview
         const dailyNotePreview = getDailyNotePreview(item);
-        
+
         // Get the readable date preview, passing the Alt key state correctly
-        const readableDatePreview = getDatePreview(item, this.plugin.settings, this.isAltKeyPressed);
-        
-        if (dailyNotePreview) {
-            // Only show dailyNotePreview if they're the same
-            if (dailyNotePreview === readableDatePreview) {
-                container.createEl('span', { 
-                    text: `↳ ${dailyNotePreview}`,
-                    cls: 'chrono-suggestion-preview' 
-                });
-            } else {
-                container.createEl('span', { 
-                    text: `↳ ${dailyNotePreview} ⭢ ${readableDatePreview}`,
-                    cls: 'chrono-suggestion-preview' 
-                });
+        let readableDatePreview = getDatePreview(item, this.plugin.settings, this.isAltKeyPressed);
+
+        // If Shift is pressed, replace readableDatePreview with the original item
+        if (this.isShiftKeyPressed) {
+            readableDatePreview = item; 
+        }
+
+        // Create the preview container span
+        const previewContainer = container.createEl('span', {
+            cls: 'chrono-suggestion-preview'
+        });
+
+        // Determine the preview content based on Ctrl key state
+        if (this.isCtrlKeyPressed) {
+            // If Ctrl is pressed, only show readableDatePreview (or item if Shift is also pressed)
+            if (readableDatePreview) {
+                previewContainer.appendText(`↳ ${readableDatePreview}`);
             }
+        } else if (dailyNotePreview) {
+            // Original logic when Ctrl is not pressed
+            previewContainer.appendText('↳ ');
+            // Create a span specifically for the daily note preview to assign a class
+            previewContainer.createEl('span', { 
+                text: dailyNotePreview, 
+                cls: 'u-pop'
+            });
+
+            if (dailyNotePreview !== readableDatePreview && readableDatePreview) {
+                previewContainer.appendText(` ⭢ ${readableDatePreview}`);
+            }
+        } else if (readableDatePreview) {
+            // Handle case where only readableDatePreview exists and Ctrl is not pressed
+            previewContainer.appendText(`↳ ${readableDatePreview}`);
+        }
+
+        // Remove the container if it ended up empty
+        if (!previewContainer.hasChildNodes() && !previewContainer.textContent?.trim()) {
+            previewContainer.remove();
         }
     }
 }
