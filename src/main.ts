@@ -1,7 +1,7 @@
-import { Plugin, TFile } from 'obsidian';
+import { Plugin } from 'obsidian';
 import { DEFAULT_SETTINGS, ChronoLanguageSettings, ChronoLanguageSettingTab } from './settings';
-import { EditorSuggester } from './suggest';
-import { OpenDailyNoteModal } from './open-daily-note';
+import { EditorSuggester } from './features/editor-suggester';
+import { OpenDailyNoteModal } from './features/open-daily-note';
 
 export default class ChronoLanguage extends Plugin {
 	settings: ChronoLanguageSettings = DEFAULT_SETTINGS;

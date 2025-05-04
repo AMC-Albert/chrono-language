@@ -1,19 +1,17 @@
 import { Notice, FuzzySuggestModal, App, FuzzyMatch, TFile } from "obsidian";
-import ChronoLanguage from "./main";
-import { DateSuggester } from "./suggest";
-import { getDailyNotePath } from "./utils";
+import ChronoLanguage from "../main";
+import { Suggester } from "../suggester";
 import { getDailyNote, getAllDailyNotes, createDailyNote } from 'obsidian-daily-notes-interface';
-import { getOrCreateFile } from "obsidian-dev-utils/obsidian/FileSystem";
-import { EnhancedDateParser } from "./parser";
+import { EnhancedDateParser } from "../parser";
 
 export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
   plugin: ChronoLanguage;
-  private suggester: DateSuggester;
+  private suggester: Suggester;
 
   constructor(app: App, plugin: ChronoLanguage) {
     super(app);
     this.plugin = plugin;
-    this.suggester = new DateSuggester(this.app, this.plugin);
+    this.suggester = new Suggester(this.app, this.plugin);
     
     // Set placeholder text for the input field
     this.setPlaceholder("Enter a date...");
