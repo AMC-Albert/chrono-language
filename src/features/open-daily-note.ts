@@ -14,7 +14,7 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
     this.suggester = new Suggester(this.app, this.plugin);
     
     // Set placeholder text for the input field
-    this.setPlaceholder("Enter a date...");
+    this.setPlaceholder("Enter a date or relative time...");
   }
 
   getItems(): string[] {
@@ -22,7 +22,7 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
     const query = inputEl?.value || "";
     return this.suggester.getDateSuggestions(
       { query },
-      ['Today', 'Yesterday', 'Tomorrow']
+      this.plugin.settings.initialOpenDailyNoteSuggestions
     );
   }
 

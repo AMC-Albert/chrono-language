@@ -15,7 +15,7 @@ export class Suggester {
     }
 
     getDateSuggestions(context: { query: string }, initialSuggestions?: string[]): string[] {
-        const suggestions = initialSuggestions || this.plugin.settings.initialSuggestions;
+        const suggestions = initialSuggestions || this.plugin.settings.initialEditorSuggestions;
         const filtered = suggestions.filter(
             c => c.toLowerCase().startsWith(context.query.toLowerCase())
         );

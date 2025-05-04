@@ -7,18 +7,18 @@ export interface ChronoLanguageSettings {
 	readableFormat: string;
   includeFolderInLinks: boolean;
   HideFolders: boolean;
-  initialSuggestions: string[];
   triggerPhrase: string;
-  forceTextAsAlias: boolean;
+  initialEditorSuggestions: string[];
+  initialOpenDailyNoteSuggestions: string[];
 }
 
 export const DEFAULT_SETTINGS: ChronoLanguageSettings = {
 	readableFormat: '',
   includeFolderInLinks: true,
   HideFolders: true,
-  initialSuggestions: ['Today', 'Tomorrow', 'Yesterday'],
   triggerPhrase: '@',
-  forceTextAsAlias: false,
+  initialEditorSuggestions: ['Today', 'Tomorrow', 'Yesterday'],
+  initialOpenDailyNoteSuggestions: ['Today', 'Tomorrow', 'Yesterday'],
 }
 
 export class ChronoLanguageSettingTab extends PluginSettingTab {
@@ -115,22 +115,40 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
           })
       );
 
-    const initialSuggestionsSettings = new Setting(containerEl)
+    const initialEditorSuggestionsSettings = new Setting(containerEl)
     .setName("Initial suggestions")
     .setDesc("Enter initial suggestions for the editor suggester. Each suggestion should be on a new line.");
     // Initial suggestions text entry box
-    const initialSuggestionsBox = new MultipleTextComponent(initialSuggestionsSettings.controlEl);
-    initialSuggestionsBox
+    const initialEditorSuggestionsBox = new MultipleTextComponent(initialEditorSuggestionsSettings.controlEl);
+    initialEditorSuggestionsBox
       .setPlaceholder("Today\nTomorrow\nYesterday")
-      .setValue(this.plugin.settings.initialSuggestions)
+      .setValue(this.plugin.settings.initialEditorSuggestions)
       .onChange(async (value) => {
         // Ensure we always have at least the default suggestions if the array is empty
         const suggestions = value.filter(item => item.trim().length > 0); // Filter out empty strings
-        this.plugin.settings.initialSuggestions = suggestions.length > 0 
+        this.plugin.settings.initialEditorSuggestions = suggestions.length > 0 
           ? [...suggestions] 
-          : DEFAULT_SETTINGS.initialSuggestions;
+          : DEFAULT_SETTINGS.initialEditorSuggestions;
         await this.plugin.saveSettings();
       });
+
+      new Setting(containerEl).setName('Open daily note modal').setHeading();
+
+      const initialOpenDailyNoteSuggestionsSettings = new Setting(containerEl)
+      .setName("Initial suggestions")
+      .setDesc("Enter initial suggestions for the 'Open daily note' modal. Each suggestion should be on a new line.");
+      // Initial suggestions text entry box
+      const initialOpenDailyNoteSuggestionsBox = new MultipleTextComponent(initialOpenDailyNoteSuggestionsSettings.controlEl);
+      initialOpenDailyNoteSuggestionsBox
+        .setPlaceholder("Today\nTomorrow\nYesterday")
+        .setValue(this.plugin.settings.initialOpenDailyNoteSuggestions)
+        .onChange(async (value) => {
+          const suggestions = value.filter(item => item.trim().length > 0);
+          this.plugin.settings.initialOpenDailyNoteSuggestions = suggestions.length > 0 
+            ? [...suggestions] 
+            : DEFAULT_SETTINGS.initialOpenDailyNoteSuggestions;
+          await this.plugin.saveSettings();
+        });
   }
   
   // Helper method to determine visibility of the "Hide folders" setting
