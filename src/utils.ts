@@ -2,6 +2,7 @@ import { App, normalizePath } from 'obsidian';
 import { Link, ObsidianSettings } from 'obsidian-dev-utils/obsidian';
 import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
 import { ChronoLanguageSettings } from './settings';
+import * as chrono from 'chrono-node';
 
 /**
  * Determines the appropriate alias for a daily note link based on settings
@@ -50,29 +51,45 @@ export function determineDailyNoteAlias(
  * @param app The Obsidian app instance
  * @param settings Plugin settings
  * @param sourceFile The source file where the link will be placed
+ * @param dateText Optional text to parse as a date (defaults to today)
  * @returns The generated markdown link
  */
-export function createDailyNoteLink(app: App, settings: ChronoLanguageSettings, sourceFile: any): string {
+export function createDailyNoteLink(app: App, settings: ChronoLanguageSettings, sourceFile: any, dateText?: string): string {
     const dailyNoteSettings = getDailyNoteSettings();
-    const currentDate = window.moment().format(dailyNoteSettings.format || "YYYY-MM-DD");
+    
+    // Use Chrono to parse the date from text, or use current date if no text provided
+    let parsedDate;
+    if (dateText && dateText.trim().length > 0) {
+        parsedDate = chrono.parseDate(dateText);
+        // If parsing failed, default to today
+        if (!parsedDate) {
+            parsedDate = new Date();
+        }
+    } else {
+        parsedDate = new Date();
+    }
+    
+    // Format the parsed date according to daily note settings
+    const momentDate = window.moment(parsedDate);
+    const formattedDate = momentDate.format(dailyNoteSettings.format || "YYYY-MM-DD");
+    
     const usingRelativeLinks = ObsidianSettings.shouldUseRelativeLinks(app);
     
-    // includeFolderInLinks -> full path
-    // usingRelativeLinks -> full path, otherwise output relative paths point to the root of the vault, which is just confusing
-    const targetPath = settings.includeFolderInLinks || usingRelativeLinks
-        ? normalizePath(`${dailyNoteSettings.folder}/${currentDate}`)
-        : currentDate;
+    // If using relative links, ignore includeFolderInLinks and use full path anyway
+    const shouldIncludeFullPath = settings.includeFolderInLinks || usingRelativeLinks;
     
-    // For display in the actual link, we may use just the date without folder
-    const displayPath = settings.includeFolderInLinks ? targetPath : currentDate;
+    // Create the target path based on settings
+    const targetPath = shouldIncludeFullPath
+        ? normalizePath(`${dailyNoteSettings.folder}/${formattedDate}`)
+        : formattedDate;
     
     // Get the appropriate alias for the link
     const alias = determineDailyNoteAlias(
         app,
         settings,
-        currentDate,
+        formattedDate,
         dailyNoteSettings.format || "YYYY-MM-DD",
-        displayPath
+        targetPath
     );
     
     const linkOptions: Link.GenerateMarkdownLinkOptions = {

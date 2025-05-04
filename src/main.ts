@@ -41,7 +41,7 @@ class ChronoSuggester extends EditorSuggest<string> {
 	}
 
 	getSuggestions(ctx: EditorSuggestContext): string[] {
-		const choices = ['Alice 1', 'Bob 1', 'Charlie 1'];
+		const choices = ['Today', 'Tomorrow', 'Yesterday'];
 		return choices.filter(c => c.toLowerCase().startsWith(ctx.query.toLowerCase()));
 	}
 
@@ -51,8 +51,8 @@ class ChronoSuggester extends EditorSuggest<string> {
 
 	selectSuggestion(item: string): void {
 		if (this.context) {
-			const { editor, start, end } = this.context;
-			const link = createDailyNoteLink(this.app, this.plugin.settings, this.context.file);
+			const { editor, start, end, query } = this.context;
+			const link = createDailyNoteLink(this.app, this.plugin.settings, this.context.file, item);
 			editor.replaceRange(link, start, end);
 		}
 	}
