@@ -1,20 +1,32 @@
-import { Plugin } from 'obsidian';
-import { ChronoLanguageSettings, ChronoLanguageSettingTab, DEFAULT_SETTINGS } from './settings';
+import { Plugin, TFile } from 'obsidian';
+import { DEFAULT_SETTINGS, ChronoLanguageSettings, ChronoLanguageSettingTab } from './settings';
 import { EditorSuggester } from './suggest';
+import { OpenDailyNoteModal } from './open-daily-note';
 
 export default class ChronoLanguage extends Plugin {
 	settings: ChronoLanguageSettings = DEFAULT_SETTINGS;
+	suggester: EditorSuggester;
 	contextSuggestion: string | null = null;
 
 	async onload() {
 		// Load settings
 		await this.loadSettings();
 
-		// Register suggester
-		this.registerEditorSuggest(new EditorSuggester(this));
-
 		// Add settings tab
 		this.addSettingTab(new ChronoLanguageSettingTab(this.app, this));
+
+		// Register suggester
+		this.suggester = new EditorSuggester(this);
+		this.registerEditorSuggest(this.suggester);
+
+		// Add command to open daily note modal
+		this.addCommand({
+			id: 'open-daily-note-modal',
+			name: 'Open Daily Note',
+			callback: () => {
+				new OpenDailyNoteModal(this.app, this).open();
+			}
+		});
 	}
 	
 	onunload() {

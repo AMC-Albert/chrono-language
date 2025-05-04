@@ -2,7 +2,6 @@ import { App, normalizePath } from 'obsidian';
 import { Link, ObsidianSettings } from 'obsidian-dev-utils/obsidian';
 import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
 import { ChronoLanguageSettings } from './settings';
-import * as chrono from 'chrono-node';
 import { EnhancedDateParser } from './parser';
 
 /**
@@ -94,6 +93,34 @@ export function determineDailyNoteAlias(
 }
 
 /**
+ * Gets the path to a daily note for a specific date
+ * @param app The Obsidian app instance
+ * @param settings Plugin settings
+ * @param momentDate Moment.js date object
+ * @returns The path to the daily note
+ */
+export function getDailyNotePath(
+    app: App,
+    settings: ChronoLanguageSettings,
+    momentDate: moment.Moment
+): string {
+    const dailyNoteSettings = getDailyNoteSettings();
+    
+    // Format the date according to daily note settings
+    const formattedDate = momentDate.format(dailyNoteSettings.format || "YYYY-MM-DD");
+    
+    const usingRelativeLinks = ObsidianSettings.shouldUseRelativeLinks(app);
+    
+    // If using relative links, ignore includeFolderInLinks and use full path anyway
+    const shouldIncludeFullPath = settings.includeFolderInLinks || usingRelativeLinks;
+    
+    // Create the target path based on settings
+    return shouldIncludeFullPath
+        ? normalizePath(`${dailyNoteSettings.folder}/${formattedDate}`)
+        : formattedDate;
+}
+
+/**
  * Creates a markdown link to the daily note
  * @param app The Obsidian app instance
  * @param settings Plugin settings
@@ -127,15 +154,8 @@ export function createDailyNoteLink(
     const momentDate = window.moment(parsedDate);
     const formattedDate = momentDate.format(dailyNoteSettings.format || "YYYY-MM-DD");
     
-    const usingRelativeLinks = ObsidianSettings.shouldUseRelativeLinks(app);
-    
-    // If using relative links, ignore includeFolderInLinks and use full path anyway
-    const shouldIncludeFullPath = settings.includeFolderInLinks || usingRelativeLinks;
-    
-    // Create the target path based on settings
-    const targetPath = shouldIncludeFullPath
-        ? normalizePath(`${dailyNoteSettings.folder}/${formattedDate}`)
-        : formattedDate;
+    // Get the path to the daily note
+    const targetPath = getDailyNotePath(app, settings, momentDate);
     
     // Get the appropriate alias for the link
     const alias = determineDailyNoteAlias(
