@@ -1,0 +1,14 @@
+.chrono-suggestion-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.chrono-suggestion-text {
+  
+}
+
+.chrono-suggestion-preview {
+  color: var(--text-muted);
+  font-size: 0.9em;
+  font-style: italic;
+}
