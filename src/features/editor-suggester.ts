@@ -1,9 +1,10 @@
 import { Editor, EditorPosition, EditorSuggest, EditorSuggestContext, App } from 'obsidian';
 import ChronoLanguage from '../main';
-import { createDailyNoteLink, getDatePreview } from '../utils';
-import { Suggester } from '../suggester';
-import { KeyCombo, Action } from '../types';
-import { KeyboardHandler } from '../keyboard-handler';
+import { createDailyNoteLink, getDatePreview, getDailyNotePreview } from '../utils/helpers';
+import { Suggester } from './suggestion-renderer';
+import { KeyCombo, InsertMode, ContentFormat } from '../plugin-data/types';
+import { KeyboardHandler } from '../utils/keyboard-handler';
+import { KEYS } from '../plugin-data/constants';
 
 /**
  * A suggester for the editor that provides date parsing suggestions
@@ -17,7 +18,7 @@ export class EditorSuggester extends EditorSuggest<string> {
         super(plugin.app);
         this.plugin = plugin;
         
-        // Initialize the keyboard handler first with proper scope
+        // Initialize the keyboard handler with proper scope
         this.keyboardHandler = new KeyboardHandler(this.scope, this.plugin.settings.invertCtrlBehavior);
         
         // Initialize suggester after keyboard handler
@@ -28,33 +29,34 @@ export class EditorSuggester extends EditorSuggest<string> {
         
         // Initial setup of instructions
         this.updateInstructions();
-        
-        // Add event listener for key changes to sync with suggester
-        document.addEventListener('keydown', this.onKeyEvent);
-        document.addEventListener('keyup', this.onKeyEvent);
     }
     
-    // Add method to handle key events and update suggester
-    onKeyEvent = (event: KeyboardEvent) => {
-        if (this.isOpen && this.suggester) {
-            this.suggester.updateAllPreviews();
-        }
-    };
-
     private setupKeyboardEventHandlers() {
+        // Register primary keyboard shortcuts
         this.keyboardHandler.registerShortcuts((event: KeyboardEvent) => {
             // Only handle Enter key with our custom logic
-            if (event.key === "Enter") {
+            if (event.key === KEYS.ENTER) {
+                // Update key state from this event directly before handling
+                // This ensures the current event's modifier state is captured
+                this.keyboardHandler.setKeyState({
+                    shift: event.shiftKey,
+                    ctrl: event.ctrlKey,
+                    alt: event.altKey
+                });
+                
+                if (this.suggester) {
+                    this.suggester.syncKeyStateFrom(this.keyboardHandler);
+                }
+                
                 this.suggestions.useSelectedItem(event);
                 return false; // Prevent default behavior
             }
             
-            // For arrow keys, only handle if no other modifier is pressed
-            // This allows modifier keys to show previews while navigating
-            if (event.key === "ArrowDown") {
+            // For arrow keys, handle navigation
+            if (event.key === KEYS.ARROW_DOWN) {
                 this.suggestions.moveDown(event);
                 return false; // Prevent default
-            } else if (event.key === "ArrowUp") {
+            } else if (event.key === KEYS.ARROW_UP) {
                 this.suggestions.moveUp(event);
                 return false; // Prevent default
             }
@@ -63,27 +65,37 @@ export class EditorSuggester extends EditorSuggest<string> {
             return true;
         });
         
-        // Add direct document listeners for arrow keys with modifiers
-        // This ensures we can still navigate suggestions when modifiers are pressed
-        document.addEventListener('keydown', this.handleArrowKeys);
-    }
-    
-    // Add a specific handler for arrow keys
-    handleArrowKeys = (event: KeyboardEvent) => {
-        if (!this.isOpen) return;
+        // Set up event listeners to sync key states between suggester and editor
+        this.scope.register([], 'keydown', (event: KeyboardEvent) => {
+            if (!this.isOpen || !this.suggester) return true;
+            
+            // Update keyboard handler state
+            const updated = this.keyboardHandler.updateKeyState(event, true);
+            
+            // If state changed, sync with suggester and update previews
+            if (updated) {
+                this.suggester.syncKeyStateFrom(this.keyboardHandler);
+                this.suggester.updateAllPreviews();
+            }
+            
+            return true; // Allow event to propagate
+        });
         
-        if (event.key === "ArrowDown") {
-            // Only handle if we're open and an active selection exists
-            this.suggestions.moveDown(event);
-            event.preventDefault();
-            event.stopPropagation();
-        } else if (event.key === "ArrowUp") {
-            // Only handle if we're open and an active selection exists
-            this.suggestions.moveUp(event);
-            event.preventDefault();
-            event.stopPropagation();
-        }
-    };
+        this.scope.register([], 'keyup', (event: KeyboardEvent) => {
+            if (!this.isOpen || !this.suggester) return true;
+            
+            // Update keyboard handler state
+            const updated = this.keyboardHandler.updateKeyState(event, false);
+            
+            // If state changed, sync with suggester and update previews
+            if (updated) {
+                this.suggester.syncKeyStateFrom(this.keyboardHandler);
+                this.suggester.updateAllPreviews();
+            }
+            
+            return true; // Allow event to propagate
+        });
+    }
 
     /**
      * Updates the instructions based on current settings
@@ -99,9 +111,6 @@ export class EditorSuggester extends EditorSuggest<string> {
         if (this.suggester) {
             this.suggester.unload();
         }
-        document.removeEventListener('keydown', this.onKeyEvent);
-        document.removeEventListener('keyup', this.onKeyEvent);
-        document.removeEventListener('keydown', this.handleArrowKeys);
     }
     
     onTrigger(cursor: EditorPosition, editor: Editor): EditorSuggestContext | null {
@@ -168,55 +177,72 @@ export class EditorSuggester extends EditorSuggest<string> {
         if (this.context) {
             const { editor, start, end } = this.context;
             
-            // If the suggester exists, sync its key state with the current event
-            if (this.suggester && event instanceof KeyboardEvent) {
-                this.suggester.keyState = {
-                    shift: event.shiftKey,
-                    ctrl: event.ctrlKey,
-                    alt: event.altKey
-                };
-            }
+            // Get the matched combo with insert mode and content format
+            const keyCombo: KeyCombo = this.keyboardHandler.getMatchedCombo(event);
             
-            const matchedCombo: KeyCombo = this.keyboardHandler.getMatchedCombo(event);
+            // Sync key state with suggester for consistent UI updates
+            if (this.suggester) {
+                this.suggester.syncKeyStateFrom(this.keyboardHandler);
+            }
             
             let insertText: string = "";
             
-            // Use the action field instead of checking specific modifiers
-            if (matchedCombo.action === Action.SELECTED_PLAIN) {
-                insertText = item;
-            } else {
-                const forceTextAsAlias = matchedCombo.action === Action.SUGGESTION_TEXT;
-                const forceNoAlias = matchedCombo.action === Action.NO_ALIAS;
-                
-                // Determine if we should insert plain text based on the action
-                // rather than specific modifier combinations
-                const insertPlaintext = matchedCombo.action === Action.PLAINTEXT || 
-                                       matchedCombo.action === Action.ALT_PLAIN ||
-                                       // Still support the inverted behavior pattern but make it more action-focused
-                                       (this.plugin.settings.invertCtrlBehavior && matchedCombo.action === Action.LINK && matchedCombo.ctrl);
-
-                // Determine format options based on action
-                const useAlternateFormat = matchedCombo.action === Action.ALTERNATE || 
-                                          matchedCombo.action === Action.ALT_PLAIN ||
-                                          matchedCombo.alt;
-
-                insertText = insertPlaintext
-                    ? getDatePreview(
+            if (keyCombo.insertMode === InsertMode.PLAINTEXT) {
+                // Plain text handling based on content format
+                if (keyCombo.contentFormat === ContentFormat.SUGGESTION_TEXT) {
+                    // For plain text + suggestion text: use the item text directly
+                    insertText = item;
+                } else if (keyCombo.contentFormat === ContentFormat.DAILY_NOTE) {
+                    // For plain text + daily note format: directly use getDailyNotePreview
+                    insertText = getDailyNotePreview(item);
+                } else {
+                    // For other plain text formats, use getDatePreview with appropriate flags
+                    insertText = getDatePreview(
                         item, 
                         this.plugin.settings, 
-                        useAlternateFormat, 
-                        forceNoAlias, 
-                        matchedCombo.action === Action.DAILY_NOTE
-                    )
-                    : createDailyNoteLink(
-                        this.app, 
-                        this.plugin.settings, 
-                        this.context.file, 
-                        item, 
-                        forceTextAsAlias, 
-                        useAlternateFormat, 
-                        forceNoAlias
+                        keyCombo.contentFormat === ContentFormat.ALTERNATE,
+                        false, // No "no alias" concept for plain text
+                        keyCombo.contentFormat === ContentFormat.DAILY_NOTE // Force daily note format when needed
                     );
+                }
+            } else {
+                // Link handling
+                insertText = createDailyNoteLink(
+                    this.app, 
+                    this.plugin.settings, 
+                    this.context.file, 
+                    item,
+                    keyCombo.contentFormat === ContentFormat.SUGGESTION_TEXT,
+                    keyCombo.contentFormat === ContentFormat.ALTERNATE,
+                    keyCombo.contentFormat === ContentFormat.DAILY_NOTE
+                );
+            }
+            
+            // Handle invert ctrl behavior
+            if (this.plugin.settings.invertCtrlBehavior) {
+                // When Ctrl is inverted, swap link/plaintext behavior for base cases
+                if (!event.shiftKey && !event.altKey) {
+                    if (event.ctrlKey) {
+                        // Ctrl → no modifiers effect (link)
+                        insertText = createDailyNoteLink(
+                            this.app, 
+                            this.plugin.settings, 
+                            this.context.file, 
+                            item,
+                            false,
+                            false,
+                            false
+                        );
+                    } else {
+                        // No modifiers → Ctrl effect (plaintext)
+                        insertText = getDatePreview(
+                            item, 
+                            this.plugin.settings, 
+                            false, 
+                            false
+                        );
+                    }
+                }
             }
             
             editor.replaceRange(insertText, start, end);

@@ -1,11 +1,11 @@
 import { App } from 'obsidian';
-import ChronoLanguage from './main';
-import { getDailyNotePreview, getDatePreview, getOrCreateDailyNote } from './utils';
-import { getDailyNote, getAllDailyNotes, getDailyNoteSettings } from 'obsidian-daily-notes-interface';
-import { EnhancedDateParser } from './parser';
+import ChronoLanguage from '../main';
+import { getDailyNotePreview, getDatePreview, getOrCreateDailyNote } from '../utils/helpers';
+import { getDailyNote, getAllDailyNotes } from 'obsidian-daily-notes-interface';
+import { EnhancedDateParser } from '../utils/parser';
 import { TFile } from 'obsidian';
-import { DEFAULT_KEYMAP, KeyState, Action, getModStringForAction, findKeyComboByModifiers } from './types';
-import { KeyboardHandler } from './keyboard-handler';
+import { InsertMode, ContentFormat } from '../plugin-data/types';
+import { KeyboardHandler } from '../utils/keyboard-handler';
 
 /**
  * Shared suggester for date suggestions
@@ -13,7 +13,6 @@ import { KeyboardHandler } from './keyboard-handler';
 export class Suggester {
     app: App;
     plugin: ChronoLanguage;
-    keyState: KeyState = { shift: false, ctrl: false, alt: false };
     currentElements: Map<string, HTMLElement> = new Map();
     contextProvider: any; // Add property to store the context provider
     keyboardHandler: KeyboardHandler;
@@ -37,38 +36,16 @@ export class Suggester {
     }
 
     handleKeyDown = (e: KeyboardEvent) => {
-        let updated = false;
-        
-        if (e.key === 'Alt' && !this.keyState.alt) {
-            this.keyState.alt = true;
-            updated = true;
-        } else if (e.key === 'Control' && !this.keyState.ctrl) {
-            this.keyState.ctrl = true;
-            updated = true;
-        } else if (e.key === 'Shift' && !this.keyState.shift) {
-            this.keyState.shift = true;
-            updated = true;
-        }
-        
+        // Use the keyboard handler to update key state
+        const updated = this.keyboardHandler.updateKeyState(e, true);
         if (updated) {
             this.updateAllPreviews();
         }
     };
 
     handleKeyUp = (e: KeyboardEvent) => {
-        let updated = false;
-        
-        if (e.key === 'Alt' && this.keyState.alt) {
-            this.keyState.alt = false;
-            updated = true;
-        } else if (e.key === 'Control' && this.keyState.ctrl) {
-            this.keyState.ctrl = false;
-            updated = true;
-        } else if (e.key === 'Shift' && this.keyState.shift) {
-            this.keyState.shift = false;
-            updated = true;
-        }
-        
+        // Use the keyboard handler to update key state
+        const updated = this.keyboardHandler.updateKeyState(e, false);
         if (updated) {
             this.updateAllPreviews();
         }
@@ -87,24 +64,9 @@ export class Suggester {
         });
     }
 
-    getCurrentKeyCombo(): Action {
-        // Create an event-like object using our tracked key state
-        const currentEvent = {
-            shiftKey: this.keyState.shift,
-            ctrlKey: this.keyState.ctrl,
-            altKey: this.keyState.alt
-        };
-        
-        // Use the keyboard handler to find the appropriate combo
-        const matchedCombo = this.keyboardHandler.getMatchedCombo(currentEvent as KeyboardEvent);
-        
-        // Ensure we're returning a valid Action enum value
-        if (matchedCombo && matchedCombo.action) {
-            return matchedCombo.action;
-        }
-        
-        // Default fallback
-        return Action.LINK;
+    getCurrentKeyCombo(): { insertMode: InsertMode; contentFormat: ContentFormat } {
+        // Use the keyboard handler to determine the current key combo
+        return this.keyboardHandler.getCurrentKeyCombo();
     }
 
     getDateSuggestions(context: { query: string }, initialSuggestions?: string[]): string[] {
@@ -153,32 +115,28 @@ export class Suggester {
 
         const dailyNoteClass = dailyNote instanceof TFile
             ? 'cm-hmd-internal-link' // Class if daily note exists
-            : 'chrono-is-unresolved'; // Not sure if I can assign an existing Obsidian class for unresolved links
+            : 'chrono-is-unresolved';
 
-        const currentAction = this.getCurrentKeyCombo();
-        const keyCombo = DEFAULT_KEYMAP[currentAction].combo;
-
-        // Get appropriate preview based on key combination's action
+        // Get the current key combo with insert mode and content format
+        const keyCombo = this.keyboardHandler.getCurrentKeyCombo();
+        
+        // Determine appropriate preview based on the content format
         let readableDatePreview: string;
 
-        if (currentAction === Action.SELECTED_PLAIN || currentAction === Action.SUGGESTION_TEXT) {
+        // Use array includes for type-safe comparison
+        const contentFormat = keyCombo.contentFormat;
+        
+        if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
             readableDatePreview = item;
-        } else if (currentAction === Action.DAILY_NOTE) {
+        } else if (contentFormat === ContentFormat.DAILY_NOTE) {
             readableDatePreview = dailyNotePreview;
         } else {
-            // Use the action to determine format rather than specific modifiers
-            const useAlternateFormat = currentAction === Action.ALTERNATE || 
-                                      currentAction === Action.ALT_PLAIN || 
-                                      keyCombo.alt;
-                                      
-            const forceNoAlias = currentAction === Action.NO_ALIAS || 
-                                (useAlternateFormat && keyCombo.shift);
-            
+            // For PRIMARY and ALTERNATE formats
             readableDatePreview = getDatePreview(
                 item,
                 this.plugin.settings,
-                useAlternateFormat,
-                forceNoAlias
+                contentFormat === ContentFormat.ALTERNATE,
+                false
             );
         }
 
@@ -187,14 +145,19 @@ export class Suggester {
             cls: 'chrono-suggestion-preview'
         });
 
-        // Determine the preview content based on the action type
-        if (currentAction === Action.PLAINTEXT || keyCombo.ctrl) {
-            // If plaintext action or ctrl is pressed, only show readable preview
+        // Determine the preview content based on insert mode and invert ctrl setting
+        // Use array includes for type-safe comparisons
+        const isPlaintext = keyCombo.insertMode === InsertMode.PLAINTEXT;
+        const isInvertedLink = this.plugin.settings.invertCtrlBehavior && 
+                              keyCombo.insertMode === InsertMode.LINK && 
+                              keyCombo.contentFormat === ContentFormat.PRIMARY;
+                              
+        if (isPlaintext || isInvertedLink) {
+            // For plaintext or inverted ctrl with link
             if (readableDatePreview) {
                 previewContainer.appendText(`↳ ${readableDatePreview}`);
             }
         } else if (dailyNotePreview) {
-            // Original logic when not using plaintext action
             previewContainer.appendText('↳ ');
             
             // Create a span specifically for the daily note preview to assign a class
@@ -254,5 +217,15 @@ export class Suggester {
         if (!previewContainer.hasChildNodes() && !previewContainer.textContent?.trim()) {
             previewContainer.remove();
         }
+    }
+    
+    // Share the keyboard handler's key state with other components
+    syncKeyStateFrom(otherHandler: KeyboardHandler): void {
+        this.keyboardHandler.setKeyState(otherHandler.getKeyState());
+    }
+    
+    // Allow other components to get this keyboard handler's key state
+    getKeyboardHandler(): KeyboardHandler {
+        return this.keyboardHandler;
     }
 }

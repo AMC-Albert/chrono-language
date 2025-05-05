@@ -1,20 +1,62 @@
 import { Notice, FuzzySuggestModal, App, FuzzyMatch } from "obsidian";
 import ChronoLanguage from "../main";
-import { Suggester } from "../suggester";
-import { EnhancedDateParser } from "../parser";
-import { getOrCreateDailyNote } from "../utils";
+import { Suggester } from "./suggestion-renderer";
+import { EnhancedDateParser } from "../utils/parser";
+import { getOrCreateDailyNote } from "../utils/helpers";
+import { KeyboardHandler } from "../utils/keyboard-handler";
 
 export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
   plugin: ChronoLanguage;
   private suggester: Suggester;
+  private keyboardHandler: KeyboardHandler;
 
   constructor(app: App, plugin: ChronoLanguage) {
     super(app);
     this.plugin = plugin;
+    
+    // Initialize keyboard handler for modal context
+    this.keyboardHandler = new KeyboardHandler(
+      this.scope, 
+      plugin.settings.invertCtrlBehavior
+    );
+    
+    // Initialize suggester after keyboard handler
     this.suggester = new Suggester(this.app, this.plugin);
     
     // Set placeholder text for the input field
     this.setPlaceholder("Enter a date or relative time...");
+    
+    // Set up event listeners for key state sync
+    this.setupKeyboardEventHandlers();
+  }
+  
+  private setupKeyboardEventHandlers() {
+    // Set up event listeners to sync key states between suggester and modal
+    this.scope.register([], 'keydown', (event: KeyboardEvent) => {
+      // Update keyboard handler state
+      const updated = this.keyboardHandler.updateKeyState(event, true);
+      
+      // If state changed, sync with suggester and update previews
+      if (updated) {
+        this.suggester.syncKeyStateFrom(this.keyboardHandler);
+        this.suggester.updateAllPreviews();
+      }
+      
+      return true; // Allow event to propagate
+    });
+    
+    this.scope.register([], 'keyup', (event: KeyboardEvent) => {
+      // Update keyboard handler state
+      const updated = this.keyboardHandler.updateKeyState(event, false);
+      
+      // If state changed, sync with suggester and update previews
+      if (updated) {
+        this.suggester.syncKeyStateFrom(this.keyboardHandler);
+        this.suggester.updateAllPreviews();
+      }
+      
+      return true; // Allow event to propagate
+    });
   }
 
   getItems(): string[] {
@@ -34,7 +76,7 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
     this.suggester.renderSuggestionContent(item.item, el, this);
   }
 
-  async onChooseItem(item: string): Promise<void> {
+  async onChooseItem(item: string, event: MouseEvent | KeyboardEvent): Promise<void> {
     try {
       const parsedDateResult = EnhancedDateParser.parseDate(item);
       if (!parsedDateResult || isNaN(parsedDateResult.getTime())) {

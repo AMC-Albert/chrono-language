@@ -1,19 +1,26 @@
 import { App, normalizePath, Notice, TFile } from 'obsidian';
 import { Link, ObsidianSettings } from 'obsidian-dev-utils/obsidian';
 import { getDailyNoteSettings, getDailyNote, getAllDailyNotes, createDailyNote } from 'obsidian-daily-notes-interface';
-import { ChronoLanguageSettings } from './settings';
+import { ChronoLanguageSettings } from '../settings';
 import { EnhancedDateParser } from './parser';
+import { DATE_FORMAT, ERRORS } from '../plugin-data/constants';
 
 /**
  * Returns a human readable preview of the parsed date
  * @param dateText Text to parse as a date
  * @param settings Plugin settings
  * @param useAlternateFormat If true, uses the alternate format instead of primary
- * @param forceNoAlias If true, forces no alias in the link
+ * @param forceNoAlias If true, forces no alias in the link (only relevant for links)
  * @param forceDailyNoteFormat If true, returns the daily note format
  * @returns Human readable date preview
  */
-export function getDatePreview(dateText: string, settings: ChronoLanguageSettings, useAlternateFormat: boolean = false, forceNoAlias: boolean = false, forceDailyNoteFormat: boolean = false): string {
+export function getDatePreview(
+    dateText: string, 
+    settings: ChronoLanguageSettings, 
+    useAlternateFormat = false, 
+    forceNoAlias = false, 
+    forceDailyNoteFormat = false
+): string {
     const dailyNoteSettings = getDailyNoteSettings();
     
     if (!dateText) return '';
@@ -24,13 +31,14 @@ export function getDatePreview(dateText: string, settings: ChronoLanguageSetting
     // Determine which format to use
     let format;
     if (forceDailyNoteFormat) {
-        format = dailyNoteSettings.format || "YYYY-MM-DD";
-    } else if (forceNoAlias) {
+        format = dailyNoteSettings.format || DATE_FORMAT.DEFAULT;
+    } else if (forceNoAlias && !forceDailyNoteFormat) {
+        // Only return empty when forceNoAlias is true AND we're not forcing daily note format
         return '';
     } else if (useAlternateFormat && settings.alternateFormat) {
         format = settings.alternateFormat;
     } else {
-        format = settings.primaryFormat || dailyNoteSettings.format || "YYYY-MM-DD";
+        format = settings.primaryFormat || dailyNoteSettings.format || DATE_FORMAT.DEFAULT;
     }
     
     return window.moment(parsedDate).format(format);
@@ -42,26 +50,24 @@ export function getDatePreview(dateText: string, settings: ChronoLanguageSetting
  * @returns Daily note format date preview
  */
 export function getDailyNotePreview(dateText: string): string {
-    const dailyNoteSettings = getDailyNoteSettings();
-    
     if (!dateText) return '';
     
     const parsedDate = EnhancedDateParser.parseDate(dateText);
     if (!parsedDate) return '';
     
-    // Always use the daily note format
-    const format = dailyNoteSettings.format || "YYYY-MM-DD";
+    const dailyNoteSettings = getDailyNoteSettings();
+    const format = dailyNoteSettings.format || DATE_FORMAT.DEFAULT;
+    
     return window.moment(parsedDate).format(format);
 }
 
 /**
  * Determines the appropriate alias for a daily note link based on settings
- * @param app The Obsidian app instance
  * @param settings Plugin settings
  * @param momentDate Moment.js date object
  * @param dailyNoteFormat The format used for daily notes
  * @param filePath The file path for the daily note
- * @param forceTextAsAlias If true, uses the original text as alias regardless of settings
+ * @param forceTextAsAlias If true, uses the original text as alias
  * @param originalText The original text to use as alias when forceTextAsAlias is true
  * @param useAlternateFormat If true, uses the alternate format for alias
  * @param forceNoAlias If true, forces no alias in the link
@@ -73,10 +79,10 @@ export function determineDailyNoteAlias(
     momentDate: moment.Moment,
     dailyNoteFormat: string,
     filePath: string,
-    forceTextAsAlias?: boolean,
+    forceTextAsAlias = false,
     originalText?: string,
-    useAlternateFormat?: boolean,
-    forceNoAlias?: boolean
+    useAlternateFormat = false,
+    forceNoAlias = false
 ): string | undefined {
     // If forcing no alias, return undefined
     if (forceNoAlias) {
@@ -90,25 +96,21 @@ export function determineDailyNoteAlias(
         
     // Case 2: Use alternate format if specified and useAlternateFormat is true
     if (useAlternateFormat && settings.alternateFormat) {
-        // Directly format using the alternate format
         return momentDate.format(settings.alternateFormat);
     }
 
     // Case 3: Use readable format if specified and different from daily note format
     if (settings.primaryFormat && dailyNoteFormat !== settings.primaryFormat) {
-        // Directly format using the primary format
         return momentDate.format(settings.primaryFormat);
     }
     
     // Case 4: Not including folders in links -> just use the date
     if (!settings.includeFolderInLinks) {
-        // Directly format using the daily note format
         return momentDate.format(dailyNoteFormat);
     }
     
     // Case 5: Including folders but want to hide them -> use date as alias
     if (settings.HideFolders) {
-        // Directly format using the daily note format
         return momentDate.format(dailyNoteFormat);
     }
     
@@ -117,16 +119,12 @@ export function determineDailyNoteAlias(
         return filePath;
     }
     
-    // Default case: No alias needed (undefined)
+    // Default case: No alias needed
     return undefined;
 }
 
 /**
  * Gets the path to a daily note for a specific date
- * @param app The Obsidian app instance
- * @param settings Plugin settings
- * @param momentDate Moment.js date object
- * @returns The path to the daily note
  */
 export function getDailyNotePath(
     app: App,
@@ -136,7 +134,7 @@ export function getDailyNotePath(
     const dailyNoteSettings = getDailyNoteSettings();
     
     // Format the date according to daily note settings
-    const formattedDate = momentDate.format(dailyNoteSettings.format || "YYYY-MM-DD");
+    const formattedDate = momentDate.format(dailyNoteSettings.format || DATE_FORMAT.DEFAULT);
     
     const usingRelativeLinks = ObsidianSettings.shouldUseRelativeLinks(app);
     
@@ -151,23 +149,15 @@ export function getDailyNotePath(
 
 /**
  * Creates a markdown link to the daily note
- * @param app The Obsidian app instance
- * @param settings Plugin settings
- * @param sourceFile The source file where the link will be placed
- * @param dateText Optional text to parse as a date (defaults to today)
- * @param forceTextAsAlias If true, uses the dateText as alias regardless of settings
- * @param useAlternateFormat If true, uses the alternate format for alias
- * @param forceNoAlias If true, forces no alias in the link
- * @returns The generated markdown link
  */
 export function createDailyNoteLink(
     app: App, 
     settings: ChronoLanguageSettings, 
-    sourceFile: any, 
-    dateText?: string, 
-    forceTextAsAlias?: boolean,
-    useAlternateFormat?: boolean,
-    forceNoAlias?: boolean
+    sourceFile: TFile, 
+    dateText = '', 
+    forceTextAsAlias = false,
+    useAlternateFormat = false,
+    forceNoAlias = false
 ): string {
     const dailyNoteSettings = getDailyNoteSettings();
     
@@ -183,50 +173,44 @@ export function createDailyNoteLink(
         parsedDate = new Date();
     }
     
-    // Format the parsed date according to daily note settings
+    // Convert to moment date
     const momentDate = window.moment(parsedDate);
-    // Keep dailyNoteFormat for path generation
-    const dailyNoteFormat = dailyNoteSettings.format || "YYYY-MM-DD"; 
+    const dailyNoteFormat = dailyNoteSettings.format || DATE_FORMAT.DEFAULT; 
     
-    // Get the path to the daily note (uses dailyNoteFormat internally)
+    // Get the path to the daily note
     const targetPath = getDailyNotePath(app, settings, momentDate);
     
     // Get the appropriate alias for the link
     const alias = determineDailyNoteAlias(
         app,
         settings,
-        momentDate, // Pass the moment object directly
-        dailyNoteFormat, // Pass the daily note format separately
+        momentDate,
+        dailyNoteFormat,
         targetPath,
-        forceTextAsAlias || false,
+        forceTextAsAlias,
         dateText,
-        useAlternateFormat || false,
-        forceNoAlias || false
+        useAlternateFormat,
+        forceNoAlias
     );
     
-    const linkOptions: Link.GenerateMarkdownLinkOptions = {
-        app: app,
+    // Generate the link
+    return Link.generateMarkdownLink({
+        app,
         targetPathOrFile: targetPath,
         sourcePathOrFile: sourceFile,
-        alias: alias,
+        alias,
         isNonExistingFileAllowed: true,
         isEmbed: false
-    };
-    
-    return Link.generateMarkdownLink(linkOptions);
+    });
 }
 
 /**
  * Gets or creates a daily note for a specific date
- * @param app The Obsidian app instance
- * @param momentDate The moment.js date object for the daily note
- * @param shouldOpen Whether to open the note after getting/creating it
- * @returns The daily note TFile or null if unsuccessful
  */
 export async function getOrCreateDailyNote(
     app: App,
     momentDate: moment.Moment,
-    shouldOpen: boolean = false
+    shouldOpen = false
 ): Promise<TFile | null> {
     try {
         // Check if the daily note exists
@@ -236,7 +220,7 @@ export async function getOrCreateDailyNote(
         if (!dailyNote) {
             dailyNote = await createDailyNote(momentDate);
             if (!dailyNote) {
-                new Notice("Failed to create daily note");
+                new Notice(ERRORS.FAILED_CREATE_NOTE);
                 return null;
             }
         }
@@ -244,7 +228,7 @@ export async function getOrCreateDailyNote(
         // Convert to Obsidian TFile
         const obsidianFile = app.vault.getAbstractFileByPath(dailyNote.path);
         if (!(obsidianFile instanceof TFile)) {
-            new Notice("Failed to find daily note in vault");
+            new Notice(ERRORS.FAILED_FIND_NOTE);
             return null;
         }
         
@@ -256,7 +240,7 @@ export async function getOrCreateDailyNote(
         return obsidianFile;
     } catch (error) {
         console.error("Error handling daily note:", error);
-        new Notice("Failed to handle daily note");
+        new Notice(ERRORS.FAILED_HANDLE_NOTE);
         return null;
     }
 }

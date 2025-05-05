@@ -1,48 +1,64 @@
 import { Plugin } from 'obsidian';
-import { DEFAULT_SETTINGS, ChronoLanguageSettings, ChronoLanguageSettingTab } from './settings';
+import { ChronoLanguageSettings, ChronoLanguageSettingTab, DEFAULT_SETTINGS } from './settings';
 import { EditorSuggester } from './features/editor-suggester';
 import { OpenDailyNoteModal } from './features/open-daily-note';
+import { MODIFIER_BEHAVIOR } from './plugin-data/constants';
 
 export default class ChronoLanguage extends Plugin {
-	settings: ChronoLanguageSettings = DEFAULT_SETTINGS;
+	settings: ChronoLanguageSettings;
 	editorSuggester: EditorSuggester;
-	contextSuggestion: string | null = null;
 
 	async onload() {
-		// Load settings
 		await this.loadSettings();
 
-		// Add settings tab
-		this.addSettingTab(new ChronoLanguageSettingTab(this.app, this));
-
-		// Register suggester
+		// Apply settings to modifier behavior configuration
+		this.updateModifierBehaviors();
+		
+		// Register Editor Suggester
 		this.editorSuggester = new EditorSuggester(this);
 		this.registerEditorSuggest(this.editorSuggester);
 
-		// Add command to open daily note modal
+		// Add command for opening daily notes
 		this.addCommand({
-			id: 'open-daily-note-modal',
+			id: 'open-daily-note',
 			name: 'Open daily note',
 			callback: () => {
 				new OpenDailyNoteModal(this.app, this).open();
 			}
 		});
-	}
-	
-	async onunload() {
-		this.editorSuggester.unload();
+
+		// Add settings tab
+		this.addSettingTab(new ChronoLanguageSettingTab(this.app, this));
 	}
 
+	/**
+	 * Update modifier behaviors based on user settings
+	 */
+	updateModifierBehaviors() {
+		// Apply user settings to the modifier behavior configuration
+		// This allows users to customize which keys perform which actions
+		MODIFIER_BEHAVIOR.INSERT_MODE_TOGGLE = this.settings.insertModeToggleKey;
+		MODIFIER_BEHAVIOR.CONTENT_SUGGESTION_TOGGLE = this.settings.contentSuggestionToggleKey;
+		MODIFIER_BEHAVIOR.CONTENT_FORMAT_TOGGLE = this.settings.contentFormatToggleKey;
+		MODIFIER_BEHAVIOR.DAILY_NOTE_TOGGLE = this.settings.dailyNoteToggleCombo;
+	}
+
+	/**
+	 * Update suggester instructions when settings change
+	 */
+	updateSuggesterInstructions() {
+		if (this.editorSuggester) {
+			this.editorSuggester.updateInstructions();
+		}
+	}
+	
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
-		
-		// Update UI elements that depend on settings
-		if (this.editorSuggester) {
-			this.editorSuggester.updateInstructions();
-		}
+		this.updateModifierBehaviors();
+		this.updateSuggesterInstructions();
 	}
 }
