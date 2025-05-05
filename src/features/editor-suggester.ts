@@ -84,25 +84,58 @@ export class EditorSuggester extends EditorSuggest<string> {
     onTrigger(cursor: EditorPosition, editor: Editor): EditorSuggestContext | null {
         // If trigger phrase is empty, disable the suggester
         if (!this.plugin.settings.triggerPhrase) return null;
-        
-        const line = editor.getLine(cursor.line).slice(0, cursor.ch);
-        // Match the custom trigger phrase followed by any characters
-        const triggerRegex = new RegExp(`${this.plugin.settings.triggerPhrase}([^${this.plugin.settings.triggerPhrase.charAt(0)}]*)$`);
-        const m = line.match(triggerRegex);
-        if (!m) return null;
-        
-        if (m.index! > 0) {
-            const charBeforeTrigger = line.charAt(m.index! - 1);
-            // If the character before trigger isn't a space or beginning of line, don't activate
-            if (charBeforeTrigger !== ' ' && charBeforeTrigger !== '\t') return null;
+
+        const line = editor.getLine(cursor.line);
+        const triggerPhrase = this.plugin.settings.triggerPhrase;
+        const cursorSubstring = line.slice(0, cursor.ch);
+
+        // Find the last occurrence of the trigger phrase ending at or before the cursor
+        const lastTriggerIndex = cursorSubstring.lastIndexOf(triggerPhrase);
+
+        // If trigger phrase not found before the cursor
+        if (lastTriggerIndex === -1) return null;
+
+        // 1. Check character *before* the trigger phrase
+        const charBefore = lastTriggerIndex > 0 ? cursorSubstring.charAt(lastTriggerIndex - 1) : ' '; // Treat start of line as space
+        if (charBefore !== ' ' && charBefore !== '\t') {
+            return null; // Not preceded by whitespace
         }
 
-        // If the query starts with a space, dismiss the suggester
-        if (m[1].startsWith(" ")) return null;
-        
+        const posAfterTrigger = lastTriggerIndex + triggerPhrase.length;
+
+        // 2. Ensure cursor is actually at or after the potential trigger's end
+        if (cursor.ch < posAfterTrigger) {
+             return null; // Cursor is within the trigger phrase itself
+        }
+
+        const query = cursorSubstring.slice(posAfterTrigger);
+
+        // 3. Check if the query starts with a space (dismisses suggester if space is typed first)
+        if (query.startsWith(' ') || query.startsWith('\t')) {
+            return null; // Query starts with space, dismiss.
+        }
+
+        // 4. Check character *immediately after* trigger *only if query is empty*
+        // This prevents triggering when typing trigger before existing non-whitespace (e.g., "@pword")
+        // or when the trigger is followed immediately by non-whitespace (e.g. "@triggerword")
+        if (query.length === 0) {
+            const charAfterInFullLine = posAfterTrigger < line.length ? line.charAt(posAfterTrigger) : ' '; // Check full line context
+            if (charAfterInFullLine !== ' ' && charAfterInFullLine !== '\t') {
+                return null; // Non-whitespace follows immediately, invalid initial trigger
+            }
+        }
+
+        // If all checks pass, this is our valid trigger point
         const activeFile = this.app.workspace.getActiveFile();
         if (!activeFile) return null;
-        return { start: { line: cursor.line, ch: m.index! }, end: cursor, query: m[1], editor, file: activeFile };
+
+        return {
+            start: { line: cursor.line, ch: lastTriggerIndex },
+            end: cursor,
+            query: query,
+            editor,
+            file: activeFile
+        };
     }
 
     getSuggestions(ctx: EditorSuggestContext): string[] {
