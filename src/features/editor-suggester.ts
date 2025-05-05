@@ -76,6 +76,12 @@ export class EditorSuggester extends EditorSuggest<string> {
         });
     }
     
+    unload() {
+        if (this.suggester) {
+            this.suggester.unload();
+        }
+    }
+    
     onTrigger(cursor: EditorPosition, editor: Editor): EditorSuggestContext | null {
         // If trigger phrase is empty, disable the suggester
         if (!this.plugin.settings.triggerPhrase) return null;
@@ -105,7 +111,8 @@ export class EditorSuggester extends EditorSuggest<string> {
     }
 
     renderSuggestion(item: string, el: HTMLElement) {
-        this.suggester.renderSuggestionContent(item, el);
+        // Pass the context (this) to the suggester for dismissing on link clicks
+        this.suggester.renderSuggestionContent(item, el, this);
     }
 
     selectSuggestion(item: string, event: KeyboardEvent | MouseEvent): void {

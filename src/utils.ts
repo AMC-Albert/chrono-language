@@ -1,6 +1,6 @@
-import { App, normalizePath } from 'obsidian';
+import { App, normalizePath, Notice, TFile } from 'obsidian';
 import { Link, ObsidianSettings } from 'obsidian-dev-utils/obsidian';
-import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
+import { getDailyNoteSettings, getDailyNote, getAllDailyNotes, createDailyNote } from 'obsidian-daily-notes-interface';
 import { ChronoLanguageSettings } from './settings';
 import { EnhancedDateParser } from './parser';
 
@@ -198,4 +198,49 @@ export function createDailyNoteLink(
     };
     
     return Link.generateMarkdownLink(linkOptions);
+}
+
+/**
+ * Gets or creates a daily note for a specific date
+ * @param app The Obsidian app instance
+ * @param momentDate The moment.js date object for the daily note
+ * @param shouldOpen Whether to open the note after getting/creating it
+ * @returns The daily note TFile or null if unsuccessful
+ */
+export async function getOrCreateDailyNote(
+    app: App,
+    momentDate: moment.Moment,
+    shouldOpen: boolean = false
+): Promise<TFile | null> {
+    try {
+        // Check if the daily note exists
+        let dailyNote = getDailyNote(momentDate, getAllDailyNotes());
+        
+        // Create the note if it doesn't exist
+        if (!dailyNote) {
+            dailyNote = await createDailyNote(momentDate);
+            if (!dailyNote) {
+                new Notice("Failed to create daily note");
+                return null;
+            }
+        }
+        
+        // Convert to Obsidian TFile
+        const obsidianFile = app.vault.getAbstractFileByPath(dailyNote.path);
+        if (!(obsidianFile instanceof TFile)) {
+            new Notice("Failed to find daily note in vault");
+            return null;
+        }
+        
+        // Open the note if requested
+        if (shouldOpen) {
+            await app.workspace.getLeaf().openFile(obsidianFile);
+        }
+        
+        return obsidianFile;
+    } catch (error) {
+        console.error("Error handling daily note:", error);
+        new Notice("Failed to handle daily note");
+        return null;
+    }
 }

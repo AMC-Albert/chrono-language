@@ -5,7 +5,7 @@ import { OpenDailyNoteModal } from './features/open-daily-note';
 
 export default class ChronoLanguage extends Plugin {
 	settings: ChronoLanguageSettings = DEFAULT_SETTINGS;
-	suggester: EditorSuggester;
+	editorSuggester: EditorSuggester;
 	contextSuggestion: string | null = null;
 
 	async onload() {
@@ -16,8 +16,8 @@ export default class ChronoLanguage extends Plugin {
 		this.addSettingTab(new ChronoLanguageSettingTab(this.app, this));
 
 		// Register suggester
-		this.suggester = new EditorSuggester(this);
-		this.registerEditorSuggest(this.suggester);
+		this.editorSuggester = new EditorSuggester(this);
+		this.registerEditorSuggest(this.editorSuggester);
 
 		// Add command to open daily note modal
 		this.addCommand({
@@ -29,8 +29,8 @@ export default class ChronoLanguage extends Plugin {
 		});
 	}
 	
-	onunload() {
-		// Clear any remaining state
+	async onunload() {
+		this.editorSuggester.unload();
 	}
 
 	async loadSettings() {

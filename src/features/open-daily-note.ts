@@ -1,8 +1,8 @@
-import { Notice, FuzzySuggestModal, App, FuzzyMatch, TFile } from "obsidian";
+import { Notice, FuzzySuggestModal, App, FuzzyMatch } from "obsidian";
 import ChronoLanguage from "../main";
 import { Suggester } from "../suggester";
-import { getDailyNote, getAllDailyNotes, createDailyNote } from 'obsidian-daily-notes-interface';
 import { EnhancedDateParser } from "../parser";
+import { getOrCreateDailyNote } from "../utils";
 
 export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
   plugin: ChronoLanguage;
@@ -31,7 +31,7 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
   }
 
   renderSuggestion(item: FuzzyMatch<string>, el: HTMLElement) {
-    this.suggester.renderSuggestionContent(item.item, el);
+    this.suggester.renderSuggestionContent(item.item, el, this);
   }
 
   async onChooseItem(item: string): Promise<void> {
@@ -42,23 +42,10 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
         return;
       }
 
-      const momentDate = window.moment(parsedDateResult); // Convert Date to Moment
+      const momentDate = window.moment(parsedDateResult);
       
-      // Get the daily note or create it if it doesn't exist
-      let dailyNote = getDailyNote(momentDate, getAllDailyNotes());
-      
-      if (!dailyNote) dailyNote = await createDailyNote(momentDate);
-      
-      if (dailyNote) {
-        const obsidianFile = this.app.vault.getAbstractFileByPath(dailyNote.path);
-        if (obsidianFile instanceof TFile) {
-          await this.app.workspace.getLeaf().openFile(obsidianFile);
-        } else {
-          new Notice("Failed to find daily note in vault");
-        }
-      } else {
-        new Notice("Failed to create or find daily note");
-      }
+      // Use the utility function to get or create and open the note
+      await getOrCreateDailyNote(this.app, momentDate, true);
     } catch (error) {
       console.error("Error opening daily note:", error);
       new Notice("Failed to open daily note");

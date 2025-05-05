@@ -7,18 +7,27 @@
   
 }
 
+.chrono-is-unresolved {
+  text-decoration-line: var(--link-decoration);
+  text-decoration-style: var(--link-unresolved-decoration-style);
+  text-decoration-color: var(--link-unresolved-decoration-color);
+  color: var(--link-unresolved-color);
+  opacity: var(--link-unresolved-opacity);
+  filter: var(--link-unresolved-filter);
+}
+
 .chrono-suggestion-preview {
   color: var(--text-muted);
   font-size: 0.9em;
-  font-style: italic;
 }
 
 .multiple-text-component {
-    min-width: 164.8px; /* Not sure if there is a non-hardcoded way */
+  /* Not sure if there is a non-hardcoded way to align with other single-line text components */
+  min-width: 164.8px;
 }
 
 .multiple-text-component textarea {
-    field-sizing: content;
-    resize: none;
-    min-width: 164.8px; 
+  field-sizing: content;
+  resize: none;
+  min-width: 164.8px; 
 }
