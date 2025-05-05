@@ -9,9 +9,11 @@ import { EnhancedDateParser } from './parser';
  * @param dateText Text to parse as a date
  * @param settings Plugin settings
  * @param useAlternateFormat If true, uses the alternate format instead of primary
+ * @param forceNoAlias If true, forces no alias in the link
+ * @param forceDailyNoteFormat If true, returns the daily note format
  * @returns Human readable date preview
  */
-export function getDatePreview(dateText: string, settings: ChronoLanguageSettings, useAlternateFormat: boolean = false): string {
+export function getDatePreview(dateText: string, settings: ChronoLanguageSettings, useAlternateFormat: boolean = false, forceNoAlias: boolean = false, forceDailyNoteFormat: boolean = false): string {
     const dailyNoteSettings = getDailyNoteSettings();
     
     if (!dateText) return '';
@@ -21,7 +23,11 @@ export function getDatePreview(dateText: string, settings: ChronoLanguageSetting
     
     // Determine which format to use
     let format;
-    if (useAlternateFormat && settings.alternateFormat) {
+    if (forceDailyNoteFormat) {
+        format = dailyNoteSettings.format || "YYYY-MM-DD";
+    } else if (forceNoAlias) {
+        return '';
+    } else if (useAlternateFormat && settings.alternateFormat) {
         format = settings.alternateFormat;
     } else {
         format = settings.primaryFormat || dailyNoteSettings.format || "YYYY-MM-DD";
@@ -58,18 +64,25 @@ export function getDailyNotePreview(dateText: string): string {
  * @param forceTextAsAlias If true, uses the original text as alias regardless of settings
  * @param originalText The original text to use as alias when forceTextAsAlias is true
  * @param useAlternateFormat If true, uses the alternate format for alias
+ * @param forceNoAlias If true, forces no alias in the link
  * @returns The alias to use for the link, or undefined if no alias should be used
  */
 export function determineDailyNoteAlias(
     app: App,
     settings: ChronoLanguageSettings, 
-    momentDate: moment.Moment, // Accept the moment object directly
+    momentDate: moment.Moment,
     dailyNoteFormat: string,
     filePath: string,
-    forceTextAsAlias: boolean = false,
+    forceTextAsAlias?: boolean,
     originalText?: string,
-    useAlternateFormat: boolean = false
+    useAlternateFormat?: boolean,
+    forceNoAlias?: boolean
 ): string | undefined {
+    // If forcing no alias, return undefined
+    if (forceNoAlias) {
+        return undefined;
+    }
+
     // Case 1: Force original text as alias
     if (forceTextAsAlias && originalText) {
         return originalText;
@@ -144,6 +157,7 @@ export function getDailyNotePath(
  * @param dateText Optional text to parse as a date (defaults to today)
  * @param forceTextAsAlias If true, uses the dateText as alias regardless of settings
  * @param useAlternateFormat If true, uses the alternate format for alias
+ * @param forceNoAlias If true, forces no alias in the link
  * @returns The generated markdown link
  */
 export function createDailyNoteLink(
@@ -151,8 +165,9 @@ export function createDailyNoteLink(
     settings: ChronoLanguageSettings, 
     sourceFile: any, 
     dateText?: string, 
-    forceTextAsAlias: boolean = false,
-    useAlternateFormat?: boolean
+    forceTextAsAlias?: boolean,
+    useAlternateFormat?: boolean,
+    forceNoAlias?: boolean
 ): string {
     const dailyNoteSettings = getDailyNoteSettings();
     
@@ -183,9 +198,10 @@ export function createDailyNoteLink(
         momentDate, // Pass the moment object directly
         dailyNoteFormat, // Pass the daily note format separately
         targetPath,
-        forceTextAsAlias,
+        forceTextAsAlias || false,
         dateText,
-        useAlternateFormat
+        useAlternateFormat || false,
+        forceNoAlias || false
     );
     
     const linkOptions: Link.GenerateMarkdownLinkOptions = {

@@ -4,6 +4,7 @@ import { getDailyNotePreview, getDatePreview, getOrCreateDailyNote } from './uti
 import { getDailyNote, getAllDailyNotes, getDailyNoteSettings } from 'obsidian-daily-notes-interface';
 import { EnhancedDateParser } from './parser';
 import { TFile } from 'obsidian';
+import { DEFAULT_KEYMAP, KeyState } from './types';
 
 /**
  * Shared suggester for date suggestions
@@ -11,9 +12,7 @@ import { TFile } from 'obsidian';
 export class Suggester {
     app: App;
     plugin: ChronoLanguage;
-    isAltKeyPressed: boolean = false;
-    isCtrlKeyPressed: boolean = false; // Add Ctrl key state
-    isShiftKeyPressed: boolean = false; // Add Shift key state
+    keyState: KeyState = { shift: false, ctrl: false, alt: false };
     currentElements: Map<string, HTMLElement> = new Map();
     contextProvider: any; // Add property to store the context provider
 
@@ -40,27 +39,39 @@ export class Suggester {
     }
 
     handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Alt') {
-            this.isAltKeyPressed = true;
-            this.updateAllPreviews();
-        } else if (e.key === 'Control') {
-            this.isCtrlKeyPressed = true;
-            this.updateAllPreviews();
-        } else if (e.key === 'Shift') {
-            this.isShiftKeyPressed = true;
+        let updated = false;
+        
+        if (e.key === 'Alt' && !this.keyState.alt) {
+            this.keyState.alt = true;
+            updated = true;
+        } else if (e.key === 'Control' && !this.keyState.ctrl) {
+            this.keyState.ctrl = true;
+            updated = true;
+        } else if (e.key === 'Shift' && !this.keyState.shift) {
+            this.keyState.shift = true;
+            updated = true;
+        }
+        
+        if (updated) {
             this.updateAllPreviews();
         }
     };
 
     handleKeyUp = (e: KeyboardEvent) => {
-        if (e.key === 'Alt') {
-            this.isAltKeyPressed = false;
-            this.updateAllPreviews();
-        } else if (e.key === 'Control') {
-            this.isCtrlKeyPressed = false;
-            this.updateAllPreviews();
-        } else if (e.key === 'Shift') {
-            this.isShiftKeyPressed = false;
+        let updated = false;
+        
+        if (e.key === 'Alt' && this.keyState.alt) {
+            this.keyState.alt = false;
+            updated = true;
+        } else if (e.key === 'Control' && this.keyState.ctrl) {
+            this.keyState.ctrl = false;
+            updated = true;
+        } else if (e.key === 'Shift' && this.keyState.shift) {
+            this.keyState.shift = false;
+            updated = true;
+        }
+        
+        if (updated) {
             this.updateAllPreviews();
         }
     };
@@ -72,11 +83,26 @@ export class Suggester {
         });
     }
 
+    getCurrentKeyCombo(): string {
+        const { shift, ctrl, alt } = this.keyState;
+        
+        if (shift && ctrl && alt) return 'ctrl+shift+alt';
+        if (shift && ctrl) return 'ctrl+shift';
+        if (ctrl && alt) return 'ctrl+alt';
+        if (shift && alt) return 'shift+alt';
+        if (shift) return 'shift';
+        if (ctrl) return 'ctrl';
+        if (alt) return 'alt';
+        return 'none';
+    }
+
+    resetKeyState() {
+        this.keyState = { shift: false, ctrl: false, alt: false };
+    }
+
     getDateSuggestions(context: { query: string }, initialSuggestions?: string[]): string[] {
         // Reset modifier key states when suggestions are requested
-        this.isAltKeyPressed = false;
-        this.isCtrlKeyPressed = false;
-        this.isShiftKeyPressed = false;
+        this.resetKeyState();
         
         const suggestions = initialSuggestions || this.plugin.settings.initialEditorSuggestions;
         const filtered = suggestions.filter(
@@ -116,10 +142,6 @@ export class Suggester {
 
         // Get daily note preview
         const dailyNotePreview = getDailyNotePreview(item);
-
-        // Detect if the daily note exists
-        const settings = getDailyNoteSettings();
-        const format = settings.format || "YYYY-MM-DD";
         
         let momentDate = window.moment(EnhancedDateParser.parseDate(item));
         
@@ -128,11 +150,23 @@ export class Suggester {
         // Use proper class based on note existence
         const dailyNoteClass = dailyNote instanceof TFile ? 'u-pop' : 'chrono-is-unresolved';
         
-        let readableDatePreview = getDatePreview(item, this.plugin.settings, this.isAltKeyPressed);
+        const currentKeyCombo = this.getCurrentKeyCombo();
+        const keyCombo = DEFAULT_KEYMAP[currentKeyCombo];
 
-        // If Shift is pressed, replace readableDatePreview with the original item
-        if (this.isShiftKeyPressed) {
-            readableDatePreview = item; 
+        // Get appropriate preview based on key combination
+        let readableDatePreview: string;
+        
+        if (keyCombo.action === 'textplain' || keyCombo.action === 'alias') {
+            readableDatePreview = item;
+        } else if (keyCombo.action === 'dailynote') {
+            readableDatePreview = dailyNotePreview;
+        } else {
+            readableDatePreview = getDatePreview(
+                item, 
+                this.plugin.settings, 
+                keyCombo.alt, 
+                keyCombo.alt && keyCombo.shift
+            );
         }
 
         // Create the preview container span
@@ -140,9 +174,9 @@ export class Suggester {
             cls: 'chrono-suggestion-preview'
         });
 
-        // Determine the preview content based on Ctrl key state
-        if (this.isCtrlKeyPressed) {
-            // If Ctrl is pressed, only show readableDatePreview (or item if Shift is also pressed)
+        // Determine the preview content based on key combination
+        if (keyCombo.ctrl) {
+            // If Ctrl is pressed, only show readableDatePreview
             if (readableDatePreview) {
                 previewContainer.appendText(`↳ ${readableDatePreview}`);
             }
