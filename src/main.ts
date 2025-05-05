@@ -22,7 +22,7 @@ export default class ChronoLanguage extends Plugin {
 		// Add command to open daily note modal
 		this.addCommand({
 			id: 'open-daily-note-modal',
-			name: 'Open Daily Note',
+			name: 'Open daily note',
 			callback: () => {
 				new OpenDailyNoteModal(this.app, this).open();
 			}

@@ -2,7 +2,7 @@ import { Editor, EditorPosition, EditorSuggest, EditorSuggestContext, App } from
 import ChronoLanguage from '../main';
 import { createDailyNoteLink, getDatePreview } from '../utils';
 import { Suggester } from '../suggester';
-import { KeyCombo } from '../types';
+import { KeyCombo, Action } from '../types';
 import { KeyboardHandler } from '../keyboard-handler';
 
 /**
@@ -10,36 +10,80 @@ import { KeyboardHandler } from '../keyboard-handler';
  */
 export class EditorSuggester extends EditorSuggest<string> {
     plugin: ChronoLanguage;
-    private suggester: Suggester;
+    private suggester: Suggester | null = null;
     private keyboardHandler: KeyboardHandler;
     
     constructor(plugin: ChronoLanguage) {
         super(plugin.app);
         this.plugin = plugin;
-        this.suggester = new Suggester(this.app, this.plugin);
         
-        // Create the keyboard handler
+        // Initialize the keyboard handler first with proper scope
         this.keyboardHandler = new KeyboardHandler(this.scope, this.plugin.settings.invertCtrlBehavior);
+        
+        // Initialize suggester after keyboard handler
+        this.suggester = new Suggester(this.app, this.plugin);
         
         // Register keyboard shortcuts with appropriate callbacks
         this.setupKeyboardEventHandlers();
         
         // Initial setup of instructions
         this.updateInstructions();
+        
+        // Add event listener for key changes to sync with suggester
+        document.addEventListener('keydown', this.onKeyEvent);
+        document.addEventListener('keyup', this.onKeyEvent);
     }
+    
+    // Add method to handle key events and update suggester
+    onKeyEvent = (event: KeyboardEvent) => {
+        if (this.isOpen && this.suggester) {
+            this.suggester.updateAllPreviews();
+        }
+    };
 
     private setupKeyboardEventHandlers() {
         this.keyboardHandler.registerShortcuts((event: KeyboardEvent) => {
+            // Only handle Enter key with our custom logic
             if (event.key === "Enter") {
                 this.suggestions.useSelectedItem(event);
-            } else if (event.key === "ArrowDown") {
+                return false; // Prevent default behavior
+            }
+            
+            // For arrow keys, only handle if no other modifier is pressed
+            // This allows modifier keys to show previews while navigating
+            if (event.key === "ArrowDown") {
                 this.suggestions.moveDown(event);
+                return false; // Prevent default
             } else if (event.key === "ArrowUp") {
                 this.suggestions.moveUp(event);
+                return false; // Prevent default
             }
-            return false; // Prevent default behavior
+            
+            // Let other key combinations pass through
+            return true;
         });
+        
+        // Add direct document listeners for arrow keys with modifiers
+        // This ensures we can still navigate suggestions when modifiers are pressed
+        document.addEventListener('keydown', this.handleArrowKeys);
     }
+    
+    // Add a specific handler for arrow keys
+    handleArrowKeys = (event: KeyboardEvent) => {
+        if (!this.isOpen) return;
+        
+        if (event.key === "ArrowDown") {
+            // Only handle if we're open and an active selection exists
+            this.suggestions.moveDown(event);
+            event.preventDefault();
+            event.stopPropagation();
+        } else if (event.key === "ArrowUp") {
+            // Only handle if we're open and an active selection exists
+            this.suggestions.moveUp(event);
+            event.preventDefault();
+            event.stopPropagation();
+        }
+    };
 
     /**
      * Updates the instructions based on current settings
@@ -55,6 +99,9 @@ export class EditorSuggester extends EditorSuggest<string> {
         if (this.suggester) {
             this.suggester.unload();
         }
+        document.removeEventListener('keydown', this.onKeyEvent);
+        document.removeEventListener('keyup', this.onKeyEvent);
+        document.removeEventListener('keydown', this.handleArrowKeys);
     }
     
     onTrigger(cursor: EditorPosition, editor: Editor): EditorSuggestContext | null {
@@ -108,36 +155,67 @@ export class EditorSuggester extends EditorSuggest<string> {
     }
 
     getSuggestions(ctx: EditorSuggestContext): string[] {
-        return this.suggester.getDateSuggestions({ query: ctx.query });
+        return this.suggester ? this.suggester.getDateSuggestions({ query: ctx.query }) : [];
     }
 
     renderSuggestion(item: string, el: HTMLElement) {
-        this.suggester.renderSuggestionContent(item, el, this);
+        if (this.suggester) {
+            this.suggester.renderSuggestionContent(item, el, this);
+        }
     }
 
     selectSuggestion(item: string, event: KeyboardEvent | MouseEvent): void {
         if (this.context) {
             const { editor, start, end } = this.context;
             
+            // If the suggester exists, sync its key state with the current event
+            if (this.suggester && event instanceof KeyboardEvent) {
+                this.suggester.keyState = {
+                    shift: event.shiftKey,
+                    ctrl: event.ctrlKey,
+                    alt: event.altKey
+                };
+            }
+            
             const matchedCombo: KeyCombo = this.keyboardHandler.getMatchedCombo(event);
             
             let insertText: string = "";
             
-            if (matchedCombo.action === 'selectedplain') {
+            // Use the action field instead of checking specific modifiers
+            if (matchedCombo.action === Action.SELECTED_PLAIN) {
                 insertText = item;
             } else {
-                const forceTextAsAlias = matchedCombo.action === 'selectedalias';
-                const forceNoAlias = matchedCombo.action === 'noalias'; 
-                const insertPlaintext = (matchedCombo.action === 'plaintext' && !this.plugin.settings.invertCtrlBehavior) || 
-                                        (matchedCombo.action === 'link' && this.plugin.settings.invertCtrlBehavior && matchedCombo.ctrl === true) || 
-                                        (matchedCombo.action === 'altplain');
+                const forceTextAsAlias = matchedCombo.action === Action.SUGGESTION_TEXT;
+                const forceNoAlias = matchedCombo.action === Action.NO_ALIAS;
+                
+                // Determine if we should insert plain text based on the action
+                // rather than specific modifier combinations
+                const insertPlaintext = matchedCombo.action === Action.PLAINTEXT || 
+                                       matchedCombo.action === Action.ALT_PLAIN ||
+                                       // Still support the inverted behavior pattern but make it more action-focused
+                                       (this.plugin.settings.invertCtrlBehavior && matchedCombo.action === Action.LINK && matchedCombo.ctrl);
 
-                const useAlternateFormat = matchedCombo.action === 'alternate' || matchedCombo.action === 'altplain';
+                // Determine format options based on action
+                const useAlternateFormat = matchedCombo.action === Action.ALTERNATE || 
+                                          matchedCombo.action === Action.ALT_PLAIN ||
+                                          matchedCombo.alt;
 
                 insertText = insertPlaintext
-                    ? getDatePreview(item, this.plugin.settings, useAlternateFormat, forceNoAlias, matchedCombo.action === 'dailynote')
+                    ? getDatePreview(
+                        item, 
+                        this.plugin.settings, 
+                        useAlternateFormat, 
+                        forceNoAlias, 
+                        matchedCombo.action === Action.DAILY_NOTE
+                    )
                     : createDailyNoteLink(
-                        this.app, this.plugin.settings, this.context.file, item, forceTextAsAlias, useAlternateFormat, forceNoAlias
+                        this.app, 
+                        this.plugin.settings, 
+                        this.context.file, 
+                        item, 
+                        forceTextAsAlias, 
+                        useAlternateFormat, 
+                        forceNoAlias
                     );
             }
             
