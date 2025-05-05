@@ -84,7 +84,13 @@ export class Suggester {
     }
 
     getCurrentKeyCombo(): string {
-        const { shift, ctrl, alt } = this.keyState;
+        // Get base key state
+        let { shift, ctrl, alt } = this.keyState;
+        
+        // Invert ctrl behavior if setting is enabled
+        if (this.plugin.settings.invertCtrlBehavior) {
+            ctrl = !ctrl;
+        }
         
         if (shift && ctrl && alt) return 'ctrl+shift+alt';
         if (shift && ctrl) return 'ctrl+shift';
@@ -156,7 +162,7 @@ export class Suggester {
         // Get appropriate preview based on key combination
         let readableDatePreview: string;
         
-        if (keyCombo.action === 'textplain' || keyCombo.action === 'alias') {
+        if (keyCombo.action === 'selectedplain' || keyCombo.action === 'selectedalias') {
             readableDatePreview = item;
         } else if (keyCombo.action === 'dailynote') {
             readableDatePreview = dailyNotePreview;

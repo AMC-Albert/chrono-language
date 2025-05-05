@@ -11,6 +11,7 @@ export interface ChronoLanguageSettings {
   triggerPhrase: string;
   initialEditorSuggestions: string[];
   initialOpenDailyNoteSuggestions: string[];
+  invertCtrlBehavior: boolean;
 }
 
 export const DEFAULT_SETTINGS: ChronoLanguageSettings = {
@@ -21,6 +22,7 @@ export const DEFAULT_SETTINGS: ChronoLanguageSettings = {
   triggerPhrase: '@',
   initialEditorSuggestions: ['Today', 'Tomorrow', 'Yesterday'],
   initialOpenDailyNoteSuggestions: ['Today', 'Tomorrow', 'Yesterday'],
+  invertCtrlBehavior: false,
 }
 
 export class ChronoLanguageSettingTab extends PluginSettingTab {
@@ -109,6 +111,18 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
     this.hideFoldersSetting = hideFoldersSetting.settingEl;
 
     new Setting(containerEl).setName('Editor suggester').setHeading();
+
+    new Setting(containerEl)
+      .setName("Insert plain text by default")
+      .setDesc("When enabled, insert suggestions as plain text by default, and use the Ctrl modifier to insert as link.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.invertCtrlBehavior)
+          .onChange(async (value) => {
+            this.plugin.settings.invertCtrlBehavior = value;
+            await this.plugin.saveSettings();
+          })
+      );
 
     // Add the trigger phrase setting
     new Setting(containerEl)

@@ -39,5 +39,10 @@ export default class ChronoLanguage extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+		
+		// Update UI elements that depend on settings
+		if (this.editorSuggester) {
+			this.editorSuggester.updateInstructions();
+		}
 	}
 }

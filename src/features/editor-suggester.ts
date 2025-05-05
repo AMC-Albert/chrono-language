@@ -16,17 +16,8 @@ export class EditorSuggester extends EditorSuggest<string> {
         this.plugin = plugin;
         this.suggester = new Suggester(this.app, this.plugin);
         
-        // Set instructions based on the DEFAULT_KEYMAP, only including those with descriptions
-        this.setInstructions(
-            Object.entries(DEFAULT_KEYMAP)
-                .filter(([key, combo]) => {
-                    return key !== 'none' && combo.description !== undefined;
-                })
-                .map(([key, combo]) => ({
-                    command: this.formatKeyComboForDisplay(key),
-                    purpose: combo.description!
-                }))
-        );
+        // Initial setup of instructions
+        this.updateInstructions();
 
         // Register keyboard shortcuts for all key combinations
         Object.entries(DEFAULT_KEYMAP).forEach(([key, combo]) => {
@@ -51,6 +42,30 @@ export class EditorSuggester extends EditorSuggest<string> {
             this.suggestions.moveUp(event);
             return false;
         });
+    }
+
+    /**
+     * Updates the instructions based on current settings
+     * This should be called whenever settings change
+     */
+    updateInstructions() {
+        this.setInstructions(
+            Object.entries(DEFAULT_KEYMAP)
+                .filter(([key, combo]) => {
+                    return key !== 'none' && combo.description !== undefined;
+                })
+                .map(([key, combo]) => {
+                    // Use alternateDesc if invertCtrlBehavior is enabled and alternateDesc exists
+                    let purpose = combo.description!;
+                    if (this.plugin.settings.invertCtrlBehavior && combo.alternateDesc) {
+                        purpose = combo.alternateDesc;
+                    }
+                    return {
+                        command: this.formatKeyComboForDisplay(key),
+                        purpose: purpose
+                    };
+                })
+        );
     }
     
     formatKeyComboForDisplay(key: string): string {
@@ -104,11 +119,16 @@ export class EditorSuggester extends EditorSuggest<string> {
             const { editor, start, end } = this.context;
             
             // Get key state from the event
-            const keyState = {
+            let keyState = {
                 shift: 'shiftKey' in event ? event.shiftKey : false,
                 ctrl: 'ctrlKey' in event ? event.ctrlKey : false,
                 alt: 'altKey' in event ? event.altKey : false
             };
+            
+            // Invert ctrl behavior if setting is enabled
+            if (this.plugin.settings.invertCtrlBehavior) {
+                keyState.ctrl = !keyState.ctrl;
+            }
             
             // Find the matching key combo
             let keyCombo: KeyCombo = DEFAULT_KEYMAP.none;
@@ -124,10 +144,10 @@ export class EditorSuggester extends EditorSuggest<string> {
             // Apply the appropriate action based on the key combo
             let insertText: string = "";
             
-            if (keyCombo.action === 'textplain') {
+            if (keyCombo.action === 'selectedplain') {
                 insertText = item;
             } else {
-                const forceTextAsAlias = keyCombo.action === 'alias';
+                const forceTextAsAlias = keyCombo.action === 'selectedalias';
                 const forceNoAlias = keyCombo.action === 'noalias'; 
                 const insertPlaintext = keyCombo.ctrl;
                 const useAlternateFormat = keyCombo.alt;
