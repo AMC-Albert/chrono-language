@@ -9,9 +9,10 @@ export interface ChronoLanguageSettings {
   includeFolderInLinks: boolean;
   HideFolders: boolean;
   triggerPhrase: string;
+  triggerHappy: boolean;
+  invertCtrlBehavior: boolean;
   initialEditorSuggestions: string[];
   initialOpenDailyNoteSuggestions: string[];
-  invertCtrlBehavior: boolean;
 }
 
 export const DEFAULT_SETTINGS: ChronoLanguageSettings = {
@@ -20,9 +21,10 @@ export const DEFAULT_SETTINGS: ChronoLanguageSettings = {
   includeFolderInLinks: true,
   HideFolders: true,
   triggerPhrase: '@',
+  triggerHappy: false,
+  invertCtrlBehavior: false,
   initialEditorSuggestions: ['Today', 'Tomorrow', 'Yesterday'],
   initialOpenDailyNoteSuggestions: ['Today', 'Tomorrow', 'Yesterday'],
-  invertCtrlBehavior: false,
 }
 
 export class ChronoLanguageSettingTab extends PluginSettingTab {
@@ -113,30 +115,42 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName('Editor suggester').setHeading();
 
     new Setting(containerEl)
-      .setName("Insert plain text by default")
-      .setDesc("When enabled, insert suggestions as plain text by default, and use the Ctrl modifier to insert as link.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.invertCtrlBehavior)
-          .onChange(async (value) => {
-            this.plugin.settings.invertCtrlBehavior = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    // Add the trigger phrase setting
-    new Setting(containerEl)
-      .setName("Trigger phrase")
-      .setDesc("Customize the trigger phrase to activate the editor suggester. If empty, the suggester will be disabled.")
-      .addText((text) => 
-        text
-          .setPlaceholder("@")
-          .setValue(this.plugin.settings.triggerPhrase)
-          .onChange(async (value) => {
-            this.plugin.settings.triggerPhrase = value;
-            await this.plugin.saveSettings();
-          })
-      );
+    .setName("Trigger phrase")
+    .setDesc("Customize the trigger phrase to activate the editor suggester. If empty, the suggester will be disabled.")
+    .addText((text) => 
+      text
+    .setPlaceholder("@")
+    .setValue(this.plugin.settings.triggerPhrase)
+    .onChange(async (value) => {
+      this.plugin.settings.triggerPhrase = value;
+      await this.plugin.saveSettings();
+    })
+  );
+  
+  new Setting(containerEl)
+  .setName("Trigger-happy suggester")
+  .setDesc("By default (off), the editor suggester will only trigger when the trigger phrase is surrounded by whitespace characters. \
+    When enabled, it will trigger unconditionally when the trigger phrase is typed.")
+    .addToggle((toggle) =>
+      toggle
+    .setValue(this.plugin.settings.triggerHappy)
+    .onChange(async (value) => {
+      this.plugin.settings.triggerHappy = value;
+      await this.plugin.saveSettings();
+    })
+  );
+  
+  new Setting(containerEl)
+    .setName("Insert plain text by default (inverted Ctrl behavior)")
+    .setDesc("When enabled, insert suggestions as plain text by default, and use the Ctrl modifier to insert as link.")
+    .addToggle((toggle) =>
+      toggle
+        .setValue(this.plugin.settings.invertCtrlBehavior)
+        .onChange(async (value) => {
+          this.plugin.settings.invertCtrlBehavior = value;
+          await this.plugin.saveSettings();
+        })
+    );
 
     const initialEditorSuggestionsSettings = new Setting(containerEl)
     .setName("Initial suggestions")

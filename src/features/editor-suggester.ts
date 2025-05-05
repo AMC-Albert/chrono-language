@@ -88,6 +88,7 @@ export class EditorSuggester extends EditorSuggest<string> {
         const line = editor.getLine(cursor.line);
         const triggerPhrase = this.plugin.settings.triggerPhrase;
         const cursorSubstring = line.slice(0, cursor.ch);
+        const triggerHappy = this.plugin.settings.triggerHappy; // Get the setting value
 
         // Find the last occurrence of the trigger phrase ending at or before the cursor
         const lastTriggerIndex = cursorSubstring.lastIndexOf(triggerPhrase);
@@ -95,10 +96,12 @@ export class EditorSuggester extends EditorSuggest<string> {
         // If trigger phrase not found before the cursor
         if (lastTriggerIndex === -1) return null;
 
-        // 1. Check character *before* the trigger phrase
-        const charBefore = lastTriggerIndex > 0 ? cursorSubstring.charAt(lastTriggerIndex - 1) : ' '; // Treat start of line as space
-        if (charBefore !== ' ' && charBefore !== '\t') {
-            return null; // Not preceded by whitespace
+        // 1. Check character *before* the trigger phrase (Skip if triggerHappy is true)
+        if (!triggerHappy) {
+            const charBefore = lastTriggerIndex > 0 ? cursorSubstring.charAt(lastTriggerIndex - 1) : ' '; // Treat start of line as space
+            if (charBefore !== ' ' && charBefore !== '\t') {
+                return null; // Not preceded by whitespace
+            }
         }
 
         const posAfterTrigger = lastTriggerIndex + triggerPhrase.length;
@@ -110,15 +113,15 @@ export class EditorSuggester extends EditorSuggest<string> {
 
         const query = cursorSubstring.slice(posAfterTrigger);
 
-        // 3. Check if the query starts with a space (dismisses suggester if space is typed first)
+        // 3. Check if the query starts with a space (dismisses suggester if space is typed first) - ALWAYS CHECK THIS
         if (query.startsWith(' ') || query.startsWith('\t')) {
             return null; // Query starts with space, dismiss.
         }
 
-        // 4. Check character *immediately after* trigger *only if query is empty*
+        // 4. Check character *immediately after* trigger *only if query is empty* (Skip if triggerHappy is true)
         // This prevents triggering when typing trigger before existing non-whitespace (e.g., "@pword")
         // or when the trigger is followed immediately by non-whitespace (e.g. "@triggerword")
-        if (query.length === 0) {
+        if (!triggerHappy && query.length === 0) {
             const charAfterInFullLine = posAfterTrigger < line.length ? line.charAt(posAfterTrigger) : ' '; // Check full line context
             if (charAfterInFullLine !== ' ' && charAfterInFullLine !== '\t') {
                 return null; // Non-whitespace follows immediately, invalid initial trigger
