@@ -15,7 +15,7 @@ export interface ChronoLanguageSettings {
 
 export const DEFAULT_SETTINGS: ChronoLanguageSettings = {
 	primaryFormat: '',
-  alternateFormat: '',
+  alternateFormat: 'dddd, MMMM Do YYYY',
   includeFolderInLinks: true,
   HideFolders: true,
   triggerPhrase: '@',
@@ -72,7 +72,7 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
       It does not need to match your daily note format.")
     .addText((text) =>
       text
-        .setPlaceholder(getDailyNoteSettings().format || "YYYY-MM-DD")
+        .setPlaceholder("dddd, MMMM Do YYYY")
         .setValue(this.plugin.settings.alternateFormat)
         .onChange(async (value) => {
           this.plugin.settings.alternateFormat = value || "";
