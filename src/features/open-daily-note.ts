@@ -4,6 +4,7 @@ import { Suggester } from "./suggestion-renderer";
 import { EnhancedDateParser } from "../utils/parser";
 import { getOrCreateDailyNote } from "../utils/helpers";
 import { KeyboardHandler } from "../utils/keyboard-handler";
+import { KEY_EVENTS } from "../plugin-data/constants";
 
 export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
   plugin: ChronoLanguage;
@@ -17,7 +18,7 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
     // Initialize keyboard handler for modal context
     this.keyboardHandler = new KeyboardHandler(
       this.scope, 
-      plugin.settings.invertCtrlBehavior
+      plugin.settings.plainTextByDefault
     );
     
     // Initialize suggester after keyboard handler
@@ -32,7 +33,7 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
   
   private setupKeyboardEventHandlers() {
     // Set up event listeners to sync key states between suggester and modal
-    this.scope.register([], 'keydown', (event: KeyboardEvent) => {
+    this.scope.register([], KEY_EVENTS.KEYDOWN, (event: KeyboardEvent) => {
       // Update keyboard handler state
       const updated = this.keyboardHandler.updateKeyState(event, true);
       
@@ -45,7 +46,7 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
       return true; // Allow event to propagate
     });
     
-    this.scope.register([], 'keyup', (event: KeyboardEvent) => {
+    this.scope.register([], KEY_EVENTS.KEYUP, (event: KeyboardEvent) => {
       // Update keyboard handler state
       const updated = this.keyboardHandler.updateKeyState(event, false);
       
@@ -78,16 +79,36 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
 
   async onChooseItem(item: string, event: MouseEvent | KeyboardEvent): Promise<void> {
     try {
+      // Use the new centralized logic for mode/format
+      const { insertMode, contentFormat } = this.keyboardHandler.getEffectiveInsertModeAndFormat(event);
       const parsedDateResult = EnhancedDateParser.parseDate(item);
       if (!parsedDateResult || isNaN(parsedDateResult.getTime())) {
         new Notice("Unable to parse date");
         return;
       }
-
       const momentDate = window.moment(parsedDateResult);
-      
-      // Use the utility function to get or create and open the note
-      await getOrCreateDailyNote(this.app, momentDate, true);
+      if (insertMode === InsertMode.PLAINTEXT) {
+        let text = '';
+        if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
+          text = item;
+        } else if (contentFormat === ContentFormat.DAILY_NOTE) {
+          text = getDailyNotePreview(item);
+        } else {
+          text = getDatePreview(
+            item,
+            this.plugin.settings,
+            contentFormat === ContentFormat.ALTERNATE,
+            false,
+            contentFormat === ContentFormat.DAILY_NOTE
+          );
+        }
+        // Insert plain text into the editor if available
+        if (this.app.workspace.activeEditor?.editor) {
+          this.app.workspace.activeEditor.editor.replaceSelection(text);
+        }
+      } else {
+        await getOrCreateDailyNote(this.app, momentDate, true);
+      }
     } catch (error) {
       console.error("Error opening daily note:", error);
       new Notice("Failed to open daily note");

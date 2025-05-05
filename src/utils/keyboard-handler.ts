@@ -15,15 +15,15 @@ import { KEYS } from '../plugin-data/constants';
  */
 export class KeyboardHandler {
     private scope: Scope | null;
-    private invertCtrlBehavior: boolean;
+    private plainTextByDefault: boolean;
     private callback: ((event: KeyboardEvent) => boolean) | null = null;
     
     // Key state tracking
     private keyState: { shift: boolean, ctrl: boolean, alt: boolean } = { shift: false, ctrl: false, alt: false };
 
-    constructor(scope?: Scope, invertCtrlBehavior: boolean = false) {
+    constructor(scope?: Scope, plainTextByDefault: boolean = false) {
         this.scope = scope || null;
-        this.invertCtrlBehavior = invertCtrlBehavior;
+        this.plainTextByDefault = plainTextByDefault;
     }
 
     /**
@@ -61,10 +61,10 @@ export class KeyboardHandler {
     }
 
     /**
-     * Update the invert control behavior setting
+     * Update the plain text by default setting
      */
-    setInvertCtrlBehavior(invert: boolean): void {
-        this.invertCtrlBehavior = invert;
+    setPlainTextByDefault(plain: boolean): void {
+        this.plainTextByDefault = plain;
     }
 
     /**
@@ -81,10 +81,10 @@ export class KeyboardHandler {
                 let purpose = combo.description || 
                     `${combo.insertMode} with ${combo.contentFormat}`;
                 
-                // Handle inverted control behavior
-                if (this.invertCtrlBehavior && modString === 'ctrl') {
+                // Handle plain text by default behavior
+                if (this.plainTextByDefault && modString === 'ctrl') {
                     purpose = InsertMode.LINK.toString(); // When Ctrl is inverted, it acts as no modifiers
-                } else if (this.invertCtrlBehavior && modString === 'none') {
+                } else if (this.plainTextByDefault && modString === 'none') {
                     purpose = InsertMode.PLAINTEXT.toString(); // When no modifiers with Ctrl inverted, it acts as Ctrl
                 }
                 
@@ -142,18 +142,19 @@ export class KeyboardHandler {
     /**
      * Get the current KeyCombo based on key state
      */
-    getCurrentKeyCombo(): KeyCombo {
+    getCurrentKeyCombo(): { insertMode: InsertMode, contentFormat: ContentFormat } {
         let effectiveState = { ...this.keyState };
-        
-        if (this.invertCtrlBehavior) {
-            effectiveState.ctrl = !effectiveState.ctrl;
-        }
-        
-        return findKeyComboByModifiers(
+        // Invert ctrl if plainTextByDefault is true
+        const combo = findKeyComboByModifiers(
             effectiveState.shift, 
             effectiveState.ctrl, 
-            effectiveState.alt
+            effectiveState.alt,
+            this.plainTextByDefault // pass invertCtrl
         );
+        return {
+            insertMode: combo.insertMode,
+            contentFormat: combo.contentFormat
+        };
     }
 
     /**
@@ -165,11 +166,31 @@ export class KeyboardHandler {
             ctrl: 'ctrlKey' in event ? event.ctrlKey : false,
             alt: 'altKey' in event ? event.altKey : false
         };
-        
-        if (this.invertCtrlBehavior) {
-            keyState.ctrl = !keyState.ctrl;
+        // Invert ctrl if plainTextByDefault is true
+        return findKeyComboByModifiers(keyState.shift, keyState.ctrl, keyState.alt, this.plainTextByDefault);
+    }
+
+    /**
+     * Get the effective insert mode and content format for a given event or key state
+     * Always respects plainTextByDefault
+     */
+    getEffectiveInsertModeAndFormat(eventOrState?: KeyboardEvent | { shift: boolean, ctrl: boolean, alt: boolean }): { insertMode: InsertMode, contentFormat: ContentFormat } {
+        let shift: boolean, ctrl: boolean, alt: boolean;
+        if (!eventOrState) {
+            ({ shift, ctrl, alt } = this.keyState);
+        } else if ('shiftKey' in eventOrState) {
+            shift = eventOrState.shiftKey;
+            ctrl = eventOrState.ctrlKey;
+            alt = eventOrState.altKey;
+        } else {
+            ({ shift, ctrl, alt } = eventOrState);
         }
-        
-        return findKeyComboByModifiers(keyState.shift, keyState.ctrl, keyState.alt);
+        // Invert ctrl if plainTextByDefault
+        const effectiveCtrl = this.plainTextByDefault ? !ctrl : ctrl;
+        const combo = findKeyComboByModifiers(shift, effectiveCtrl, alt, false);
+        return {
+            insertMode: combo.insertMode,
+            contentFormat: combo.contentFormat
+        };
     }
 }

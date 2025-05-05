@@ -69,6 +69,14 @@ export const KEYS = {
 };
 
 /**
+ * Constants for key event types
+ */
+export const KEY_EVENTS = {
+    KEYDOWN: 'keydown',
+    KEYUP: 'keyup'
+};
+
+/**
  * Constants for date formats
  */
 export const DATE_FORMAT = {

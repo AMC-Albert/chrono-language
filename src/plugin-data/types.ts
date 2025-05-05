@@ -207,8 +207,10 @@ export function getAllKeyCombos(): KeyCombo[] {
 }
 
 // Helper function to find combo by modifier state
-export function findKeyComboByModifiers(shift: boolean, ctrl: boolean, alt: boolean): KeyCombo {
-    const modString = createModifierString(shift, ctrl, alt);
+export function findKeyComboByModifiers(shift: boolean, ctrl: boolean, alt: boolean, invertCtrl: boolean = false): KeyCombo {
+    // Invert ctrl if needed (for plainTextByDefault)
+    const effectiveCtrl = invertCtrl ? !ctrl : ctrl;
+    const modString = createModifierString(shift, effectiveCtrl, alt);
     const entry = KEYMAP[modString];
     return entry ? { ...entry.combo } : KEYMAP[MODIFIER_KEY.NONE].combo;
 }

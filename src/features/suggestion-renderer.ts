@@ -5,6 +5,7 @@ import { getDailyNote, getAllDailyNotes } from 'obsidian-daily-notes-interface';
 import { EnhancedDateParser } from '../utils/parser';
 import { TFile } from 'obsidian';
 import { InsertMode, ContentFormat } from '../plugin-data/types';
+// Ensure this import path is correct and points to the file where getCurrentKeyCombo is implemented
 import { KeyboardHandler } from '../utils/keyboard-handler';
 
 /**
@@ -21,7 +22,7 @@ export class Suggester {
         this.app = app;
         this.plugin = plugin;
         // Initialize keyboard handler without requiring a scope
-        this.keyboardHandler = new KeyboardHandler(undefined, plugin.settings.invertCtrlBehavior);
+        this.keyboardHandler = new KeyboardHandler(undefined, plugin.settings.plainTextByDefault);
         this.setupKeyEventListeners();
     }
     
@@ -64,9 +65,10 @@ export class Suggester {
         });
     }
 
-    getCurrentKeyCombo(): { insertMode: InsertMode; contentFormat: ContentFormat } {
-        // Use the keyboard handler to determine the current key combo
-        return this.keyboardHandler.getCurrentKeyCombo();
+    // Add this method to allow settings update and force re-render
+    updateSettingsAndRerender() {
+        this.keyboardHandler.setPlainTextByDefault(this.plugin.settings.plainTextByDefault);
+        this.updateAllPreviews();
     }
 
     getDateSuggestions(context: { query: string }, initialSuggestions?: string[]): string[] {
@@ -95,7 +97,8 @@ export class Suggester {
             this.contextProvider = context;
         }
 
-        // Update the preview for this item
+        // Always update the preview for this item using the latest settings
+        this.keyboardHandler.setPlainTextByDefault(this.plugin.settings.plainTextByDefault);
         this.updatePreviewContent(item, container);
     }
 
@@ -105,33 +108,21 @@ export class Suggester {
         if (existingPreview) {
             existingPreview.remove();
         }
-
-        // Get daily note preview
+        // Always use the latest settings for insert mode/content format
+        this.keyboardHandler.setPlainTextByDefault(this.plugin.settings.plainTextByDefault);
+        const { insertMode, contentFormat } = this.keyboardHandler.getEffectiveInsertModeAndFormat();
         const dailyNotePreview = getDailyNotePreview(item);
-
         let momentDate = window.moment(EnhancedDateParser.parseDate(item));
-
         const dailyNote = momentDate.isValid() ? getDailyNote(momentDate, getAllDailyNotes()) : null;
-
         const dailyNoteClass = dailyNote instanceof TFile
-            ? 'cm-hmd-internal-link' // Class if daily note exists
+            ? 'cm-hmd-internal-link'
             : 'chrono-is-unresolved';
-
-        // Get the current key combo with insert mode and content format
-        const keyCombo = this.keyboardHandler.getCurrentKeyCombo();
-        
-        // Determine appropriate preview based on the content format
         let readableDatePreview: string;
-
-        // Use array includes for type-safe comparison
-        const contentFormat = keyCombo.contentFormat;
-        
         if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
             readableDatePreview = item;
         } else if (contentFormat === ContentFormat.DAILY_NOTE) {
             readableDatePreview = dailyNotePreview;
         } else {
-            // For PRIMARY and ALTERNATE formats
             readableDatePreview = getDatePreview(
                 item,
                 this.plugin.settings,
@@ -139,81 +130,50 @@ export class Suggester {
                 false
             );
         }
-
-        // Create the preview container span
         const previewContainer = container.createEl('span', {
             cls: 'chrono-suggestion-preview'
         });
-
-        // Determine the preview content based on insert mode and invert ctrl setting
-        // Use array includes for type-safe comparisons
-        const isPlaintext = keyCombo.insertMode === InsertMode.PLAINTEXT;
-        const isInvertedLink = this.plugin.settings.invertCtrlBehavior && 
-                              keyCombo.insertMode === InsertMode.LINK && 
-                              keyCombo.contentFormat === ContentFormat.PRIMARY;
-                              
-        if (isPlaintext || isInvertedLink) {
-            // For plaintext or inverted ctrl with link
+        if (insertMode === InsertMode.PLAINTEXT) {
             if (readableDatePreview) {
                 previewContainer.appendText(`↳ ${readableDatePreview}`);
             }
         } else if (dailyNotePreview) {
             previewContainer.appendText('↳ ');
-            
-            // Create a span specifically for the daily note preview to assign a class
             const linkEl = previewContainer.createEl('a', {
                 text: dailyNotePreview,
                 cls: dailyNoteClass, 
                 href: dailyNote ? dailyNote.path : '',
             });
-
-            // Add click handler to prevent the suggestion selection and allow the link click
             linkEl.addEventListener('click', async (event) => {
                 event.preventDefault();
                 event.stopPropagation();
-
-                // Store reference to context before potentially closing it
                 const currentContext = this.contextProvider;
-
-                // Remove trigger phrase from editor if we're in an editor context
                 if (currentContext &&
                     currentContext.context &&
                     currentContext.context.editor &&
                     currentContext.context.start &&
                     currentContext.context.end) {
-
                     const { editor, start, end } = currentContext.context;
-                    // Remove the trigger phrase and query text from the editor
                     editor.replaceRange('', start, end);
                 }
-
-                // Dismiss the modal/context if it exists
                 if (currentContext) {
                     if (typeof currentContext.close === 'function') {
-                        // For modal contexts like OpenDailyNoteModal
                         currentContext.close();
                     } else if (typeof currentContext.suggestions?.close === 'function') {
-                        // For EditorSuggest contexts
                         currentContext.suggestions.close();
                     }
                 }
-
                 if (momentDate.isValid()) {
-                    // Use the utility function to get or create the daily note and open it
                     const file = await getOrCreateDailyNote(this.app, momentDate, true);
                     if (!file) console.error("Failed to handle daily note for:", item);
                 }
             });
-
             if (dailyNotePreview !== readableDatePreview && readableDatePreview) {
                 previewContainer.appendText(` ⭢ ${readableDatePreview}`);
             }
         } else if (readableDatePreview) {
-            // Handle case where only readableDatePreview exists
             previewContainer.appendText(`↳ ${readableDatePreview}`);
         }
-
-        // Remove the container if it ended up empty
         if (!previewContainer.hasChildNodes() && !previewContainer.textContent?.trim()) {
             previewContainer.remove();
         }
@@ -222,6 +182,8 @@ export class Suggester {
     // Share the keyboard handler's key state with other components
     syncKeyStateFrom(otherHandler: KeyboardHandler): void {
         this.keyboardHandler.setKeyState(otherHandler.getKeyState());
+        // Keep plainTextByDefault in sync with plugin settings
+        this.keyboardHandler.setPlainTextByDefault(this.plugin.settings.plainTextByDefault);
     }
     
     // Allow other components to get this keyboard handler's key state

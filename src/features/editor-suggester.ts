@@ -19,7 +19,7 @@ export class EditorSuggester extends EditorSuggest<string> {
         this.plugin = plugin;
         
         // Initialize the keyboard handler with proper scope
-        this.keyboardHandler = new KeyboardHandler(this.scope, this.plugin.settings.invertCtrlBehavior);
+        this.keyboardHandler = new KeyboardHandler(this.scope, this.plugin.settings.plainTextByDefault);
         
         // Initialize suggester after keyboard handler
         this.suggester = new Suggester(this.app, this.plugin);
@@ -66,6 +66,51 @@ export class EditorSuggester extends EditorSuggest<string> {
         });
         
         // Set up event listeners to sync key states between suggester and editor
+        this.scope.register([], KEYS.CONTROL.toLowerCase(), (event: KeyboardEvent) => {
+            if (!this.isOpen || !this.suggester) return true;
+            
+            // Update keyboard handler state
+            const updated = this.keyboardHandler.updateKeyState(event, true);
+            
+            // If state changed, sync with suggester and update previews
+            if (updated) {
+                this.suggester.syncKeyStateFrom(this.keyboardHandler);
+                this.suggester.updateAllPreviews();
+            }
+            
+            return true; // Allow event to propagate
+        });
+        
+        this.scope.register([], KEYS.SHIFT.toLowerCase(), (event: KeyboardEvent) => {
+            if (!this.isOpen || !this.suggester) return true;
+            
+            // Update keyboard handler state
+            const updated = this.keyboardHandler.updateKeyState(event, false);
+            
+            // If state changed, sync with suggester and update previews
+            if (updated) {
+                this.suggester.syncKeyStateFrom(this.keyboardHandler);
+                this.suggester.updateAllPreviews();
+            }
+            
+            return true; // Allow event to propagate
+        });
+        
+        this.scope.register([], KEYS.ALT.toLowerCase(), (event: KeyboardEvent) => {
+            if (!this.isOpen || !this.suggester) return true;
+            
+            // Update keyboard handler state
+            const updated = this.keyboardHandler.updateKeyState(event, false);
+            
+            // If state changed, sync with suggester and update previews
+            if (updated) {
+                this.suggester.syncKeyStateFrom(this.keyboardHandler);
+                this.suggester.updateAllPreviews();
+            }
+            
+            return true; // Allow event to propagate
+        });
+        
         this.scope.register([], 'keydown', (event: KeyboardEvent) => {
             if (!this.isOpen || !this.suggester) return true;
             
@@ -103,7 +148,7 @@ export class EditorSuggester extends EditorSuggest<string> {
      */
     updateInstructions() {
         // Use keyboard handler to get the instructions
-        this.keyboardHandler.setInvertCtrlBehavior(this.plugin.settings.invertCtrlBehavior);
+        this.keyboardHandler.setPlainTextByDefault(this.plugin.settings.plainTextByDefault);
         this.setInstructions(this.keyboardHandler.getInstructions());
     }
     
@@ -176,76 +221,45 @@ export class EditorSuggester extends EditorSuggest<string> {
     selectSuggestion(item: string, event: KeyboardEvent | MouseEvent): void {
         if (this.context) {
             const { editor, start, end } = this.context;
-            
-            // Get the matched combo with insert mode and content format
-            const keyCombo: KeyCombo = this.keyboardHandler.getMatchedCombo(event);
-            
-            // Sync key state with suggester for consistent UI updates
+            // Use the new centralized logic for mode/format
+            const { insertMode, contentFormat } = this.keyboardHandler.getEffectiveInsertModeAndFormat(event);
             if (this.suggester) {
                 this.suggester.syncKeyStateFrom(this.keyboardHandler);
             }
-            
             let insertText: string = "";
-            
-            if (keyCombo.insertMode === InsertMode.PLAINTEXT) {
-                // Plain text handling based on content format
-                if (keyCombo.contentFormat === ContentFormat.SUGGESTION_TEXT) {
-                    // For plain text + suggestion text: use the item text directly
+            if (insertMode === InsertMode.PLAINTEXT) {
+                if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
                     insertText = item;
-                } else if (keyCombo.contentFormat === ContentFormat.DAILY_NOTE) {
-                    // For plain text + daily note format: directly use getDailyNotePreview
+                } else if (contentFormat === ContentFormat.DAILY_NOTE) {
                     insertText = getDailyNotePreview(item);
                 } else {
-                    // For other plain text formats, use getDatePreview with appropriate flags
                     insertText = getDatePreview(
                         item, 
                         this.plugin.settings, 
-                        keyCombo.contentFormat === ContentFormat.ALTERNATE,
-                        false, // No "no alias" concept for plain text
-                        keyCombo.contentFormat === ContentFormat.DAILY_NOTE // Force daily note format when needed
+                        contentFormat === ContentFormat.ALTERNATE,
+                        false,
+                        contentFormat === ContentFormat.DAILY_NOTE
                     );
                 }
             } else {
-                // Link handling
                 insertText = createDailyNoteLink(
                     this.app, 
                     this.plugin.settings, 
                     this.context.file, 
                     item,
-                    keyCombo.contentFormat === ContentFormat.SUGGESTION_TEXT,
-                    keyCombo.contentFormat === ContentFormat.ALTERNATE,
-                    keyCombo.contentFormat === ContentFormat.DAILY_NOTE
+                    contentFormat === ContentFormat.SUGGESTION_TEXT,
+                    contentFormat === ContentFormat.ALTERNATE,
+                    contentFormat === ContentFormat.DAILY_NOTE
                 );
             }
-            
-            // Handle invert ctrl behavior
-            if (this.plugin.settings.invertCtrlBehavior) {
-                // When Ctrl is inverted, swap link/plaintext behavior for base cases
-                if (!event.shiftKey && !event.altKey) {
-                    if (event.ctrlKey) {
-                        // Ctrl → no modifiers effect (link)
-                        insertText = createDailyNoteLink(
-                            this.app, 
-                            this.plugin.settings, 
-                            this.context.file, 
-                            item,
-                            false,
-                            false,
-                            false
-                        );
-                    } else {
-                        // No modifiers → Ctrl effect (plaintext)
-                        insertText = getDatePreview(
-                            item, 
-                            this.plugin.settings, 
-                            false, 
-                            false
-                        );
-                    }
-                }
-            }
-            
             editor.replaceRange(insertText, start, end);
+        }
+    }
+
+    // Public method to update renderer settings and force re-render
+    public updateRendererSettingsAndRerender() {
+        if (this.suggester && typeof this.suggester.updateSettingsAndRerender === 'function') {
+            this.suggester.updateSettingsAndRerender();
         }
     }
 }

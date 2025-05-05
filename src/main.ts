@@ -11,9 +11,6 @@ export default class ChronoLanguage extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
-		// Apply settings to modifier behavior configuration
-		this.updateModifierBehaviors();
-		
 		// Register Editor Suggester
 		this.editorSuggester = new EditorSuggester(this);
 		this.registerEditorSuggest(this.editorSuggester);
@@ -30,35 +27,25 @@ export default class ChronoLanguage extends Plugin {
 		// Add settings tab
 		this.addSettingTab(new ChronoLanguageSettingTab(this.app, this));
 	}
-
-	/**
-	 * Update modifier behaviors based on user settings
-	 */
-	updateModifierBehaviors() {
-		// Apply user settings to the modifier behavior configuration
-		// This allows users to customize which keys perform which actions
-		MODIFIER_BEHAVIOR.INSERT_MODE_TOGGLE = this.settings.insertModeToggleKey;
-		MODIFIER_BEHAVIOR.CONTENT_SUGGESTION_TOGGLE = this.settings.contentSuggestionToggleKey;
-		MODIFIER_BEHAVIOR.CONTENT_FORMAT_TOGGLE = this.settings.contentFormatToggleKey;
-		MODIFIER_BEHAVIOR.DAILY_NOTE_TOGGLE = this.settings.dailyNoteToggleCombo;
-	}
-
-	/**
-	 * Update suggester instructions when settings change
-	 */
-	updateSuggesterInstructions() {
-		if (this.editorSuggester) {
-			this.editorSuggester.updateInstructions();
-		}
-	}
 	
+	async onSettingsChanged() {
+		// Unload and re-register the editor suggester with new settings
+		if (this.editorSuggester) {
+			this.editorSuggester.unload();
+		}
+		this.editorSuggester = new EditorSuggester(this);
+		this.registerEditorSuggest(this.editorSuggester);
+		this.editorSuggester.updateRendererSettingsAndRerender();
+	}
+
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
-		this.updateModifierBehaviors();
-		this.updateSuggesterInstructions();
+		if (this.editorSuggester) {
+			this.editorSuggester.updateInstructions();
+		}
 	}
 }
