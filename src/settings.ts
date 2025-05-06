@@ -13,16 +13,6 @@ export interface ChronoLanguageSettings {
 	plainTextByDefault: boolean;
 	initialEditorSuggestions: string[];
 	initialOpenDailyNoteSuggestions: string[];
-	keyBindings: {
-		insertAsPlainText: string;
-		insertAsLink: string;
-		usePrimaryFormat: string;
-		useAlternateFormat: string;
-		useDailyNoteFormat: string;
-		useSuggestionText: string;
-		openDailyNote: string;
-		openDailyNoteNewTab: string;
-	};
 }
 
 export const DEFAULT_SETTINGS: ChronoLanguageSettings = {
@@ -35,16 +25,6 @@ export const DEFAULT_SETTINGS: ChronoLanguageSettings = {
 	plainTextByDefault: false,
 	initialEditorSuggestions: ['Today', 'Tomorrow', 'Yesterday'],
 	initialOpenDailyNoteSuggestions: ['Today', 'Tomorrow', 'Yesterday'],
-	keyBindings: {
-		insertAsPlainText: 'Control',
-		insertAsLink: '',
-		usePrimaryFormat: '',
-		useAlternateFormat: 'Alt',
-		useDailyNoteFormat: 'Shift+Alt',
-		useSuggestionText: 'Shift',
-		openDailyNote: 'Tab',
-		openDailyNoteNewTab: 'Control+Tab',
-	},
 };
 
 export class ChronoLanguageSettingTab extends PluginSettingTab {
@@ -169,77 +149,7 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.plainTextByDefault = value;
 						await this.plugin.saveSettings();
-					})
-			);
-
-		new Setting(containerEl).setName('Key Bindings').setHeading();
-
-		new Setting(containerEl)
-			.setName("Insert as plain text")
-			.setDesc("Key or key combo to insert text as plain text")
-			.addText((text) =>
-				text
-					.setPlaceholder("Control")
-					.setValue(this.plugin.settings.keyBindings.insertAsPlainText)
-					.onChange(async (value) => {
-						this.plugin.settings.keyBindings.insertAsPlainText = value;
-						await this.plugin.saveSettings();
-						this.plugin.updateKeyBindings();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName("Use alternate format")
-			.setDesc("Key or key combo to use the alternate date format")
-			.addText((text) =>
-				text
-					.setPlaceholder("Alt")
-					.setValue(this.plugin.settings.keyBindings.useAlternateFormat)
-					.onChange(async (value) => {
-						this.plugin.settings.keyBindings.useAlternateFormat = value;
-						await this.plugin.saveSettings();
-						this.plugin.updateKeyBindings();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName("Use daily note format")
-			.setDesc("Key or key combo to use the daily note format")
-			.addText((text) =>
-				text
-					.setPlaceholder("Shift+Alt")
-					.setValue(this.plugin.settings.keyBindings.useDailyNoteFormat)
-					.onChange(async (value) => {
-						this.plugin.settings.keyBindings.useDailyNoteFormat = value;
-						await this.plugin.saveSettings();
-						this.plugin.updateKeyBindings();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName("Open daily note")
-			.setDesc("Key or key combo to open the selected daily note")
-			.addText((text) =>
-				text
-					.setPlaceholder("Tab")
-					.setValue(this.plugin.settings.keyBindings.openDailyNote)
-					.onChange(async (value) => {
-						this.plugin.settings.keyBindings.openDailyNote = value;
-						await this.plugin.saveSettings();
-						this.plugin.updateKeyBindings();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName("Open daily note in new tab")
-			.setDesc("Key or key combo to open the selected daily note in a new tab")
-			.addText((text) =>
-				text
-					.setPlaceholder("Control+Tab")
-					.setValue(this.plugin.settings.keyBindings.openDailyNoteNewTab)
-					.onChange(async (value) => {
-						this.plugin.settings.keyBindings.openDailyNoteNewTab = value;
-						await this.plugin.saveSettings();
+						// Call updateKeyBindings to refresh UI immediately
 						this.plugin.updateKeyBindings();
 					})
 			);

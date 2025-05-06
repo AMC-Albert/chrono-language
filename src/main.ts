@@ -62,14 +62,14 @@ export default class ChronoLanguage extends Plugin {
 		// Update the editor suggester keyboard bindings using the new updateSettings method
 		if (this.editorSuggester) {
 			this.editorSuggester.updateSettings({
-				keyBindings: this.settings.keyBindings
+				plainTextByDefault: this.settings.plainTextByDefault
 			});
 		}
 		
 		// Update the suggestion provider keyboard bindings
 		if (this.suggestionProvider) {
 			this.suggestionProvider.updateSettings({
-				keyBindings: this.settings.keyBindings
+				plainTextByDefault: this.settings.plainTextByDefault
 			});
 		}
 	}
