@@ -157,6 +157,7 @@ export class EditorSuggester extends EditorSuggest<string> {
         if (insertMode === InsertMode.PLAINTEXT) {
             // Handle plain text insertion
             if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
+                // When ContentFormat is SUGGESTION_TEXT, the raw item (suggestion string) is returned.
                 return item;
             }
             if (contentFormat === ContentFormat.DAILY_NOTE) {

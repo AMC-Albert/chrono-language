@@ -9,7 +9,7 @@ import Holidays from 'date-holidays';
  */
 export class EnhancedDateParser {
     private static holidaysInstance: any = null;
-    private static holidayCache: Map<string, Date> = new Map();
+    private static holidayCache: Map<string, { name: string, dates: Date[] }> = new Map();
     private static currentYear = new Date().getFullYear();
     private static currentLocale = 'US';
 
@@ -48,33 +48,40 @@ export class EnhancedDateParser {
         [currentYear, currentYear + 1].forEach(year => {
             const holidays = this.holidaysInstance.getHolidays(year);
             holidays.forEach((holiday: any) => {
-                const name = holiday.name.toLowerCase();
+                const name = holiday.name;
+                const lowerName = name.toLowerCase();
                 const date = new Date(holiday.date);
-                this.holidayCache.set(name, date);
+                if (!this.holidayCache.has(lowerName)) {
+                    this.holidayCache.set(lowerName, { name, dates: [date] });
+                } else {
+                    this.holidayCache.get(lowerName)!.dates.push(date);
+                }
                 
                 // Also add short names and common variations
-                const shortName = name.split(' ')[0].toLowerCase();
-                if (shortName.length > 3 && !this.holidayCache.has(shortName)) {
-                    this.holidayCache.set(shortName, date);
+                const shortName = lowerName.split(' ')[0];
+                if (shortName.length > 3) {
+                    if (!this.holidayCache.has(shortName)) {
+                        this.holidayCache.set(shortName, { name, dates: [date] });
+                    } else {
+                        this.holidayCache.get(shortName)!.dates.push(date);
+                    }
                 }
             });
         });
 
         // Add common holiday aliases that might not be in the library
         const aliases: Record<string, string> = {
-            'xmas': 'christmas',
-            'x-mas': 'christmas',
-            'new years': 'new year\'s day',
-            'new years day': 'new year\'s day',
-            'new years eve': 'new year\'s eve',
-            'july 4th': 'independence day',
-            '4th of july': 'independence day',
-            'valentine': 'valentine\'s day',
+            "Xmas": 'christmas',
+            "X-mas": 'christmas',
+            "July 4th": 'independence day',
+            "4th of July": 'independence day',
         };
 
         Object.entries(aliases).forEach(([alias, official]) => {
+            const lowerAlias = alias.toLowerCase();
             if (this.holidayCache.has(official)) {
-                this.holidayCache.set(alias, this.holidayCache.get(official)!);
+                const { dates } = this.holidayCache.get(official)!;
+                this.holidayCache.set(lowerAlias, { name: alias, dates: [...dates] });
             }
         });
     }
@@ -104,17 +111,34 @@ export class EnhancedDateParser {
         
         // Direct match in cache
         if (this.holidayCache.has(cleanedText)) {
-            return this.holidayCache.get(cleanedText)!;
+            const { dates } = this.holidayCache.get(cleanedText)!;
+            return this.getNextUpcomingDate(dates);
         }
 
         // Try to find partial matches
-        for (const [holiday, date] of this.holidayCache.entries()) {
+        for (const [holiday, obj] of this.holidayCache.entries()) {
             if (cleanedText.includes(holiday) || holiday.includes(cleanedText)) {
-                return date;
+                return this.getNextUpcomingDate(obj.dates);
             }
         }
 
         return null;
+    }
+
+    /**
+     * Get the next upcoming date from a list of dates
+     * @param dates Array of dates
+     * @returns Next upcoming date or null if none found
+     */
+    private static getNextUpcomingDate(dates: Date[]): Date | null {
+        const now = new Date();
+        // Sort dates and return the soonest date that is today or in the future
+        const sorted = dates.slice().sort((a, b) => a.getTime() - b.getTime());
+        for (const date of sorted) {
+            if (date >= now) return date;
+        }
+        // If all dates are in the past, return the latest one
+        return sorted.length > 0 ? sorted[sorted.length - 1] : null;
     }
 
     /**
@@ -151,14 +175,12 @@ export class EnhancedDateParser {
      */
     static parseDate(text: string): Date | null {
         if (!text) return null;
-        
-        // First check if it's a recognized holiday
+        // First check if it's a recognized holiday (before enhancing text)
         const holidayDate = this.checkForHoliday(text);
         if (holidayDate) {
             return holidayDate;
         }
-        
-        // Fall back to regular parsing
+        // Only enhance text if not a holiday
         const modifiedText = this.enhanceText(text);
         return chrono.parseDate(modifiedText);
     }
@@ -170,8 +192,7 @@ export class EnhancedDateParser {
      */
     static parse(text: string): chrono.ParsedResult[] {
         if (!text) return [];
-        
-        // If it's a recognized holiday, create a custom result
+        // First check if it's a recognized holiday (before enhancing text)
         const holidayDate = this.checkForHoliday(text);
         if (holidayDate) {
             // Create a chrono-like result for the holiday
@@ -186,8 +207,7 @@ export class EnhancedDateParser {
             };
             return [result];
         }
-        
-        // Fall back to regular parsing
+        // Only enhance text if not a holiday
         const modifiedText = this.enhanceText(text);
         return chrono.parse(modifiedText);
     }
@@ -200,7 +220,11 @@ export class EnhancedDateParser {
         if (!this.holidaysInstance) {
             this.initHolidays();
         }
-        
-        return Array.from(this.holidayCache.keys());
+        // Return unique, capitalized holiday names
+        const names = new Set<string>();
+        for (const { name } of this.holidayCache.values()) {
+            names.add(name);
+        }
+        return Array.from(names);
     }
 }

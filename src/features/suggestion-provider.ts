@@ -43,16 +43,11 @@ export class SuggestionProvider {
             const locale = this.plugin.settings.holidayLocale || 'US';
             EnhancedDateParser.setLocale(locale);
             
-            // Get all holiday names
+            // Get all holiday names (including aliases)
             this.holidaySuggestions = EnhancedDateParser.getHolidayNames();
             
-            // Filter to most common holidays to avoid overwhelming the user
-            // and sort alphabetically for easier browsing
-            if (this.holidaySuggestions.length > 50) {
-                this.holidaySuggestions = this.holidaySuggestions
-                    .filter(name => name.length > 3) // Filter out very short names
-                    .sort();
-            }
+            // Sort alphabetically for easier browsing
+            this.holidaySuggestions = this.holidaySuggestions.sort();
         } catch (error) {
             console.error('Failed to initialize holiday suggestions:', error);
             this.holidaySuggestions = [];
@@ -293,11 +288,15 @@ export class SuggestionProvider {
         // Remove any existing preview elements to prevent duplicates
         container.querySelector('.chrono-suggestion-preview')?.remove();
         
-        let readableDatePreview = item;
-        if (contentFormat === ContentFormat.DAILY_NOTE) {
+        // Determine preview text
+        let readableDatePreview: string;
+        if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
+            readableDatePreview = item;
+        } else if (contentFormat === ContentFormat.DAILY_NOTE) {
             readableDatePreview = dailyNotePreview;
-        } else if (contentFormat !== ContentFormat.SUGGESTION_TEXT) {
-            readableDatePreview = getDatePreview(item, this.plugin.settings, contentFormat === ContentFormat.ALTERNATE, false);
+        } else { // Primary or Alternate format
+            const useAlternate = contentFormat === ContentFormat.ALTERNATE;
+            readableDatePreview = getDatePreview(item, this.plugin.settings, useAlternate, false);
         }
 
         const previewContainer = container.createEl('span', { cls: 'chrono-suggestion-preview' });
