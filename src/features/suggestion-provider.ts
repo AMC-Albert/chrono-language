@@ -27,21 +27,21 @@ export class SuggestionProvider {
     }
     
     setupKeyEventListeners() {
-        document.addEventListener('keydown', this.handleKeyDown);
+        // use capture to intercept before default selection behavior
+        document.addEventListener('keydown', this.handleKeyDown, true);
         document.addEventListener('keyup', this.handleKeyUp);
     }
 
     removeKeyEventListeners() {
-        document.removeEventListener('keydown', this.handleKeyDown);
+        document.removeEventListener('keydown', this.handleKeyDown, true);
         document.removeEventListener('keyup', this.handleKeyUp);
     }
 
     handleKeyDown = (e: KeyboardEvent) => {
         const navKeys = ['ArrowUp','ArrowDown','PageUp','PageDown','Home','End'];
-        // if holding any modifier while pressing a nav key, swallow and re-emit plain event
         if (navKeys.includes(e.key) && (e.altKey || e.ctrlKey || e.shiftKey)) {
             e.preventDefault();
-            e.stopPropagation();
+            e.stopImmediatePropagation();  // prevent text-selection on Shift+Arrow
             document.dispatchEvent(new KeyboardEvent('keydown', {
                 key: e.key,
                 code: e.code,
