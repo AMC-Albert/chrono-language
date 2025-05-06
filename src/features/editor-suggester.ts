@@ -59,6 +59,10 @@ export class EditorSuggester extends EditorSuggest<string> {
     private handleSelectionKey = (event: KeyboardEvent): boolean => {
         if (!this.isOpen || !this.suggester || !this.context) return false;
 
+        // Always prevent default behavior for selection keys
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
         if (event.key === KEYS.TAB) {
             // Handle Tab key action (open daily note)
             const openInNewTab = event.shiftKey;
