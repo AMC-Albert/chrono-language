@@ -1,20 +1,20 @@
 import { Notice, FuzzySuggestModal, App, FuzzyMatch, moment } from "obsidian";
 import ChronoLanguage from "../main";
-import { Suggester } from "./suggestion-renderer";
+import { SuggestionProvider } from "./suggestion-provider";
 import { EnhancedDateParser } from "../utils/parser";
 import { getOrCreateDailyNote } from "../utils/helpers";
 import { ERRORS } from "../definitions/constants";
 
 export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
   plugin: ChronoLanguage;
-  private suggester: Suggester;
+  private suggester: SuggestionProvider;
 
   constructor(app: App, plugin: ChronoLanguage) {
     super(app);
     this.plugin = plugin;
 
     // Initialize suggester
-    this.suggester = new Suggester(this.app, this.plugin);
+    this.suggester = new SuggestionProvider(this.app, this.plugin);
 
     // Set placeholder text for the input field
     this.setPlaceholder("Enter a date or relative time...");

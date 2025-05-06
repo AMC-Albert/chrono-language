@@ -11,7 +11,7 @@ import { KeyboardHandler } from '../utils/keyboard-handler';
 /**
  * Shared suggester for date suggestions
  */
-export class Suggester {
+export class SuggestionProvider {
     app: App;
     plugin: ChronoLanguage;
     currentElements: Map<string, HTMLElement> = new Map();
@@ -37,7 +37,20 @@ export class Suggester {
     }
 
     handleKeyDown = (e: KeyboardEvent) => {
-        // Use the keyboard handler to update key state
+        const navKeys = ['ArrowUp','ArrowDown','PageUp','PageDown','Home','End'];
+        // if holding any modifier while pressing a nav key, swallow and re-emit plain event
+        if (navKeys.includes(e.key) && (e.altKey || e.ctrlKey || e.shiftKey)) {
+            e.preventDefault();
+            e.stopPropagation();
+            document.dispatchEvent(new KeyboardEvent('keydown', {
+                key: e.key,
+                code: e.code,
+                keyCode: e.keyCode,
+                bubbles: true,
+                cancelable: true
+            }));
+            return;
+        }
         const updated = this.keyboardHandler.updateKeyState(e, true);
         if (updated) {
             this.updateAllPreviews();

@@ -1,7 +1,7 @@
 import { Editor, EditorPosition, EditorSuggest, EditorSuggestContext, Modifier } from 'obsidian';
 import ChronoLanguage from '../main';
 import { createDailyNoteLink, getDatePreview, getDailyNotePreview } from '../utils/helpers';
-import { Suggester } from './suggestion-renderer';
+import { SuggestionProvider } from './suggestion-provider';
 import { InsertMode, ContentFormat, getAllKeyCombos } from '../definitions/types';
 import { KeyboardHandler } from '../utils/keyboard-handler';
 import { KEYS } from '../definitions/constants';
@@ -11,7 +11,7 @@ import { KEYS } from '../definitions/constants';
  */
 export class EditorSuggester extends EditorSuggest<string> {
     plugin: ChronoLanguage;
-    private suggester: Suggester | null = null;
+    private suggester: SuggestionProvider | null = null;
     private keyboardHandler: KeyboardHandler;
     
     constructor(plugin: ChronoLanguage) {
@@ -22,7 +22,7 @@ export class EditorSuggester extends EditorSuggest<string> {
         this.keyboardHandler = new KeyboardHandler(this.scope, this.plugin.settings.plainTextByDefault);
         
         // Initialize suggester after keyboard handler
-        this.suggester = new Suggester(this.app, this.plugin);
+        this.suggester = new SuggestionProvider(this.app, this.plugin);
         
         // Register keyboard shortcuts with appropriate callbacks
         this.setupKeyboardEventHandlers();
