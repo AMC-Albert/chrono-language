@@ -131,6 +131,9 @@ export class SuggestionProvider {
         // Set the suggester as open when rendering content
         this.isSuggesterOpen = true;
         
+        // Reset all modifier keys when suggestions are first rendered
+        this.keyboardHandler.resetModifierKeys();
+        
         const container = el.createEl('div', { cls: 'chrono-suggestion-container' });
         container.setAttribute('data-suggestion', item);
         container.createEl('span', { text: item, cls: 'chrono-suggestion-text' });

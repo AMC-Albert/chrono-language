@@ -125,6 +125,12 @@ export class KeyboardHandler {
     isKeyPressed(key: string): boolean {
         return !!this.keyState[key];
     }
+    
+    resetModifierKeys(): void {
+        this.keyState = { Control: false, Shift: false, Alt: false };
+        this.notifyKeyStateChangeListeners();
+    }
+    
     unload(): void {
         document.removeEventListener(KEY_EVENTS.KEYDOWN, this.handleKeyEvent, true);
         document.removeEventListener(KEY_EVENTS.KEYUP, this.handleKeyEvent, true);
