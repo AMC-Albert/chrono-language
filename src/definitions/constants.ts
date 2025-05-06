@@ -61,8 +61,6 @@ export const MODIFIERS = {
  */
 export const KEYS = {
     ENTER: 'Enter',
-    ARROW_UP: 'ArrowUp',
-    ARROW_DOWN: 'ArrowDown',
     CONTROL: 'Control',
     ALT: 'Alt',
     SHIFT: 'Shift'
@@ -88,13 +86,13 @@ export const DATE_FORMAT = {
  */
 export const DESCRIPTIONS = {
     LINK_PRIMARY: 'Insert as link',
-    LINK_SUGGESTION_TEXT: 'Insert as link using suggestion text',
-    LINK_ALTERNATE: 'Insert as link with alternate format',
-    LINK_DAILY_NOTE: 'Insert as link without alias',
+    LINK_SUGGESTION_TEXT: 'Use suggestion text',
+    LINK_ALTERNATE: 'Alternate format',
+    LINK_DAILY_NOTE: 'Force no alias',
     PLAINTEXT_PRIMARY: 'Insert as plain text',
-    PLAINTEXT_SUGGESTION_TEXT: 'Insert text as displayed',
-    PLAINTEXT_ALTERNATE: 'Insert plain text with alternate format',
-    PLAINTEXT_DAILY_NOTE: 'Insert daily note as plain text'
+    PLAINTEXT_SUGGESTION_TEXT: 'Use suggestion text',
+    PLAINTEXT_ALTERNATE: 'Alternate format',
+    PLAINTEXT_DAILY_NOTE: 'Force no alias'
 } as const;
 
 /**

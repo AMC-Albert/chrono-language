@@ -49,10 +49,6 @@ export class EditorSuggester extends EditorSuggest<string> {
                 return this.suggestions.useSelectedItem(event);
             });
         });
-
-        // Arrow navigation (no modifiers)
-        this.scope.register([], KEYS.ARROW_DOWN, (e) => { this.suggestions.moveDown(e); return false; });
-        this.scope.register([], KEYS.ARROW_UP,   (e) => { this.suggestions.moveUp(e);   return false; });
     }
 
     /**

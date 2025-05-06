@@ -47,17 +47,6 @@ export class KeyboardHandler {
                 return false;
             });
         });
-
-        // Register arrow keys
-        this.scope.register([], KEYS.ARROW_DOWN, (event: KeyboardEvent) => {
-            if (this.callback) return this.callback(event);
-            return false;
-        });
-
-        this.scope.register([], KEYS.ARROW_UP, (event: KeyboardEvent) => {
-            if (this.callback) return this.callback(event);
-            return false;
-        });
     }
 
     /**
