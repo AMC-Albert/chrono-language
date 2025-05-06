@@ -4,7 +4,7 @@ import { createDailyNoteLink, getDatePreview, getDailyNotePreview } from '../uti
 import { SuggestionProvider } from './suggestion-provider';
 import { InsertMode, ContentFormat, getAllKeyCombos } from '../definitions/types';
 import { KeyboardHandler } from '../utils/keyboard-handler';
-import { KEYS } from '../definitions/constants';
+import { KEY_EVENTS, KEYS } from '../definitions/constants';
 
 /**
  * A suggester for the editor that provides date parsing suggestions
@@ -33,8 +33,8 @@ export class EditorSuggester extends EditorSuggest<string> {
     
     private setupKeyboardEventHandlers() {
         // update our keyState on raw keydown/keyup
-        document.addEventListener('keydown',  e => this.keyboardHandler.updateKeyState(e, true));
-        document.addEventListener('keyup',    e => this.keyboardHandler.updateKeyState(e, false));
+        document.addEventListener(KEY_EVENTS.KEYDOWN,  e => this.keyboardHandler.updateKeyState(e, true));
+        document.addEventListener(KEY_EVENTS.KEYUP,    e => this.keyboardHandler.updateKeyState(e, false));
 
         // Enter under every modifier combo
         getAllKeyCombos().forEach(combo => {

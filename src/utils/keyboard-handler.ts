@@ -8,7 +8,7 @@ import {
     findKeyComboByModifiers, 
     KeyMapEntry 
 } from '../definitions/types';
-import { KEYS } from '../definitions/constants';
+import { KEYS, DESCRIPTIONS } from '../definitions/constants';
 
 /**
  * Handles keyboard shortcuts for the plugin
@@ -60,7 +60,7 @@ export class KeyboardHandler {
      * Get instructions for display in the UI
      */
     getInstructions(): { command: string, purpose: string }[] {
-        return Object.values(KEYMAP)
+        const instructions = Object.values(KEYMAP)
             .filter((entry: KeyMapEntry) => entry.combo.showInInstructions === true)
             .filter((entry: KeyMapEntry) => entry.modString !== 'none')
             .map((entry: KeyMapEntry) => {
@@ -83,6 +83,20 @@ export class KeyboardHandler {
                     purpose: purpose
                 };
             });
+
+        // Add Tab key action
+        instructions.push({
+            command: this.formatKeyComboForDisplay(KEYS.TAB),
+            purpose: DESCRIPTIONS.OPEN_DAILY_NOTE
+        });
+
+        // Add Ctrl+Tab for opening daily note in a new tab
+        instructions.push({
+            command: this.formatKeyComboForDisplay('ctrl+tab'),
+            purpose: 'Open daily note in new tab'
+        });
+
+        return instructions;
     }
 
     /**

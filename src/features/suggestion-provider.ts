@@ -5,6 +5,7 @@ import { getDailyNote, getAllDailyNotes } from 'obsidian-daily-notes-interface';
 import { EnhancedDateParser } from '../utils/parser';
 import { TFile } from 'obsidian';
 import { InsertMode, ContentFormat } from '../definitions/types';
+import { KEY_EVENTS, KEYS } from '../definitions/constants';
 // Ensure this import path is correct and points to the file where getCurrentKeyCombo is implemented
 import { KeyboardHandler } from '../utils/keyboard-handler';
 
@@ -28,21 +29,50 @@ export class SuggestionProvider {
     
     setupKeyEventListeners() {
         // use capture to intercept before default selection behavior
-        document.addEventListener('keydown', this.handleKeyDown, true);
-        document.addEventListener('keyup', this.handleKeyUp);
+        document.addEventListener(KEY_EVENTS.KEYDOWN, this.handleKeyDown, true);
+        document.addEventListener(KEY_EVENTS.KEYUP, this.handleKeyUp);
     }
 
     removeKeyEventListeners() {
-        document.removeEventListener('keydown', this.handleKeyDown, true);
-        document.removeEventListener('keyup', this.handleKeyUp);
+        document.removeEventListener(KEY_EVENTS.KEYDOWN, this.handleKeyDown, true);
+        document.removeEventListener(KEY_EVENTS.KEYUP, this.handleKeyUp);
     }
 
     handleKeyDown = (e: KeyboardEvent) => {
+        // Ctrl+Tab opens in a new tab
+        if (e.key === KEYS.TAB && e.ctrlKey && !e.altKey && !e.shiftKey) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            const sel = document.querySelector('.is-selected .chrono-suggestion-container') as HTMLElement;
+            const link = sel?.querySelector('a[data-href]') as HTMLElement;
+            if (link) {
+                link.dispatchEvent(new MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                    ctrlKey: true
+                }));
+            }
+            return;
+        }
+
+        // Tab opens the daily‐note link of the highlighted suggestion
+        if (e.key === KEYS.TAB && !e.altKey && !e.ctrlKey && !e.shiftKey) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            // find the currently highlighted container
+            const sel = document.querySelector('.is-selected .chrono-suggestion-container') as HTMLElement;
+            const link = sel?.querySelector('a[data-href]') as HTMLElement;
+            if (link) {
+                link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+            }
+            return;
+        }
+
         const navKeys = ['ArrowUp','ArrowDown','PageUp','PageDown','Home','End'];
         if (navKeys.includes(e.key) && (e.altKey || e.ctrlKey || e.shiftKey)) {
             e.preventDefault();
             e.stopImmediatePropagation();  // prevent text-selection on Shift+Arrow
-            document.dispatchEvent(new KeyboardEvent('keydown', {
+            document.dispatchEvent(new KeyboardEvent(KEY_EVENTS.KEYDOWN, {
                 key: e.key,
                 code: e.code,
                 keyCode: e.keyCode,
@@ -176,9 +206,14 @@ export class SuggestionProvider {
                         currentContext.suggestions.close();
                     }
                 }
-                if (momentDate.isValid()) {
-                    const file = await getOrCreateDailyNote(this.app, momentDate, true);
-                    if (!file) console.error("Failed to handle daily note for:", item);
+                // Always create the daily note if needed
+                const file = await getOrCreateDailyNote(this.app, momentDate, true);
+                if (!file) {
+                    console.error("Failed to handle daily note for:", item);
+                } else {
+                    // open in new tab if Ctrl held, otherwise reuse current pane
+                    const leaf = this.app.workspace.getLeaf(event.ctrlKey);
+                    await leaf.openFile(file);
                 }
             });
             if (dailyNotePreview !== readableDatePreview && readableDatePreview) {

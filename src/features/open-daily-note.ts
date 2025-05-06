@@ -3,7 +3,7 @@ import ChronoLanguage from "../main";
 import { SuggestionProvider } from "./suggestion-provider";
 import { EnhancedDateParser } from "../utils/parser";
 import { getOrCreateDailyNote } from "../utils/helpers";
-import { ERRORS } from "../definitions/constants";
+import { ERRORS, KEY_EVENTS } from "../definitions/constants";
 
 export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
   plugin: ChronoLanguage;
@@ -24,7 +24,7 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
   }
 
   private setupKeyboardEventHandlers() {
-    ['keydown', 'keyup'].forEach((ev) =>
+    [KEY_EVENTS.KEYDOWN, KEY_EVENTS.KEYUP].forEach((ev) =>
       this.scope.register([], ev, () => {
         this.suggester.updateAllPreviews();
         return true;

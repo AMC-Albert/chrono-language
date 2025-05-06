@@ -3,7 +3,7 @@
  */
 export const INSERT_MODE = {
     LINK: 'Insert as link',
-    PLAINTEXT: 'Insert as plain text'
+    PLAINTEXT: 'Insert as plain text',
 } as const;
 
 /**
@@ -63,7 +63,8 @@ export const KEYS = {
     ENTER: 'Enter',
     CONTROL: 'Control',
     ALT: 'Alt',
-    SHIFT: 'Shift'
+    SHIFT: 'Shift',
+    TAB: 'Tab'
 } as const;
 
 /**
@@ -92,7 +93,8 @@ export const DESCRIPTIONS = {
     PLAINTEXT_PRIMARY: 'Insert as plain text',
     PLAINTEXT_SUGGESTION_TEXT: 'Use suggestion text',
     PLAINTEXT_ALTERNATE: 'Alternate format',
-    PLAINTEXT_DAILY_NOTE: 'Force no alias'
+    PLAINTEXT_DAILY_NOTE: 'Force no alias',
+    OPEN_DAILY_NOTE: 'Open daily note'
 } as const;
 
 /**
