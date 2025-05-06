@@ -100,6 +100,7 @@ export const ERRORS = {
     FAILED_HANDLE_NOTE: 'Failed to handle daily note',
     UNABLE_PARSE_DATE: 'Unable to parse date',
     DAILY_NOTES_FOLDER_MISSING: 'Failed to find daily notes folder. Please check that the folder you have set in the daily notes core plugin settings exists.',
+    FAILED_CREATE_FOLDER: 'Failed to create daily notes folder.',
 } as const;
 
 /**

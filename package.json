@@ -23,6 +23,7 @@
 	},
 	"dependencies": {
 		"chrono-node": "^2.8.0",
+		"date-holidays": "^3.24.2",
 		"obsidian-daily-notes-interface": "^0.9.4",
 		"obsidian-dev-utils": "^26.22.0"
 	}

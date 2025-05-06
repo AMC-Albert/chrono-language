@@ -1,5 +1,5 @@
 import { App, normalizePath, Notice, TFile, TFolder, moment } from 'obsidian';
-import { Link, ObsidianSettings } from 'obsidian-dev-utils/obsidian';
+import { Link, ObsidianSettings, FileSystem } from 'obsidian-dev-utils/obsidian';
 import { getDailyNoteSettings, getDailyNote, getAllDailyNotes, createDailyNote, DEFAULT_DAILY_NOTE_FORMAT } from 'obsidian-daily-notes-interface';
 import { ChronoLanguageSettings } from '../settings';
 import { EnhancedDateParser } from './parser';
@@ -132,7 +132,7 @@ export function getDailyNotePath(
     settings: ChronoLanguageSettings,
     momentDate: moment.Moment
 ): string {
-    let dailyNoteSettings = getDailyNoteSettings();
+    const dailyNoteSettings = getDailyNoteSettings();
 
     // Format the date according to daily note settings
     const formattedDate = momentDate.format(dailyNoteSettings.format || DEFAULT_DAILY_NOTE_FORMAT);
@@ -194,7 +194,7 @@ export function createDailyNoteLink(
         forceNoAlias
     );
     
-    // Generate the link
+    // Generate the link using Link utility
     return Link.generateMarkdownLink({
         app,
         targetPathOrFile: targetPath,
@@ -222,7 +222,7 @@ export async function getOrCreateDailyNote(
     const dailyNoteSettings = getDailyNoteSettings();
 
     // Check if the daily note exists
-    const allNotes = getAllDailyNotesSafe(app, silent);
+    const allNotes = await getAllDailyNotesSafe(app, silent, true);
     if (!allNotes) return null;
     
     let dailyNote = getDailyNote(momentDate, allNotes);
@@ -236,9 +236,9 @@ export async function getOrCreateDailyNote(
         }
     }
     
-    // Convert to Obsidian TFile
-    const obsidianFile = app.vault.getAbstractFileByPath(dailyNote.path);
-    if (!(obsidianFile instanceof TFile)) {
+    // Get TFile using FileSystem utility
+    const obsidianFile = FileSystem.getFileOrNull(app, dailyNote.path);
+    if (!obsidianFile) {
         if (!silent) new Notice(ERRORS.FAILED_FIND_NOTE);
         return null;
     }
@@ -251,26 +251,70 @@ export async function getOrCreateDailyNote(
 }
 
 /**
+ * Creates the daily notes folder if it doesn't exist
+ * @param app The Obsidian app instance
+ * @param silent If true, no notices will be displayed
+ * @returns Promise resolving to true if the folder exists or was successfully created, false otherwise
+ */
+export async function createDailyNotesFolderIfNeeded(app: App, silent: boolean = false): Promise<boolean> {
+    const dailyNoteSettings = getDailyNoteSettings();
+    const folderPath = dailyNoteSettings.folder ?? '';
+    
+    // Check if folder exists (empty string means root folder, which always exists)
+    if (folderPath === '') {
+        return true;
+    }
+    
+    try {
+        // Use FileSystem.getOrCreateFolder utility
+        await FileSystem.getOrCreateFolder(app, folderPath);
+        return true;
+    } catch (error) {
+        if (!silent) {
+            new Notice(`${ERRORS.FAILED_CREATE_FOLDER}: ${error}`, 5000);
+        }
+        return false;
+    }
+}
+
+/**
  * Wrapper to safely get all daily notes only if the folder exists
  * @param app The Obsidian app instance
  * @param silent If true, no error notice will be displayed if the folder is missing
+ * @param createIfNeeded If true, attempts to create the folder if it doesn't exist
  * @returns Record of daily notes or null if the folder is missing
  */
-export function getAllDailyNotesSafe(app: App, silent: boolean = false): Record<string, TFile> | null {
+export async function getAllDailyNotesSafe(
+    app: App, 
+    silent: boolean = false,
+    createIfNeeded: boolean = false
+): Promise<Record<string, TFile> | null> {
     const dailyNoteSettings = getDailyNoteSettings();
     // Allow empty string (root folder), but must be a valid AbstractFile (TFolder or root)
     const folderPath = dailyNoteSettings.folder ?? '';
-    const folder = app.vault.getAbstractFileByPath(folderPath);
+    
+    // Use FileSystem.getFolderOrNull utility
+    const folder = FileSystem.getFolderOrNull(app, folderPath);
+    
     // Accept root (empty string) or TFolder
     if (
         (folderPath === '' && app.vault.getRoot() !== null) ||
-        (folder && folder instanceof TFolder)
+        folder !== null
     ) {
-        return getAllDailyNotes();
-    } else {
-        if (!silent) {
-            new Notice(ERRORS.DAILY_NOTES_FOLDER_MISSING, 5000);
+        // Add type assertion to resolve incompatible TFile types
+        return getAllDailyNotes() as Record<string, TFile>;
+    } else if (createIfNeeded) {
+        // Try to create the folder
+        const created = await createDailyNotesFolderIfNeeded(app, silent);
+        if (created) {
+            // Add type assertion to resolve incompatible TFile types
+            return getAllDailyNotes() as Record<string, TFile>;
         }
-        return null;
     }
+    
+    // Folder doesn't exist and either we didn't try to create it or creation failed
+    if (!silent) {
+        new Notice(ERRORS.DAILY_NOTES_FOLDER_MISSING, 5000);
+    }
+    return null;
 }

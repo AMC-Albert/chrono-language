@@ -13,6 +13,11 @@ import {
     MODIFIER_KEY
 } from '../definitions/constants';
 
+/**
+ * Callback function type for key state change events
+ */
+type KeyStateChangeCallback = () => void;
+
 export class KeyboardHandler {
     private scope: Scope | null;
     private plainTextByDefault: boolean;
