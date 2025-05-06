@@ -7,8 +7,8 @@ import {
     getAllKeyCombos, 
     findKeyComboByModifiers, 
     KeyMapEntry 
-} from '../plugin-data/types';
-import { KEYS } from '../plugin-data/constants';
+} from '../definitions/types';
+import { KEYS } from '../definitions/constants';
 
 /**
  * Handles keyboard shortcuts for the plugin
@@ -73,6 +73,7 @@ export class KeyboardHandler {
     getInstructions(): { command: string, purpose: string }[] {
         return Object.values(KEYMAP)
             .filter((entry: KeyMapEntry) => entry.combo.showInInstructions === true)
+            .filter((entry: KeyMapEntry) => entry.modString !== 'none')
             .map((entry: KeyMapEntry) => {
                 const combo = entry.combo;
                 const modString = entry.modString;
@@ -155,19 +156,6 @@ export class KeyboardHandler {
             insertMode: combo.insertMode,
             contentFormat: combo.contentFormat
         };
-    }
-
-    /**
-     * Find the matched key combo based on key event state
-     */
-    getMatchedCombo(event: KeyboardEvent | MouseEvent | any): KeyCombo {
-        let keyState = {
-            shift: 'shiftKey' in event ? event.shiftKey : false,
-            ctrl: 'ctrlKey' in event ? event.ctrlKey : false,
-            alt: 'altKey' in event ? event.altKey : false
-        };
-        // Invert ctrl if plainTextByDefault is true
-        return findKeyComboByModifiers(keyState.shift, keyState.ctrl, keyState.alt, this.plainTextByDefault);
     }
 
     /**

@@ -1,10 +1,10 @@
-import { Editor, EditorPosition, EditorSuggest, EditorSuggestContext, App } from 'obsidian';
+import { Editor, EditorPosition, EditorSuggest, EditorSuggestContext, Modifier } from 'obsidian';
 import ChronoLanguage from '../main';
 import { createDailyNoteLink, getDatePreview, getDailyNotePreview } from '../utils/helpers';
 import { Suggester } from './suggestion-renderer';
-import { KeyCombo, InsertMode, ContentFormat } from '../plugin-data/types';
+import { InsertMode, ContentFormat, getAllKeyCombos } from '../definitions/types';
 import { KeyboardHandler } from '../utils/keyboard-handler';
-import { KEYS } from '../plugin-data/constants';
+import { KEYS } from '../definitions/constants';
 
 /**
  * A suggester for the editor that provides date parsing suggestions
@@ -32,114 +32,27 @@ export class EditorSuggester extends EditorSuggest<string> {
     }
     
     private setupKeyboardEventHandlers() {
-        // Register primary keyboard shortcuts
-        this.keyboardHandler.registerShortcuts((event: KeyboardEvent) => {
-            // Only handle Enter key with our custom logic
-            if (event.key === KEYS.ENTER) {
-                // Update key state from this event directly before handling
-                // This ensures the current event's modifier state is captured
-                this.keyboardHandler.setKeyState({
-                    shift: event.shiftKey,
-                    ctrl: event.ctrlKey,
-                    alt: event.altKey
-                });
-                
-                if (this.suggester) {
-                    this.suggester.syncKeyStateFrom(this.keyboardHandler);
-                }
-                
-                this.suggestions.useSelectedItem(event);
-                return false; // Prevent default behavior
-            }
-            
-            // For arrow keys, handle navigation
-            if (event.key === KEYS.ARROW_DOWN) {
-                this.suggestions.moveDown(event);
-                return false; // Prevent default
-            } else if (event.key === KEYS.ARROW_UP) {
-                this.suggestions.moveUp(event);
-                return false; // Prevent default
-            }
-            
-            // Let other key combinations pass through
-            return true;
-        });
-        
-        // Set up event listeners to sync key states between suggester and editor
-        this.scope.register([], KEYS.CONTROL.toLowerCase(), (event: KeyboardEvent) => {
-            if (!this.isOpen || !this.suggester) return true;
-            
-            // Update keyboard handler state
-            const updated = this.keyboardHandler.updateKeyState(event, true);
-            
-            // If state changed, sync with suggester and update previews
-            if (updated) {
+        // update our keyState on raw keydown/keyup
+        document.addEventListener('keydown',  e => this.keyboardHandler.updateKeyState(e, true));
+        document.addEventListener('keyup',    e => this.keyboardHandler.updateKeyState(e, false));
+
+        // Enter under every modifier combo
+        getAllKeyCombos().forEach(combo => {
+            const mods: Modifier[] = [];
+            if (combo.ctrl)  mods.push('Ctrl');
+            if (combo.shift) mods.push('Shift');
+            if (combo.alt)   mods.push('Alt');
+            this.scope.register(mods, KEYS.ENTER, (event) => {
+                if (!this.isOpen || !this.suggester) return false;
+                // sync preview state
                 this.suggester.syncKeyStateFrom(this.keyboardHandler);
-                this.suggester.updateAllPreviews();
-            }
-            
-            return true; // Allow event to propagate
+                return this.suggestions.useSelectedItem(event);
+            });
         });
-        
-        this.scope.register([], KEYS.SHIFT.toLowerCase(), (event: KeyboardEvent) => {
-            if (!this.isOpen || !this.suggester) return true;
-            
-            // Update keyboard handler state
-            const updated = this.keyboardHandler.updateKeyState(event, false);
-            
-            // If state changed, sync with suggester and update previews
-            if (updated) {
-                this.suggester.syncKeyStateFrom(this.keyboardHandler);
-                this.suggester.updateAllPreviews();
-            }
-            
-            return true; // Allow event to propagate
-        });
-        
-        this.scope.register([], KEYS.ALT.toLowerCase(), (event: KeyboardEvent) => {
-            if (!this.isOpen || !this.suggester) return true;
-            
-            // Update keyboard handler state
-            const updated = this.keyboardHandler.updateKeyState(event, false);
-            
-            // If state changed, sync with suggester and update previews
-            if (updated) {
-                this.suggester.syncKeyStateFrom(this.keyboardHandler);
-                this.suggester.updateAllPreviews();
-            }
-            
-            return true; // Allow event to propagate
-        });
-        
-        this.scope.register([], 'keydown', (event: KeyboardEvent) => {
-            if (!this.isOpen || !this.suggester) return true;
-            
-            // Update keyboard handler state
-            const updated = this.keyboardHandler.updateKeyState(event, true);
-            
-            // If state changed, sync with suggester and update previews
-            if (updated) {
-                this.suggester.syncKeyStateFrom(this.keyboardHandler);
-                this.suggester.updateAllPreviews();
-            }
-            
-            return true; // Allow event to propagate
-        });
-        
-        this.scope.register([], 'keyup', (event: KeyboardEvent) => {
-            if (!this.isOpen || !this.suggester) return true;
-            
-            // Update keyboard handler state
-            const updated = this.keyboardHandler.updateKeyState(event, false);
-            
-            // If state changed, sync with suggester and update previews
-            if (updated) {
-                this.suggester.syncKeyStateFrom(this.keyboardHandler);
-                this.suggester.updateAllPreviews();
-            }
-            
-            return true; // Allow event to propagate
-        });
+
+        // Arrow navigation (no modifiers)
+        this.scope.register([], KEYS.ARROW_DOWN, (e) => { this.suggestions.moveDown(e); return false; });
+        this.scope.register([], KEYS.ARROW_UP,   (e) => { this.suggestions.moveUp(e);   return false; });
     }
 
     /**
@@ -221,37 +134,39 @@ export class EditorSuggester extends EditorSuggest<string> {
     selectSuggestion(item: string, event: KeyboardEvent | MouseEvent): void {
         if (this.context) {
             const { editor, start, end } = this.context;
-            // Use the new centralized logic for mode/format
-            const { insertMode, contentFormat } = this.keyboardHandler.getEffectiveInsertModeAndFormat(event);
-            if (this.suggester) {
-                this.suggester.syncKeyStateFrom(this.keyboardHandler);
-            }
-            let insertText: string = "";
+            // always derive insertMode/contentFormat from the actual event
+            const { insertMode, contentFormat } = 
+                this.keyboardHandler.getEffectiveInsertModeAndFormat(event as any);
+            
+            let insertText = "";
+
             if (insertMode === InsertMode.PLAINTEXT) {
                 if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
                     insertText = item;
-                } else if (contentFormat === ContentFormat.DAILY_NOTE) {
-                    insertText = getDailyNotePreview(item);
-                } else {
-                    insertText = getDatePreview(
-                        item, 
-                        this.plugin.settings, 
-                        contentFormat === ContentFormat.ALTERNATE,
-                        false,
-                        contentFormat === ContentFormat.DAILY_NOTE
-                    );
                 }
-            } else {
+                else if (contentFormat === ContentFormat.DAILY_NOTE) {
+                    insertText = getDailyNotePreview(item);
+                }
+                else if (contentFormat === ContentFormat.ALTERNATE) {
+                    insertText = getDatePreview(item, this.plugin.settings, true);
+                }
+                else {  // PRIMARY
+                    insertText = getDatePreview(item, this.plugin.settings, false);
+                }
+            }
+            else {
+                // link insertion, force flags based on contentFormat
                 insertText = createDailyNoteLink(
-                    this.app, 
-                    this.plugin.settings, 
-                    this.context.file, 
+                    this.app,
+                    this.plugin.settings,
+                    this.context.file,
                     item,
                     contentFormat === ContentFormat.SUGGESTION_TEXT,
                     contentFormat === ContentFormat.ALTERNATE,
                     contentFormat === ContentFormat.DAILY_NOTE
                 );
             }
+
             editor.replaceRange(insertText, start, end);
         }
     }

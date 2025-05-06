@@ -4,7 +4,7 @@
 export const INSERT_MODE = {
     LINK: 'Insert as link',
     PLAINTEXT: 'Insert as plain text'
-};
+} as const;
 
 /**
  * Constants for Content Formats
@@ -14,7 +14,7 @@ export const CONTENT_FORMAT = {
     ALTERNATE: 'Alternate format',
     DAILY_NOTE: 'Daily note format',
     SUGGESTION_TEXT: 'Use suggestion text'
-};
+} as const;
 
 /**
  * Modifier keys
@@ -24,7 +24,7 @@ export const MODIFIER_KEY = {
     CTRL: 'ctrl',
     SHIFT: 'shift',
     ALT: 'alt'
-};
+} as const;
 
 /**
  * Modifier behaviors - map physical keys to logical functions
@@ -39,7 +39,7 @@ export const MODIFIER_BEHAVIOR = {
     CONTENT_FORMAT_TOGGLE: MODIFIER_KEY.ALT,
     // The combination that triggers daily note format
     DAILY_NOTE_TOGGLE: `${MODIFIER_KEY.SHIFT}+${MODIFIER_KEY.ALT}`
-};
+} as const;
 
 /**
  * Constants for modifier combinations
@@ -54,7 +54,7 @@ export const MODIFIERS = {
     CTRL_ALT: `${MODIFIER_KEY.CTRL}+${MODIFIER_KEY.ALT}`,
     SHIFT_ALT: `${MODIFIER_KEY.SHIFT}+${MODIFIER_KEY.ALT}`,
     CTRL_SHIFT_ALT: `${MODIFIER_KEY.CTRL}+${MODIFIER_KEY.SHIFT}+${MODIFIER_KEY.ALT}`
-};
+} as const;
 
 /**
  * Constants for keyboard keys
@@ -66,7 +66,7 @@ export const KEYS = {
     CONTROL: 'Control',
     ALT: 'Alt',
     SHIFT: 'Shift'
-};
+} as const;
 
 /**
  * Constants for key event types
@@ -74,14 +74,14 @@ export const KEYS = {
 export const KEY_EVENTS = {
     KEYDOWN: 'keydown',
     KEYUP: 'keyup'
-};
+} as const;
 
 /**
  * Constants for date formats
  */
 export const DATE_FORMAT = {
     DEFAULT: 'YYYY-MM-DD'
-};
+} as const;
 
 /**
  * Constants for descriptions
@@ -95,7 +95,7 @@ export const DESCRIPTIONS = {
     PLAINTEXT_SUGGESTION_TEXT: 'Insert text as displayed',
     PLAINTEXT_ALTERNATE: 'Insert plain text with alternate format',
     PLAINTEXT_DAILY_NOTE: 'Insert daily note as plain text'
-};
+} as const;
 
 /**
  * Constants for error messages
@@ -105,4 +105,13 @@ export const ERRORS = {
     FAILED_FIND_NOTE: 'Failed to find daily note in vault',
     FAILED_HANDLE_NOTE: 'Failed to handle daily note',
     UNABLE_PARSE_DATE: 'Unable to parse date'
-};
+} as const;
+
+/**
+ * List of insertMode + contentFormat combos to hide in instruction list
+ */
+export const HIDDEN_ACTIONS = [
+    { insertMode: INSERT_MODE.PLAINTEXT, contentFormat: CONTENT_FORMAT.SUGGESTION_TEXT },
+    { insertMode: INSERT_MODE.PLAINTEXT, contentFormat: CONTENT_FORMAT.ALTERNATE },
+    { insertMode: INSERT_MODE.PLAINTEXT, contentFormat: CONTENT_FORMAT.DAILY_NOTE },
+] as const;

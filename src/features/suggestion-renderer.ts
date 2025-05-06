@@ -4,7 +4,7 @@ import { getDailyNotePreview, getDatePreview, getOrCreateDailyNote } from '../ut
 import { getDailyNote, getAllDailyNotes } from 'obsidian-daily-notes-interface';
 import { EnhancedDateParser } from '../utils/parser';
 import { TFile } from 'obsidian';
-import { InsertMode, ContentFormat } from '../plugin-data/types';
+import { InsertMode, ContentFormat } from '../definitions/types';
 // Ensure this import path is correct and points to the file where getCurrentKeyCombo is implemented
 import { KeyboardHandler } from '../utils/keyboard-handler';
 

@@ -3,7 +3,7 @@ import { Link, ObsidianSettings } from 'obsidian-dev-utils/obsidian';
 import { getDailyNoteSettings, getDailyNote, getAllDailyNotes, createDailyNote } from 'obsidian-daily-notes-interface';
 import { ChronoLanguageSettings } from '../settings';
 import { EnhancedDateParser } from './parser';
-import { DATE_FORMAT, ERRORS } from '../plugin-data/constants';
+import { DATE_FORMAT, ERRORS } from '../definitions/constants';
 
 /**
  * Returns a human readable preview of the parsed date

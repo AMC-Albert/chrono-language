@@ -2,7 +2,7 @@ import { Plugin } from 'obsidian';
 import { ChronoLanguageSettings, ChronoLanguageSettingTab, DEFAULT_SETTINGS } from './settings';
 import { EditorSuggester } from './features/editor-suggester';
 import { OpenDailyNoteModal } from './features/open-daily-note';
-import { MODIFIER_BEHAVIOR } from './plugin-data/constants';
+import { MODIFIER_BEHAVIOR } from './definitions/constants';
 
 export default class ChronoLanguage extends Plugin {
 	settings: ChronoLanguageSettings;

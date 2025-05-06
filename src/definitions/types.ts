@@ -5,21 +5,20 @@ import {
     KEYS, 
     DESCRIPTIONS,
     MODIFIER_BEHAVIOR,
-    MODIFIER_KEY
+    MODIFIER_KEY,
+    HIDDEN_ACTIONS
 } from './constants';
 
-// Define two distinct action type groups for better organization and type safety
-export enum InsertMode {
-    LINK = INSERT_MODE.LINK,
-    PLAINTEXT = INSERT_MODE.PLAINTEXT
-}
+// helper to extract all values from a const-object
+type ValueOf<T> = T[keyof T];
 
-export enum ContentFormat {
-    PRIMARY = CONTENT_FORMAT.PRIMARY,
-    ALTERNATE = CONTENT_FORMAT.ALTERNATE,
-    DAILY_NOTE = CONTENT_FORMAT.DAILY_NOTE,
-    SUGGESTION_TEXT = CONTENT_FORMAT.SUGGESTION_TEXT
-}
+// derive unions automatically from constants.ts
+export type InsertMode = ValueOf<typeof INSERT_MODE>;
+export type ContentFormat = ValueOf<typeof CONTENT_FORMAT>;
+
+// expose value namespaces for legacy enum‐style references
+export const InsertMode = INSERT_MODE;
+export const ContentFormat = CONTENT_FORMAT;
 
 export interface KeyState {
     shift: boolean;
@@ -47,28 +46,31 @@ export interface KeyMapEntry {
 
 // Define insert modes by modifier behavior (not directly by keys)
 const INSERT_MODES: Record<string, InsertMode> = {
-    [MODIFIER_KEY.NONE]: InsertMode.LINK,
-    [MODIFIER_BEHAVIOR.INSERT_MODE_TOGGLE]: InsertMode.PLAINTEXT
+    [MODIFIER_KEY.NONE]: INSERT_MODE.LINK,
+    [MODIFIER_BEHAVIOR.INSERT_MODE_TOGGLE]: INSERT_MODE.PLAINTEXT
 };
 
 // Define content formats by modifier behavior (not directly by keys)
 const CONTENT_FORMATS: Record<string, ContentFormat> = {
-    [MODIFIER_KEY.NONE]: ContentFormat.PRIMARY,
-    [MODIFIER_BEHAVIOR.CONTENT_SUGGESTION_TOGGLE]: ContentFormat.SUGGESTION_TEXT,
-    [MODIFIER_BEHAVIOR.CONTENT_FORMAT_TOGGLE]: ContentFormat.ALTERNATE,
-    [MODIFIER_BEHAVIOR.DAILY_NOTE_TOGGLE]: ContentFormat.DAILY_NOTE
+    [MODIFIER_KEY.NONE]: CONTENT_FORMAT.PRIMARY,
+    [MODIFIER_BEHAVIOR.CONTENT_SUGGESTION_TOGGLE]: CONTENT_FORMAT.SUGGESTION_TEXT,
+    [MODIFIER_BEHAVIOR.CONTENT_FORMAT_TOGGLE]: CONTENT_FORMAT.ALTERNATE,
+    [MODIFIER_BEHAVIOR.DAILY_NOTE_TOGGLE]: CONTENT_FORMAT.DAILY_NOTE
 };
 
 /**
  * Create a modifier string from key states with consistent ordering
  */
-export function createModifierString(shift: boolean, ctrl: boolean, alt: boolean): string {
-    // Always order as 'ctrl+shift+alt' or subset of that for consistency
+export function createModifierString(
+    shift: boolean,
+    ctrl: boolean,
+    alt: boolean
+): ValueOf<typeof MODIFIERS> {    // narrow return type to known modifiers
     const mods = [];
     if (ctrl) mods.push(MODIFIER_KEY.CTRL);
     if (shift) mods.push(MODIFIER_KEY.SHIFT);
     if (alt) mods.push(MODIFIER_KEY.ALT);
-    return mods.length > 0 ? mods.join('+') : MODIFIER_KEY.NONE;
+    return (mods.length > 0 ? mods.join('+') : MODIFIER_KEY.NONE) as ValueOf<typeof MODIFIERS>;
 }
 
 /**
@@ -111,22 +113,22 @@ function getContentFormatBehaviorString(modString: string): string {
  * Generates a description for a key combo
  */
 function generateDescription(insertMode: InsertMode, contentFormat: ContentFormat): string {
-    if (insertMode === InsertMode.PLAINTEXT) {
-        if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
+    if (insertMode === INSERT_MODE.PLAINTEXT) {
+        if (contentFormat === CONTENT_FORMAT.SUGGESTION_TEXT) {
             return DESCRIPTIONS.PLAINTEXT_SUGGESTION_TEXT;
-        } else if (contentFormat === ContentFormat.DAILY_NOTE) {
+        } else if (contentFormat === CONTENT_FORMAT.DAILY_NOTE) {
             return DESCRIPTIONS.PLAINTEXT_DAILY_NOTE;
-        } else if (contentFormat === ContentFormat.ALTERNATE) {
+        } else if (contentFormat === CONTENT_FORMAT.ALTERNATE) {
             return DESCRIPTIONS.PLAINTEXT_ALTERNATE;
         } else {
             return DESCRIPTIONS.PLAINTEXT_PRIMARY;
         }
     } else {
-        if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
+        if (contentFormat === CONTENT_FORMAT.SUGGESTION_TEXT) {
             return DESCRIPTIONS.LINK_SUGGESTION_TEXT;
-        } else if (contentFormat === ContentFormat.DAILY_NOTE) {
+        } else if (contentFormat === CONTENT_FORMAT.DAILY_NOTE) {
             return DESCRIPTIONS.LINK_DAILY_NOTE;
-        } else if (contentFormat === ContentFormat.ALTERNATE) {
+        } else if (contentFormat === CONTENT_FORMAT.ALTERNATE) {
             return DESCRIPTIONS.LINK_ALTERNATE;
         } else {
             return DESCRIPTIONS.LINK_PRIMARY;
@@ -137,9 +139,10 @@ function generateDescription(insertMode: InsertMode, contentFormat: ContentForma
 /**
  * Determine if a key combo should be shown in instructions
  */
-function shouldShowInInstructions(modString: string): boolean {
-    // Hide certain combinations from instructions
-    return ![MODIFIERS.CTRL_SHIFT_ALT, MODIFIERS.CTRL_SHIFT, MODIFIERS.CTRL_ALT].includes(modString);
+function shouldShowInInstructions(combo: KeyCombo): boolean {
+    return !HIDDEN_ACTIONS.some(
+        h => h.insertMode === combo.insertMode && h.contentFormat === combo.contentFormat
+    );
 }
 
 /**
@@ -147,59 +150,40 @@ function shouldShowInInstructions(modString: string): boolean {
  */
 function generateKeyMap(): Record<string, KeyMapEntry> {
     const keyMap: Record<string, KeyMapEntry> = {};
-    
-    // Generate all possible modifier combinations
     const booleanOptions = [false, true];
+
     for (const ctrl of booleanOptions) {
         for (const shift of booleanOptions) {
             for (const alt of booleanOptions) {
                 const modString = createModifierString(shift, ctrl, alt);
-                
-                // Get the insert mode based on behavior
+
                 const insertModeBehavior = getInsertModeBehaviorString(modString);
                 const insertMode = INSERT_MODES[insertModeBehavior];
-                
-                // Get content format based on behavior
+
                 const contentFormatBehavior = getContentFormatBehaviorString(modString);
-                const contentFormat = CONTENT_FORMATS[contentFormatBehavior] || ContentFormat.PRIMARY;
-                
-                // Generate the description
+                const contentFormat = CONTENT_FORMATS[contentFormatBehavior] || CONTENT_FORMAT.PRIMARY;
+
                 const description = generateDescription(insertMode, contentFormat);
-                
-                // Create the combo
-                keyMap[modString] = {
-                    combo: {
-                        shift,
-                        ctrl,
-                        alt,
-                        key: KEYS.ENTER,
-                        insertMode,
-                        contentFormat,
-                        description,
-                        showInInstructions: shouldShowInInstructions(modString)
-                    },
-                    modString
+
+                const combo: KeyCombo = {
+                    shift, ctrl, alt,
+                    key: KEYS.ENTER,
+                    insertMode,
+                    contentFormat,
+                    description,
+                    showInInstructions: shouldShowInInstructions({ shift, ctrl, alt, key: KEYS.ENTER, insertMode, contentFormat })
                 };
+
+                keyMap[modString] = { combo, modString };
             }
         }
     }
-    
+
     return keyMap;
 }
 
 // Define the KEYMAP using dynamic generation
 export const KEYMAP = generateKeyMap();
-
-/**
- * Create a key state object from event
- */
-export function getKeyStateFromEvent(event: KeyboardEvent | MouseEvent): KeyState {
-    return {
-        shift: 'shiftKey' in event ? event.shiftKey : false,
-        ctrl: 'ctrlKey' in event ? event.ctrlKey : false,
-        alt: 'altKey' in event ? event.altKey : false
-    };
-}
 
 // Helper function to get all key combos
 export function getAllKeyCombos(): KeyCombo[] {
@@ -214,11 +198,3 @@ export function findKeyComboByModifiers(shift: boolean, ctrl: boolean, alt: bool
     const entry = KEYMAP[modString];
     return entry ? { ...entry.combo } : KEYMAP[MODIFIER_KEY.NONE].combo;
 }
-
-// Helper function to find key map entry by modifier string
-export function findKeyMapEntryByModString(modString: string): KeyMapEntry {
-    return KEYMAP[modString] || KEYMAP[MODIFIER_KEY.NONE];
-}
-
-// For backward compatibility - can be removed if needed
-export const DEFAULT_KEYMAP = KEYMAP;
