@@ -80,19 +80,30 @@ export class SuggestionProvider {
     };
     
     // Handle daily note opening actions
-    private handleDailyNoteAction(e: KeyboardEvent, newTab: boolean) {
+    private async handleDailyNoteAction(e: KeyboardEvent, newTab: boolean) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        
+
         const sel = document.querySelector('.is-selected .chrono-suggestion-container') as HTMLElement;
-        const link = sel?.querySelector('a[data-href]') as HTMLElement;
-        
-        if (link) {
-            link.dispatchEvent(new MouseEvent('click', { 
-                bubbles: true, 
-                cancelable: true, 
-                ctrlKey: newTab 
-            }));
+        const raw = sel?.getAttribute('data-suggestion');
+        if (!raw) return;
+
+        const parsed = EnhancedDateParser.parseDate(raw);
+        if (!parsed) return;
+
+        const momentDate = moment(parsed);
+        const file = await getOrCreateDailyNote(this.app, momentDate, false); // don't open in getOrCreateDailyNote
+
+        if (file) {
+            if (newTab) {
+                // Create a new tab and open the file there, do not open in the original tab
+                const newLeaf = this.app.workspace.getLeaf("tab");
+                await newLeaf.openFile(file);
+            } else {
+                // Open in the current tab
+                const leaf = this.app.workspace.getLeaf(false);
+                await leaf.openFile(file);
+            }
         }
     }
 
@@ -135,56 +146,32 @@ export class SuggestionProvider {
 
     renderSuggestionContent(item: string, el: HTMLElement, context?: any) {
         const container = el.createEl('div', { cls: 'chrono-suggestion-container' });
+        container.setAttribute('data-suggestion', item);
         container.createEl('span', { text: item, cls: 'chrono-suggestion-text' });
-
-        // Store reference to this element and context
         this.currentElements.set(item, container);
-        if (context) {
-            this.contextProvider = context;
-        }
-
-        // Update the preview for this item
+        if (context) this.contextProvider = context;
         this.updatePreviewContent(item, container);
     }
 
     updatePreviewContent(item: string, container: HTMLElement) {
-        // Remove any existing preview elements
-        const existingPreview = container.querySelector('.chrono-suggestion-preview');
-        if (existingPreview) {
-            existingPreview.remove();
-        }
-        
-        // Get current key state and determine insert mode/content format
+        container.querySelector('.chrono-suggestion-preview')?.remove();
         const { insertMode, contentFormat } = this.keyboardHandler.getEffectiveInsertModeAndFormat();
-        
-        const dailyNotePreview = getDailyNotePreview(item);
-        let momentDate = moment(EnhancedDateParser.parseDate(item));
+        const momentDate = moment(EnhancedDateParser.parseDate(item));
         const dailyNote = momentDate.isValid() ? getDailyNote(momentDate, getAllDailyNotes()) : null;
+        const dailyNotePreview = getDailyNotePreview(item) ?? item;
         const dailyNoteClass = dailyNote instanceof TFile ? '' : 'chrono-is-unresolved';
-        
-        // Determine the text to display based on content format
-        let readableDatePreview: string;
-        if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
-            readableDatePreview = item;
-        } else if (contentFormat === ContentFormat.DAILY_NOTE) {
+
+        let readableDatePreview = item;
+        if (contentFormat === ContentFormat.DAILY_NOTE) {
             readableDatePreview = dailyNotePreview;
-        } else {
-            readableDatePreview = getDatePreview(
-                item,
-                this.plugin.settings,
-                contentFormat === ContentFormat.ALTERNATE,
-                false
-            );
+        } else if (contentFormat !== ContentFormat.SUGGESTION_TEXT) {
+            readableDatePreview = getDatePreview(item, this.plugin.settings, contentFormat === ContentFormat.ALTERNATE, false);
         }
-        
-        // Create preview container
+
         const previewContainer = container.createEl('span', { cls: 'chrono-suggestion-preview' });
-        
-        // Display content based on insert mode
+
         if (insertMode === InsertMode.PLAINTEXT) {
-            if (readableDatePreview) {
-                previewContainer.appendText(`↳ ${readableDatePreview}`);
-            }
+            previewContainer.appendText(`↳ ${readableDatePreview}`);
         } else if (dailyNotePreview) {
             previewContainer.appendText('↳ ');
             const linkEl = previewContainer.createEl('a', {
@@ -192,55 +179,25 @@ export class SuggestionProvider {
                 cls: dailyNoteClass, 
                 attr: { 'data-href': dailyNote?.path ?? '#', target: '_self', rel: 'noopener nofollow' }
             });
-            
-            // Add click handler for links
             linkEl.addEventListener('click', async (event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                
-                // Close the suggester
                 this.closeSuggester();
-                
-                // Create and open the daily note
                 const file = await getOrCreateDailyNote(this.app, momentDate, true);
-                if (file) {
-                    const leaf = this.app.workspace.getLeaf(event.ctrlKey);
-                    await leaf.openFile(file);
-                }
+                if (file) await this.app.workspace.getLeaf(event.ctrlKey).openFile(file);
             });
-            
-            // Show additional preview if needed
-            if (dailyNotePreview !== readableDatePreview && readableDatePreview) {
+            if (dailyNotePreview !== readableDatePreview)
                 previewContainer.appendText(` ⭢ ${readableDatePreview}`);
-            }
-        } else if (readableDatePreview) {
-            previewContainer.appendText(`↳ ${readableDatePreview}`);
         }
-        
-        // Remove empty preview containers
-        if (!previewContainer.hasChildNodes() && !previewContainer.textContent?.trim()) {
-            previewContainer.remove();
-        }
+
+        if (!previewContainer.hasChildNodes() && !previewContainer.textContent?.trim()) previewContainer.remove();
     }
-    
+
     // Helper method to close the suggester
     private closeSuggester() {
-        const currentContext = this.contextProvider;
-        
-        // Clear out editor context if available
-        if (currentContext?.context?.editor && currentContext?.context?.start && currentContext?.context?.end) {
-            const { editor, start, end } = currentContext.context;
-            editor.replaceRange('', start, end);
-        }
-        
-        // Close the suggester
-        if (currentContext) {
-            if (typeof currentContext.close === 'function') {
-                currentContext.close();
-            } else if (typeof currentContext.suggestions?.close === 'function') {
-                currentContext.suggestions.close();
-            }
-        }
+        const ctx = this.contextProvider;
+        ctx?.context?.editor?.replaceRange?.('', ctx.context.start, ctx.context.end);
+        ctx?.close?.() ?? ctx?.suggestions?.close?.();
     }
     
     getKeyboardHandler(): KeyboardHandler {
