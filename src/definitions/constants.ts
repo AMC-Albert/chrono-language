@@ -76,13 +76,6 @@ export const KEY_EVENTS = {
 } as const;
 
 /**
- * Constants for date formats
- */
-export const DATE_FORMAT = {
-    DEFAULT: 'YYYY-MM-DD'
-} as const;
-
-/**
  * Constants for descriptions
  */
 export const DESCRIPTIONS = {
@@ -105,7 +98,8 @@ export const ERRORS = {
     FAILED_CREATE_NOTE: 'Failed to create daily note',
     FAILED_FIND_NOTE: 'Failed to find daily note in vault',
     FAILED_HANDLE_NOTE: 'Failed to handle daily note',
-    UNABLE_PARSE_DATE: 'Unable to parse date'
+    UNABLE_PARSE_DATE: 'Unable to parse date',
+    DAILY_NOTES_FOLDER_MISSING: 'Failed to find daily notes folder. Please check that the folder you have set in the daily notes core plugin settings exists.',
 } as const;
 
 /**

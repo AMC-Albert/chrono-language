@@ -1,7 +1,7 @@
 import { App, moment } from 'obsidian';
 import ChronoLanguage from '../main';
-import { getDailyNotePreview, getDatePreview, getOrCreateDailyNote } from '../utils/helpers';
-import { getDailyNote, getAllDailyNotes } from 'obsidian-daily-notes-interface';
+import { getDailyNotePreview, getDatePreview, getOrCreateDailyNote, getAllDailyNotesSafe } from '../utils/helpers';
+import { getDailyNote } from 'obsidian-daily-notes-interface';
 import { EnhancedDateParser } from '../utils/parser';
 import { TFile } from 'obsidian';
 import { InsertMode, ContentFormat } from '../definitions/types';
@@ -16,6 +16,7 @@ export class SuggestionProvider {
     currentElements: Map<string, HTMLElement> = new Map();
     contextProvider: any;
     keyboardHandler: KeyboardHandler;
+    isSuggesterOpen: boolean = false;
 
     constructor(app: App, plugin: ChronoLanguage) {
         this.app = app;
@@ -31,8 +32,10 @@ export class SuggestionProvider {
      * Handle key state changes by updating UI
      */
     handleKeyStateChange = (): void => {
-        // Update all UI elements when key state changes
-        requestAnimationFrame(() => this.updateAllPreviews());
+        // Only update previews if suggester is open
+        if (this.isSuggesterOpen) {
+            requestAnimationFrame(() => this.updateAllPreviews());
+        }
     };
     
     // Handle daily note opening actions
@@ -81,9 +84,13 @@ export class SuggestionProvider {
         this.keyboardHandler.removeKeyStateChangeListener(this.handleKeyStateChange);
         this.currentElements.clear();
         this.keyboardHandler.unload();
+        this.isSuggesterOpen = false;
     }
 
     updateAllPreviews() {
+        // Only proceed if suggester is open
+        if (!this.isSuggesterOpen) return;
+        
         // Update all currently rendered suggestions
         this.currentElements.forEach((el, item) => {
             this.updatePreviewContent(item, el);
@@ -95,10 +102,16 @@ export class SuggestionProvider {
      */
     updateSettings(settings: { keyBindings?: Record<string, string>; plainTextByDefault?: boolean }): void {
         this.keyboardHandler.update(settings);
-        this.updateAllPreviews();
+        // Only update previews if suggester is open
+        if (this.isSuggesterOpen) {
+            this.updateAllPreviews();
+        }
     }
 
     getDateSuggestions(context: { query: string }, initialSuggestions?: string[]): string[] {
+        // Set the suggester as open when getting suggestions
+        this.isSuggesterOpen = true;
+        
         const suggestions = initialSuggestions || this.plugin.settings.initialEditorSuggestions;
         const filtered = suggestions.filter(
             c => c.toLowerCase().startsWith(context.query.toLowerCase())
@@ -115,6 +128,9 @@ export class SuggestionProvider {
     }
 
     renderSuggestionContent(item: string, el: HTMLElement, context?: any) {
+        // Set the suggester as open when rendering content
+        this.isSuggesterOpen = true;
+        
         const container = el.createEl('div', { cls: 'chrono-suggestion-container' });
         container.setAttribute('data-suggestion', item);
         container.createEl('span', { text: item, cls: 'chrono-suggestion-text' });
@@ -124,47 +140,66 @@ export class SuggestionProvider {
     }
 
     updatePreviewContent(item: string, container: HTMLElement) {
-        container.querySelector('.chrono-suggestion-preview')?.remove();
-        const { insertMode, contentFormat } = this.keyboardHandler.getEffectiveInsertModeAndFormat();
-        const momentDate = moment(EnhancedDateParser.parseDate(item));
-        const dailyNote = momentDate.isValid() ? getDailyNote(momentDate, getAllDailyNotes()) : null;
-        const dailyNotePreview = getDailyNotePreview(item) ?? item;
-        const dailyNoteClass = dailyNote instanceof TFile ? '' : 'chrono-is-unresolved';
+        try {
+            if (!this.isSuggesterOpen || !container.isConnected) return;
+            
+            container.querySelector('.chrono-suggestion-preview')?.remove();
+            const { insertMode, contentFormat } = this.keyboardHandler.getEffectiveInsertModeAndFormat();
+            const momentDate = moment(EnhancedDateParser.parseDate(item));
+            let dailyNote = null;
+            // Use the safe version with silent=true to prevent notice spam during UI updates
+            const allNotes = getAllDailyNotesSafe(this.app, true);
+            let dailyNotePreview = item;
+            let dailyNoteClass = '';
+            if (momentDate.isValid() && allNotes) {
+                dailyNote = getDailyNote(momentDate, allNotes);
+                dailyNotePreview = getDailyNotePreview(item) ?? item;
+                dailyNoteClass = dailyNote instanceof TFile ? '' : 'chrono-is-unresolved';
+            } else if (!allNotes) {
+                dailyNotePreview = 'Daily notes folder missing';
+                dailyNoteClass = 'chrono-is-unresolved';
+            }
 
-        let readableDatePreview = item;
-        if (contentFormat === ContentFormat.DAILY_NOTE) {
-            readableDatePreview = dailyNotePreview;
-        } else if (contentFormat !== ContentFormat.SUGGESTION_TEXT) {
-            readableDatePreview = getDatePreview(item, this.plugin.settings, contentFormat === ContentFormat.ALTERNATE, false);
+            let readableDatePreview = item;
+            if (contentFormat === ContentFormat.DAILY_NOTE) {
+                readableDatePreview = dailyNotePreview;
+            } else if (contentFormat !== ContentFormat.SUGGESTION_TEXT) {
+                readableDatePreview = getDatePreview(item, this.plugin.settings, contentFormat === ContentFormat.ALTERNATE, false);
+            }
+
+            const previewContainer = container.createEl('span', { cls: 'chrono-suggestion-preview' });
+
+            if (insertMode === InsertMode.PLAINTEXT) {
+                previewContainer.appendText(`↳ ${readableDatePreview}`);
+            } else if (dailyNotePreview) {
+                previewContainer.appendText('↳ ');
+                const linkEl = previewContainer.createEl('a', {
+                    text: dailyNotePreview,
+                    cls: dailyNoteClass, 
+                    attr: { 'data-href': dailyNote?.path ?? '#', target: '_self', rel: 'noopener nofollow' }
+                });
+                linkEl.addEventListener('click', async (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.closeSuggester();
+                    const file = await getOrCreateDailyNote(this.app, momentDate, true);
+                    if (file) await this.app.workspace.getLeaf(event.ctrlKey).openFile(file);
+                });
+                if (dailyNotePreview !== readableDatePreview)
+                    previewContainer.appendText(` ⭢ ${readableDatePreview}`);
+            }
+
+            if (!previewContainer.hasChildNodes() && !previewContainer.textContent?.trim()) previewContainer.remove();
+        } catch (e) {
+            console.error('Error updating preview content:', e);
         }
-
-        const previewContainer = container.createEl('span', { cls: 'chrono-suggestion-preview' });
-
-        if (insertMode === InsertMode.PLAINTEXT) {
-            previewContainer.appendText(`↳ ${readableDatePreview}`);
-        } else if (dailyNotePreview) {
-            previewContainer.appendText('↳ ');
-            const linkEl = previewContainer.createEl('a', {
-                text: dailyNotePreview,
-                cls: dailyNoteClass, 
-                attr: { 'data-href': dailyNote?.path ?? '#', target: '_self', rel: 'noopener nofollow' }
-            });
-            linkEl.addEventListener('click', async (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                this.closeSuggester();
-                const file = await getOrCreateDailyNote(this.app, momentDate, true);
-                if (file) await this.app.workspace.getLeaf(event.ctrlKey).openFile(file);
-            });
-            if (dailyNotePreview !== readableDatePreview)
-                previewContainer.appendText(` ⭢ ${readableDatePreview}`);
-        }
-
-        if (!previewContainer.hasChildNodes() && !previewContainer.textContent?.trim()) previewContainer.remove();
     }
 
     // Helper method to close the suggester
     private closeSuggester() {
+        // Set suggester as closed
+        this.isSuggesterOpen = false;
+        
         const ctx = this.contextProvider;
         ctx?.context?.editor?.replaceRange?.('', ctx.context.start, ctx.context.end);
         ctx?.close?.() ?? ctx?.suggestions?.close?.();

@@ -53,14 +53,9 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
       const momentDate = moment(parsed);
       const file = await getOrCreateDailyNote(this.app, momentDate, true);
       
-      if (!file) {
-        new Notice(ERRORS.FAILED_HANDLE_NOTE);
-        return;
-      }
-      
       // Use the active leaf to open the file
       const leaf = this.app.workspace.getLeaf();
-      await leaf.openFile(file);
+      if (file) await leaf.openFile(file);
     } catch (error) {
       console.error("Error opening daily note:", error);
       new Notice(ERRORS.FAILED_HANDLE_NOTE);

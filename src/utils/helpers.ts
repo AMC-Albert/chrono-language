@@ -1,9 +1,9 @@
-import { App, normalizePath, Notice, TFile, moment } from 'obsidian';
+import { App, normalizePath, Notice, TFile, TFolder, moment } from 'obsidian';
 import { Link, ObsidianSettings } from 'obsidian-dev-utils/obsidian';
-import { getDailyNoteSettings, getDailyNote, getAllDailyNotes, createDailyNote } from 'obsidian-daily-notes-interface';
+import { getDailyNoteSettings, getDailyNote, getAllDailyNotes, createDailyNote, DEFAULT_DAILY_NOTE_FORMAT } from 'obsidian-daily-notes-interface';
 import { ChronoLanguageSettings } from '../settings';
 import { EnhancedDateParser } from './parser';
-import { DATE_FORMAT, ERRORS } from '../definitions/constants';
+import { ERRORS } from '../definitions/constants';
 
 /**
  * Returns a human readable preview of the parsed date
@@ -21,7 +21,7 @@ export function getDatePreview(
     forceNoAlias = false, 
     forceDailyNoteFormat = false
 ): string {
-    const dailyNoteSettings = getDailyNoteSettings();
+    let dailyNoteSettings = getDailyNoteSettings();
     
     if (!dateText) return '';
     
@@ -31,14 +31,14 @@ export function getDatePreview(
     // Determine which format to use
     let format;
     if (forceDailyNoteFormat) {
-        format = dailyNoteSettings.format || DATE_FORMAT.DEFAULT;
+        format = dailyNoteSettings.format || DEFAULT_DAILY_NOTE_FORMAT;
     } else if (forceNoAlias && !forceDailyNoteFormat) {
         // Only return empty when forceNoAlias is true AND we're not forcing daily note format
         return '';
     } else if (useAlternateFormat && settings.alternateFormat) {
         format = settings.alternateFormat;
     } else {
-        format = settings.primaryFormat || dailyNoteSettings.format || DATE_FORMAT.DEFAULT;
+        format = settings.primaryFormat || dailyNoteSettings.format || DEFAULT_DAILY_NOTE_FORMAT;
     }
     
     return moment(parsedDate).format(format);
@@ -50,13 +50,14 @@ export function getDatePreview(
  * @returns Daily note format date preview
  */
 export function getDailyNotePreview(dateText: string): string {
+    let dailyNoteSettings = getDailyNoteSettings();
+
     if (!dateText) return '';
     
     const parsedDate = EnhancedDateParser.parseDate(dateText);
     if (!parsedDate) return '';
     
-    const dailyNoteSettings = getDailyNoteSettings();
-    const format = dailyNoteSettings.format || DATE_FORMAT.DEFAULT;
+    const format = dailyNoteSettings.format || DEFAULT_DAILY_NOTE_FORMAT;
     
     return moment(parsedDate).format(format);
 }
@@ -131,10 +132,10 @@ export function getDailyNotePath(
     settings: ChronoLanguageSettings,
     momentDate: moment.Moment
 ): string {
-    const dailyNoteSettings = getDailyNoteSettings();
-    
+    let dailyNoteSettings = getDailyNoteSettings();
+
     // Format the date according to daily note settings
-    const formattedDate = momentDate.format(dailyNoteSettings.format || DATE_FORMAT.DEFAULT);
+    const formattedDate = momentDate.format(dailyNoteSettings.format || DEFAULT_DAILY_NOTE_FORMAT);
     
     const usingRelativeLinks = ObsidianSettings.shouldUseRelativeLinks(app);
     
@@ -175,7 +176,7 @@ export function createDailyNoteLink(
     
     // Convert to moment date
     const momentDate = moment(parsedDate);
-    const dailyNoteFormat = dailyNoteSettings.format || DATE_FORMAT.DEFAULT; 
+    const dailyNoteFormat = dailyNoteSettings.format || DEFAULT_DAILY_NOTE_FORMAT; 
     
     // Get the path to the daily note
     const targetPath = getDailyNotePath(app, settings, momentDate);
@@ -206,41 +207,70 @@ export function createDailyNoteLink(
 
 /**
  * Gets or creates a daily note for a specific date
+ * @param app The Obsidian app instance
+ * @param momentDate The date for the daily note
+ * @param shouldOpen Whether to open the note after creation/retrieval
+ * @param silent If true, no error notice will be displayed if the folder is missing
+ * @returns The daily note file or null if it couldn't be found/created
  */
 export async function getOrCreateDailyNote(
     app: App,
     momentDate: moment.Moment,
-    shouldOpen = false
+    shouldOpen = false,
+    silent = false
 ): Promise<TFile | null> {
-    try {
-        // Check if the daily note exists
-        let dailyNote = getDailyNote(momentDate, getAllDailyNotes());
-        
-        // Create the note if it doesn't exist
+    const dailyNoteSettings = getDailyNoteSettings();
+
+    // Check if the daily note exists
+    const allNotes = getAllDailyNotesSafe(app, silent);
+    if (!allNotes) return null;
+    
+    let dailyNote = getDailyNote(momentDate, allNotes);
+    
+    // Create the note if it doesn't exist
+    if (!dailyNote) {
+        dailyNote = await createDailyNote(momentDate);
         if (!dailyNote) {
-            dailyNote = await createDailyNote(momentDate);
-            if (!dailyNote) {
-                new Notice(ERRORS.FAILED_CREATE_NOTE);
-                return null;
-            }
-        }
-        
-        // Convert to Obsidian TFile
-        const obsidianFile = app.vault.getAbstractFileByPath(dailyNote.path);
-        if (!(obsidianFile instanceof TFile)) {
-            new Notice(ERRORS.FAILED_FIND_NOTE);
+            if (!silent) new Notice(ERRORS.FAILED_CREATE_NOTE);
             return null;
         }
-        
-        // Open the note if requested
-        if (shouldOpen) {
-            await app.workspace.getLeaf().openFile(obsidianFile);
+    }
+    
+    // Convert to Obsidian TFile
+    const obsidianFile = app.vault.getAbstractFileByPath(dailyNote.path);
+    if (!(obsidianFile instanceof TFile)) {
+        if (!silent) new Notice(ERRORS.FAILED_FIND_NOTE);
+        return null;
+    }
+    
+    // Open the note if requested
+    if (shouldOpen) {
+        await app.workspace.getLeaf().openFile(obsidianFile);
+    }
+    return obsidianFile;
+}
+
+/**
+ * Wrapper to safely get all daily notes only if the folder exists
+ * @param app The Obsidian app instance
+ * @param silent If true, no error notice will be displayed if the folder is missing
+ * @returns Record of daily notes or null if the folder is missing
+ */
+export function getAllDailyNotesSafe(app: App, silent: boolean = false): Record<string, TFile> | null {
+    const dailyNoteSettings = getDailyNoteSettings();
+    // Allow empty string (root folder), but must be a valid AbstractFile (TFolder or root)
+    const folderPath = dailyNoteSettings.folder ?? '';
+    const folder = app.vault.getAbstractFileByPath(folderPath);
+    // Accept root (empty string) or TFolder
+    if (
+        (folderPath === '' && app.vault.getRoot() !== null) ||
+        (folder && folder instanceof TFolder)
+    ) {
+        return getAllDailyNotes();
+    } else {
+        if (!silent) {
+            new Notice(ERRORS.DAILY_NOTES_FOLDER_MISSING, 5000);
         }
-        
-        return obsidianFile;
-    } catch (error) {
-        console.error("Error handling daily note:", error);
-        new Notice(ERRORS.FAILED_HANDLE_NOTE);
         return null;
     }
 }

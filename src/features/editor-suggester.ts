@@ -21,34 +21,23 @@ export class EditorSuggester extends EditorSuggest<string> {
     }
     
     private initComponents() {
-        // Initialize the keyboard handler with proper scope
+        // Initialize keyboard handler and suggester, register handlers, and update instructions
         this.keyboardHandler = new KeyboardHandler(this.scope, this.plugin.settings.plainTextByDefault);
-        
-        // Initialize suggester after keyboard handler
         this.suggester = new SuggestionProvider(this.app, this.plugin);
-        
-        // Register keyboard shortcuts
         this.registerKeyboardHandlers();
-        
-        // Initial setup of instructions
         this.updateInstructions();
     }
     
     private registerKeyboardHandlers() {
-        // Register Enter key with all modifier combinations
-        getAllKeyCombos().forEach(combo => {
+        // Register Enter key for all modifier combos in a concise loop
+        getAllKeyCombos().forEach(({ ctrl, shift, alt }) => {
             const mods: Modifier[] = [];
-            if (combo.ctrl)  mods.push('Ctrl');
-            if (combo.shift) mods.push('Shift');
-            if (combo.alt)   mods.push('Alt');
-            
-            // Register for Enter key
+            if (ctrl) mods.push('Ctrl');
+            if (shift) mods.push('Shift');
+            if (alt) mods.push('Alt');
             this.scope.register(mods, KEYS.ENTER, this.handleSelectionKey);
         });
-        
-        // Register Tab key handlers (for openDailyNote and openDailyNoteNewTab actions)
-        // These actions are defined in KeyboardHandler.DEFAULT_KEY_BINDINGS
-        // and will call handleSelectionKey when their respective keys (Tab, Shift+Tab by default) are pressed.
+        // Register Tab key handlers for daily note actions
         this.keyboardHandler.registerTabKeyHandlers(this.handleSelectionKey);
     }
     
@@ -195,15 +184,8 @@ export class EditorSuggester extends EditorSuggest<string> {
      * Update settings and trigger UI refresh
      */
     updateSettings(settings: { keyBindings?: Record<string, string>; plainTextByDefault?: boolean }): void {
-        // Update the keyboard handler
         this.keyboardHandler.update(settings);
-        
-        // Update the UI
         this.updateInstructions();
-        
-        // Update the suggester if needed
-        if (this.suggester) {
-            this.suggester.updateSettings(settings);
-        }
+        this.suggester?.updateSettings(settings);
     }
 }
