@@ -42,20 +42,33 @@ export class EditorSuggester extends EditorSuggest<string> {
             if (combo.shift) mods.push('Shift');
             if (combo.alt)   mods.push('Alt');
             
+            // Register for Enter key
             this.scope.register(mods, KEYS.ENTER, this.handleSelectionKey);
         });
         
-        // Register Tab key handlers
+        // Register Tab key handlers (for openDailyNote and openDailyNoteNewTab actions)
+        // These actions are defined in KeyboardHandler.DEFAULT_KEY_BINDINGS
+        // and will call handleSelectionKey when their respective keys (Tab, Shift+Tab by default) are pressed.
         this.keyboardHandler.registerTabKeyHandlers(this.handleSelectionKey);
     }
     
     private handleSelectionKey = (event: KeyboardEvent): boolean => {
-        if (!this.isOpen || !this.suggester) return false;
-        // Prevent insertion behavior for Tab and Shift+Tab (handled by daily note logic)
+        if (!this.isOpen || !this.suggester || !this.context) return false;
+
         if (event.key === KEYS.TAB) {
-            // If Shift+Tab or Tab, handled elsewhere, do not insert, but return true to close suggester
-            return true;
+            // This was triggered by a Tab-related action (e.g., openDailyNote, openDailyNoteNewTab)
+            // Determine if Shift was pressed for "new tab" behavior.
+            // This assumes default bindings or similar structure for these actions.
+            const openInNewTab = event.shiftKey; // Simplified: assumes Shift is the distinguishing factor.
+                                                // A more robust check might involve consulting keyBindings config
+                                                // if Tab actions become more complexly configurable.
+
+            this.suggester.handleDailyNoteAction(event, openInNewTab, this.context);
+            // We've handled the action (opening a daily note), so close the suggester.
+            return true; 
         }
+        
+        // For Enter key (and other non-Tab selections)
         return this.suggestions.useSelectedItem(event);
     };
 

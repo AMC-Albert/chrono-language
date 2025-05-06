@@ -39,7 +39,7 @@ export const MODIFIER_BEHAVIOR = {
     CONTENT_FORMAT_TOGGLE: MODIFIER_KEY.ALT,
     // The combination that triggers daily note format
     DAILY_NOTE_TOGGLE: `${MODIFIER_KEY.SHIFT}+${MODIFIER_KEY.ALT}`
-} as const;
+};
 
 /**
  * Constants for modifier combinations

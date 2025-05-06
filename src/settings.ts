@@ -72,7 +72,7 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Alternate date format")
 			.setDesc("Specify your alternate human-readable date format. \
-				It will be used for link aliases and plain text dates (when holding Alt while using the editor suggester). \
+				It will be used for link aliases and plain text dates (when the alternate format action is triggered in the editor suggester). \
 				It does not need to match your daily note format.")
 			.addText((text) =>
 				text
@@ -142,7 +142,7 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Insert plain text by default")
-			.setDesc("When enabled, insert suggestions as plain text by default, and use the Ctrl modifier to insert as link.")
+			.setDesc("When enabled, insert suggestions as plain text by default, and use the modifier for link insertion to insert as a link.")
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.plainTextByDefault)

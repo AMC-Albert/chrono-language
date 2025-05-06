@@ -2,8 +2,16 @@ import { Modifier, Scope } from 'obsidian';
 import { 
     InsertMode,
     ContentFormat,
+    createModifierString // Added import
 } from '../definitions/types';
-import { DESCRIPTIONS, KEY_EVENTS, KEYS, CONTENT_FORMAT } from '../definitions/constants';
+import { 
+    DESCRIPTIONS, 
+    KEY_EVENTS, 
+    KEYS, 
+    CONTENT_FORMAT,
+    MODIFIER_BEHAVIOR, // Added import
+    MODIFIER_KEY // Added import
+} from '../definitions/constants';
 
 // Keybinds are now configured in DEFAULT_KEY_BINDINGS. To add a new keybind, add an entry there and handle its action in the code.
 
@@ -212,23 +220,25 @@ export class KeyboardHandler {
      * Get the effective insert mode and content format for a given event
      */
     getEffectiveInsertModeAndFormat(event?: KeyboardEvent): { insertMode: InsertMode, contentFormat: ContentFormat } {
-        // If we received an event, use that to determine key state
         const ctrlPressed = event ? event.ctrlKey : this.keyState[KEYS.CONTROL];
         const shiftPressed = event ? event.shiftKey : this.keyState[KEYS.SHIFT];
         const altPressed = event ? event.altKey : this.keyState[KEYS.ALT];
 
-        // Determine insert mode based on ctrl state and plainTextByDefault
-        const insertMode = this.plainTextByDefault
-            ? (ctrlPressed ? InsertMode.LINK : InsertMode.PLAINTEXT)
-            : (ctrlPressed ? InsertMode.PLAINTEXT : InsertMode.LINK);
+        const modString = createModifierString(shiftPressed, ctrlPressed, altPressed);
 
-        // Determine content format based on modifier keys
+        // Determine insert mode based on behavior toggle
+        const insertModeToggled = MODIFIER_BEHAVIOR.INSERT_MODE_TOGGLE && modString.includes(MODIFIER_BEHAVIOR.INSERT_MODE_TOGGLE);
+        const insertMode = this.plainTextByDefault
+            ? (insertModeToggled ? InsertMode.LINK : InsertMode.PLAINTEXT)
+            : (insertModeToggled ? InsertMode.PLAINTEXT : InsertMode.LINK);
+
+        // Determine content format based on behavior toggles
         let contentFormat = ContentFormat.PRIMARY;
-        if (shiftPressed && altPressed) {
+        if (MODIFIER_BEHAVIOR.DAILY_NOTE_TOGGLE !== MODIFIER_KEY.NONE && modString.includes(MODIFIER_BEHAVIOR.DAILY_NOTE_TOGGLE)) {
             contentFormat = ContentFormat.DAILY_NOTE;
-        } else if (shiftPressed) {
+        } else if (MODIFIER_BEHAVIOR.CONTENT_SUGGESTION_TOGGLE && modString.includes(MODIFIER_BEHAVIOR.CONTENT_SUGGESTION_TOGGLE)) {
             contentFormat = ContentFormat.SUGGESTION_TEXT;
-        } else if (altPressed) {
+        } else if (MODIFIER_BEHAVIOR.CONTENT_FORMAT_TOGGLE && modString.includes(MODIFIER_BEHAVIOR.CONTENT_FORMAT_TOGGLE)) {
             contentFormat = ContentFormat.ALTERNATE;
         }
 

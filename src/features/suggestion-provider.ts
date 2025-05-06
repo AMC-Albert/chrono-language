@@ -22,7 +22,6 @@ export class SuggestionProvider {
         this.plugin = plugin;
         // Initialize keyboard handler without requiring a scope
         this.keyboardHandler = new KeyboardHandler(undefined, plugin.settings.plainTextByDefault);
-        this.setupEventListeners();
         
         // Register for key state changes
         this.keyboardHandler.addKeyStateChangeListener(this.handleKeyStateChange);
@@ -36,53 +35,8 @@ export class SuggestionProvider {
         requestAnimationFrame(() => this.updateAllPreviews());
     };
     
-    setupEventListeners() {
-        // Listen for Tab key to handle daily note actions
-        document.addEventListener('keydown', this.handleKeyboardNavigation);
-    }
-
-    removeEventListeners() {
-        document.removeEventListener('keydown', this.handleKeyboardNavigation);
-        this.keyboardHandler.removeKeyStateChangeListener(this.handleKeyStateChange);
-    }
-    
-    // Handle keyboard navigation specifically for tab key
-    handleKeyboardNavigation = (e: KeyboardEvent) => {
-        // Only handle Tab key specifically for daily notes
-        if (e.key === 'Tab') {
-            // Get the current context from the contextProvider if available
-            const context = this.contextProvider?.context;
-            // Handle open daily note in new tab
-            if (e.shiftKey && !e.ctrlKey && !e.altKey) {
-                this.handleDailyNoteAction(e, true, context);
-                return;
-            }
-            
-            // Handle open daily note in current pane
-            if (!e.ctrlKey && !e.altKey && !e.shiftKey) {
-                this.handleDailyNoteAction(e, false, context);
-                return;
-            }
-        }
-        
-        // Handle navigation keys with modifiers
-        const navKeys = ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'];
-        if (navKeys.includes(e.key) && (e.altKey || e.ctrlKey || e.shiftKey)) {
-            e.preventDefault();
-            e.stopImmediatePropagation();  // prevent text-selection on Shift+Arrow
-            
-            // Re-dispatch the event without modifiers to prevent text selection
-            document.dispatchEvent(new KeyboardEvent('keydown', {
-                key: e.key,
-                code: e.code,
-                bubbles: true,
-                cancelable: true
-            }));
-        }
-    };
-    
     // Handle daily note opening actions
-    private async handleDailyNoteAction(e: KeyboardEvent, newTab: boolean, context?: any) {
+    public async handleDailyNoteAction(e: KeyboardEvent, newTab: boolean, context?: any) {
         e.preventDefault();
         e.stopImmediatePropagation();
 
@@ -113,7 +67,7 @@ export class SuggestionProvider {
 
         if (file) {
             if (newTab) {
-                const newLeaf = this.app.workspace.getLeaf("tab");
+                const newLeaf = this.app.workspace.getLeaf(true);
                 await newLeaf.openFile(file);
             } else {
                 const leaf = this.app.workspace.getLeaf(false);
@@ -124,7 +78,7 @@ export class SuggestionProvider {
     }
 
     unload() {
-        this.removeEventListeners();
+        this.keyboardHandler.removeKeyStateChangeListener(this.handleKeyStateChange);
         this.currentElements.clear();
         this.keyboardHandler.unload();
     }

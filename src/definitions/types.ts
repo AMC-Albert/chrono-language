@@ -98,7 +98,7 @@ export function createModifierString(
  * Returns the appropriate behavior string based on the current modifiers
  */
 function getInsertModeBehaviorString(modString: string): string {
-    // In current implementation, insert mode is toggled by ctrl
+    // In current implementation, insert mode is toggled by the key assigned to MODIFIER_BEHAVIOR.INSERT_MODE_TOGGLE
     // But this function allows us to change which key controls this behavior
     return modString.includes(MODIFIER_BEHAVIOR.INSERT_MODE_TOGGLE)
         ? MODIFIER_BEHAVIOR.INSERT_MODE_TOGGLE
@@ -110,17 +110,17 @@ function getInsertModeBehaviorString(modString: string): string {
  * Returns the appropriate behavior string for the content format
  */
 function getContentFormatBehaviorString(modString: string): string {
-    // Check for shift+alt first (the daily note toggle)
+    // Check for the combination assigned to MODIFIER_BEHAVIOR.DAILY_NOTE_TOGGLE first
     if (modString.includes(MODIFIER_BEHAVIOR.DAILY_NOTE_TOGGLE)) {
         return MODIFIER_BEHAVIOR.DAILY_NOTE_TOGGLE;
     }
     
-    // Check for the content suggestion toggle (shift)
+    // Check for the key assigned to MODIFIER_BEHAVIOR.CONTENT_SUGGESTION_TOGGLE
     if (modString.includes(MODIFIER_BEHAVIOR.CONTENT_SUGGESTION_TOGGLE)) {
         return MODIFIER_BEHAVIOR.CONTENT_SUGGESTION_TOGGLE;
     }
     
-    // Check for the content format toggle (alt)
+    // Check for the key assigned to MODIFIER_BEHAVIOR.CONTENT_FORMAT_TOGGLE
     if (modString.includes(MODIFIER_BEHAVIOR.CONTENT_FORMAT_TOGGLE)) {
         return MODIFIER_BEHAVIOR.CONTENT_FORMAT_TOGGLE;
     }
