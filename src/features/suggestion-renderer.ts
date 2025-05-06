@@ -1,4 +1,4 @@
-import { App } from 'obsidian';
+import { App, moment } from 'obsidian';
 import ChronoLanguage from '../main';
 import { getDailyNotePreview, getDatePreview, getOrCreateDailyNote } from '../utils/helpers';
 import { getDailyNote, getAllDailyNotes } from 'obsidian-daily-notes-interface';
@@ -112,11 +112,11 @@ export class Suggester {
         this.keyboardHandler.setPlainTextByDefault(this.plugin.settings.plainTextByDefault);
         const { insertMode, contentFormat } = this.keyboardHandler.getEffectiveInsertModeAndFormat();
         const dailyNotePreview = getDailyNotePreview(item);
-        let momentDate = window.moment(EnhancedDateParser.parseDate(item));
+        let momentDate = moment(EnhancedDateParser.parseDate(item));
         const dailyNote = momentDate.isValid() ? getDailyNote(momentDate, getAllDailyNotes()) : null;
         const dailyNoteClass = dailyNote instanceof TFile
             ? 'cm-hmd-internal-link'
-            : 'chrono-is-unresolved';
+            : 'is-unresolved';
         let readableDatePreview: string;
         if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
             readableDatePreview = item;
@@ -142,7 +142,7 @@ export class Suggester {
             const linkEl = previewContainer.createEl('a', {
                 text: dailyNotePreview,
                 cls: dailyNoteClass, 
-                href: dailyNote ? dailyNote.path : '',
+                attr: { 'data-href': dailyNote ? dailyNote.path : 'aa', target: '_blank', rel: 'noopener nofollow' }
             });
             linkEl.addEventListener('click', async (event) => {
                 event.preventDefault();

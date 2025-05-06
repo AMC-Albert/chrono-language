@@ -1,4 +1,4 @@
-import { App, normalizePath, Notice, TFile } from 'obsidian';
+import { App, normalizePath, Notice, TFile, moment } from 'obsidian';
 import { Link, ObsidianSettings } from 'obsidian-dev-utils/obsidian';
 import { getDailyNoteSettings, getDailyNote, getAllDailyNotes, createDailyNote } from 'obsidian-daily-notes-interface';
 import { ChronoLanguageSettings } from '../settings';
@@ -41,7 +41,7 @@ export function getDatePreview(
         format = settings.primaryFormat || dailyNoteSettings.format || DATE_FORMAT.DEFAULT;
     }
     
-    return window.moment(parsedDate).format(format);
+    return moment(parsedDate).format(format);
 }
 
 /**
@@ -58,7 +58,7 @@ export function getDailyNotePreview(dateText: string): string {
     const dailyNoteSettings = getDailyNoteSettings();
     const format = dailyNoteSettings.format || DATE_FORMAT.DEFAULT;
     
-    return window.moment(parsedDate).format(format);
+    return moment(parsedDate).format(format);
 }
 
 /**
@@ -174,7 +174,7 @@ export function createDailyNoteLink(
     }
     
     // Convert to moment date
-    const momentDate = window.moment(parsedDate);
+    const momentDate = moment(parsedDate);
     const dailyNoteFormat = dailyNoteSettings.format || DATE_FORMAT.DEFAULT; 
     
     // Get the path to the daily note

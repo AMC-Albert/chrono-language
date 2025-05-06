@@ -1,4 +1,4 @@
-import { Notice, FuzzySuggestModal, App, FuzzyMatch } from "obsidian";
+import { Notice, FuzzySuggestModal, App, FuzzyMatch, moment } from "obsidian";
 import ChronoLanguage from "../main";
 import { Suggester } from "./suggestion-renderer";
 import { EnhancedDateParser } from "../utils/parser";
@@ -56,7 +56,7 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
         new Notice(ERRORS.UNABLE_PARSE_DATE);
         return;
       }
-      const momentDate = window.moment(parsed);
+      const momentDate = moment(parsed);
       await getOrCreateDailyNote(this.app, momentDate, true);
     } catch (error) {
       console.error("Error opening daily note:", error);
