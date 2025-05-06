@@ -9,16 +9,36 @@ import {
     HIDDEN_ACTIONS
 } from './constants';
 
+/**
+ * Types for Insert Modes
+ * Using string enums directly to avoid type errors
+ */
+export enum InsertMode {
+    LINK = 'Insert as link',
+    PLAINTEXT = 'Insert as plain text'
+}
+
+/**
+ * Types for Content Format
+ * Using string enums directly to avoid type errors
+ */
+export enum ContentFormat {
+    PRIMARY = 'Primary format',
+    ALTERNATE = 'Alternate format',
+    DAILY_NOTE = 'Daily note format',
+    SUGGESTION_TEXT = 'Use suggestion text'
+}
+
 // helper to extract all values from a const-object
 type ValueOf<T> = T[keyof T];
 
 // derive unions automatically from constants.ts
-export type InsertMode = ValueOf<typeof INSERT_MODE>;
-export type ContentFormat = ValueOf<typeof CONTENT_FORMAT>;
+export type InsertModeUnion = ValueOf<typeof INSERT_MODE>;
+export type ContentFormatUnion = ValueOf<typeof CONTENT_FORMAT>;
 
 // expose value namespaces for legacy enum‐style references
-export const InsertMode = INSERT_MODE;
-export const ContentFormat = CONTENT_FORMAT;
+export const InsertModeUnion = INSERT_MODE;
+export const ContentFormatUnion = CONTENT_FORMAT;
 
 export interface KeyState {
     shift: boolean;
@@ -32,8 +52,8 @@ export interface KeyCombo {
     ctrl?: boolean;
     alt?: boolean;
     key: string;
-    insertMode: InsertMode;
-    contentFormat: ContentFormat;
+    insertMode: InsertModeUnion;
+    contentFormat: ContentFormatUnion;
     showInInstructions?: boolean;
     description?: string; // Human-readable description
 }
@@ -45,13 +65,13 @@ export interface KeyMapEntry {
 }
 
 // Define insert modes by modifier behavior (not directly by keys)
-const INSERT_MODES: Record<string, InsertMode> = {
+const INSERT_MODES: Record<string, InsertModeUnion> = {
     [MODIFIER_KEY.NONE]: INSERT_MODE.LINK,
     [MODIFIER_BEHAVIOR.INSERT_MODE_TOGGLE]: INSERT_MODE.PLAINTEXT
 };
 
 // Define content formats by modifier behavior (not directly by keys)
-const CONTENT_FORMATS: Record<string, ContentFormat> = {
+const CONTENT_FORMATS: Record<string, ContentFormatUnion> = {
     [MODIFIER_KEY.NONE]: CONTENT_FORMAT.PRIMARY,
     [MODIFIER_BEHAVIOR.CONTENT_SUGGESTION_TOGGLE]: CONTENT_FORMAT.SUGGESTION_TEXT,
     [MODIFIER_BEHAVIOR.CONTENT_FORMAT_TOGGLE]: CONTENT_FORMAT.ALTERNATE,
@@ -112,7 +132,7 @@ function getContentFormatBehaviorString(modString: string): string {
 /**
  * Generates a description for a key combo
  */
-function generateDescription(insertMode: InsertMode, contentFormat: ContentFormat): string {
+function generateDescription(insertMode: InsertModeUnion, contentFormat: ContentFormatUnion): string {
     if (insertMode === INSERT_MODE.PLAINTEXT) {
         if (contentFormat === CONTENT_FORMAT.SUGGESTION_TEXT) {
             return DESCRIPTIONS.PLAINTEXT_SUGGESTION_TEXT;

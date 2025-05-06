@@ -3,8 +3,13 @@ import ChronoLanguage from "../main";
 import { SuggestionProvider } from "./suggestion-provider";
 import { EnhancedDateParser } from "../utils/parser";
 import { getOrCreateDailyNote } from "../utils/helpers";
-import { ERRORS, KEY_EVENTS } from "../definitions/constants";
+import { ERRORS } from "../definitions/constants";
 
+/**
+ * Modal for quickly opening daily notes via date parsing
+ * 
+ * Note: This class does not need any custom key handling
+ */
 export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
   plugin: ChronoLanguage;
   private suggester: SuggestionProvider;
@@ -18,18 +23,6 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
 
     // Set placeholder text for the input field
     this.setPlaceholder("Enter a date or relative time...");
-
-    // Set up event listeners for key state sync
-    this.setupKeyboardEventHandlers();
-  }
-
-  private setupKeyboardEventHandlers() {
-    [KEY_EVENTS.KEYDOWN, KEY_EVENTS.KEYUP].forEach((ev) =>
-      this.scope.register([], ev, () => {
-        this.suggester.updateAllPreviews();
-        return true;
-      })
-    );
   }
 
   getItems(): string[] {
@@ -56,8 +49,18 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
         new Notice(ERRORS.UNABLE_PARSE_DATE);
         return;
       }
+      
       const momentDate = moment(parsed);
-      await getOrCreateDailyNote(this.app, momentDate, true);
+      const file = await getOrCreateDailyNote(this.app, momentDate, true);
+      
+      if (!file) {
+        new Notice(ERRORS.FAILED_HANDLE_NOTE);
+        return;
+      }
+      
+      // Use the active leaf to open the file
+      const leaf = this.app.workspace.getLeaf();
+      await leaf.openFile(file);
     } catch (error) {
       console.error("Error opening daily note:", error);
       new Notice(ERRORS.FAILED_HANDLE_NOTE);

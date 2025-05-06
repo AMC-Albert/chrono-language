@@ -1,14 +1,12 @@
-import { Scope, Modifier } from 'obsidian';
+import { Scope } from 'obsidian';
 import { 
-    KEYMAP, 
-    KeyCombo, 
     InsertMode,
     ContentFormat,
-    getAllKeyCombos, 
-    findKeyComboByModifiers, 
-    KeyMapEntry 
 } from '../definitions/types';
-import { KEYS, DESCRIPTIONS } from '../definitions/constants';
+import { DESCRIPTIONS, KEY_EVENTS, KEYS, CONTENT_FORMAT } from '../definitions/constants';
+
+// Define a type for key state change callbacks
+type KeyStateChangeCallback = () => void;
 
 /**
  * Handles keyboard shortcuts for the plugin
@@ -16,84 +14,141 @@ import { KEYS, DESCRIPTIONS } from '../definitions/constants';
 export class KeyboardHandler {
     private scope: Scope | null;
     private plainTextByDefault: boolean;
-    private callback: ((event: KeyboardEvent) => boolean) | null = null;
     
     // Key state tracking
-    private keyState: { shift: boolean, ctrl: boolean, alt: boolean } = { shift: false, ctrl: false, alt: false };
+    private keyState: Record<string, boolean> = {
+        Control: false,
+        Shift: false,
+        Alt: false
+    };
+    
+    // Key binding configuration
+    private keyBindings: Record<string, string> = {
+        insertAsPlainText: 'Control',
+        useAlternateFormat: 'Alt',
+        useSuggestionText: 'Shift',
+        useDailyNoteFormat: 'Shift+Alt'
+    };
+
+    // Event listeners for key state changes
+    private keyStateChangeListeners: KeyStateChangeCallback[] = [];
 
     constructor(scope?: Scope, plainTextByDefault: boolean = false) {
         this.scope = scope || null;
         this.plainTextByDefault = plainTextByDefault;
+        
+        // Set up document-level event listeners
+        this.setupKeyEventListeners();
     }
 
     /**
-     * Register all keyboard shortcuts with a callback
+     * Add a listener for key state changes
      */
-    registerShortcuts(callback: (event: KeyboardEvent) => boolean): void {
-        this.callback = callback;
-        
-        // Only register shortcuts if we have a scope
-        if (!this.scope) return;
-        
-        // Register each modifier combination for Enter key
-        getAllKeyCombos().forEach((combo) => {
-            const keys: Modifier[] = [];
-            if (combo.shift) keys.push("Shift");
-            if (combo.ctrl) keys.push("Ctrl");
-            if (combo.alt) keys.push("Alt");
-            
-            this.scope?.register(keys, combo.key, (event: KeyboardEvent) => {
-                if (this.callback) return this.callback(event);
-                return false;
-            });
-        });
+    addKeyStateChangeListener(callback: KeyStateChangeCallback): void {
+        this.keyStateChangeListeners.push(callback);
     }
 
     /**
-     * Update the plain text by default setting
+     * Remove a listener for key state changes
      */
-    setPlainTextByDefault(plain: boolean): void {
-        this.plainTextByDefault = plain;
+    removeKeyStateChangeListener(callback: KeyStateChangeCallback): void {
+        const index = this.keyStateChangeListeners.indexOf(callback);
+        if (index !== -1) {
+            this.keyStateChangeListeners.splice(index, 1);
+        }
+    }
+
+    /**
+     * Notify all listeners about key state changes
+     */
+    private notifyKeyStateChangeListeners(): void {
+        this.keyStateChangeListeners.forEach(callback => callback());
+    }
+
+    /**
+     * Set up event listeners for key events
+     */
+    private setupKeyEventListeners(): void {
+        document.addEventListener(KEY_EVENTS.KEYDOWN, this.handleKeyEvent, true);
+        document.addEventListener(KEY_EVENTS.KEYUP, this.handleKeyEvent, true);
+    }
+    
+    /**
+     * Handle key events for tracking modifier key state
+     */
+    private handleKeyEvent = (event: KeyboardEvent): void => {
+        const key = event.key;
+        const isKeyDown = event.type === KEY_EVENTS.KEYDOWN;
+        
+        // Only track modifier keys
+        if (key === KEYS.CONTROL || key === KEYS.SHIFT || key === KEYS.ALT) {
+            // Only update and notify if state actually changed
+            if (this.keyState[key] !== isKeyDown) {
+                this.keyState[key] = isKeyDown;
+                this.notifyKeyStateChangeListeners();
+            }
+        }
+    };
+
+    /**
+     * Update bindings and settings
+     */
+    update(settings: { keyBindings?: Record<string, string>; plainTextByDefault?: boolean }): void {
+        if (settings.keyBindings) {
+            Object.assign(this.keyBindings, settings.keyBindings);
+        }
+        
+        if (settings.plainTextByDefault !== undefined) {
+            this.plainTextByDefault = settings.plainTextByDefault;
+        }
     }
 
     /**
      * Get instructions for display in the UI
      */
     getInstructions(): { command: string, purpose: string }[] {
-        const instructions = Object.values(KEYMAP)
-            .filter((entry: KeyMapEntry) => entry.combo.showInInstructions === true)
-            .filter((entry: KeyMapEntry) => entry.modString !== 'none')
-            .map((entry: KeyMapEntry) => {
-                const combo = entry.combo;
-                const modString = entry.modString;
-                
-                // Use the combo's description or fallback to the insert mode and content format
-                let purpose = combo.description || 
-                    `${combo.insertMode} with ${combo.contentFormat}`;
-                
-                // Handle plain text by default behavior
-                if (this.plainTextByDefault && modString === 'ctrl') {
-                    purpose = InsertMode.LINK.toString(); // When Ctrl is inverted, it acts as no modifiers
-                } else if (this.plainTextByDefault && modString === 'none') {
-                    purpose = InsertMode.PLAINTEXT.toString(); // When no modifiers with Ctrl inverted, it acts as Ctrl
-                }
-                
-                return {
-                    command: this.formatKeyComboForDisplay(modString),
-                    purpose: purpose
-                };
+        const instructions: { command: string, purpose: string }[] = [];
+        
+        // Add instructions for modifiers
+        if (this.plainTextByDefault) {
+            instructions.push({ command: "None", purpose: InsertMode.PLAINTEXT.toString() });
+            instructions.push({ 
+                command: this.formatKeyComboForDisplay(this.keyBindings.insertAsPlainText), 
+                purpose: InsertMode.LINK.toString() 
             });
-
-        // Add Tab key action
+        } else {
+            instructions.push({ command: "None", purpose: InsertMode.LINK.toString() });
+            instructions.push({ 
+                command: this.formatKeyComboForDisplay(this.keyBindings.insertAsPlainText), 
+                purpose: InsertMode.PLAINTEXT.toString() 
+            });
+        }
+        
+        // Add instructions for content format modifiers
         instructions.push({
-            command: this.formatKeyComboForDisplay(KEYS.TAB),
+            command: this.formatKeyComboForDisplay(this.keyBindings.useAlternateFormat),
+            purpose: CONTENT_FORMAT.ALTERNATE // Use constant directly instead of enum
+        });
+        
+        instructions.push({
+            command: this.formatKeyComboForDisplay(this.keyBindings.useSuggestionText),
+            purpose: CONTENT_FORMAT.SUGGESTION_TEXT // Use constant directly instead of enum
+        });
+        
+        instructions.push({
+            command: this.formatKeyComboForDisplay(this.keyBindings.useDailyNoteFormat),
+            purpose: CONTENT_FORMAT.DAILY_NOTE // Use constant directly instead of enum
+        });
+        
+        // Add Tab instructions
+        instructions.push({
+            command: this.formatKeyComboForDisplay("tab"),
             purpose: DESCRIPTIONS.OPEN_DAILY_NOTE
         });
-
-        // Add Ctrl+Tab for opening daily note in a new tab
+        
         instructions.push({
-            command: this.formatKeyComboForDisplay('ctrl+tab'),
-            purpose: 'Open daily note in new tab'
+            command: this.formatKeyComboForDisplay("ctrl+tab"),
+            purpose: "Open daily note in new tab"
         });
 
         return instructions;
@@ -103,85 +158,64 @@ export class KeyboardHandler {
      * Format a key combo for display in instructions
      */
     formatKeyComboForDisplay(key: string): string {
-        if (key === 'none') return "None";
+        if (!key || key === 'none') return "None";
         return key.split('+')
             .map(k => k.charAt(0).toUpperCase() + k.slice(1))
             .join('+');
     }
 
     /**
-     * Update key state based on keyboard events
+     * Register keyboard shortcuts for tab key handling
      */
-    updateKeyState(event: KeyboardEvent, isKeyDown: boolean): boolean {
-        let updated = false;
+    registerTabKeyHandlers(callback: (event: KeyboardEvent) => boolean): void {
+        if (!this.scope) return;
         
-        if (event.key === KEYS.ALT && this.keyState.alt !== isKeyDown) {
-            this.keyState.alt = isKeyDown;
-            updated = true;
-        } else if (event.key === KEYS.CONTROL && this.keyState.ctrl !== isKeyDown) {
-            this.keyState.ctrl = isKeyDown;
-            updated = true;
-        } else if (event.key === KEYS.SHIFT && this.keyState.shift !== isKeyDown) {
-            this.keyState.shift = isKeyDown;
-            updated = true;
+        // Register Tab key and Ctrl+Tab key for daily note actions
+        this.scope.register([], 'Tab', callback);
+        this.scope.register(['Ctrl'], 'Tab', callback);
+    }
+
+    /**
+     * Get the effective insert mode and content format for a given event
+     */
+    getEffectiveInsertModeAndFormat(event?: KeyboardEvent): { insertMode: InsertMode, contentFormat: ContentFormat } {
+        // If we received an event, use that to determine key state
+        const ctrlPressed = event ? event.ctrlKey : this.keyState[KEYS.CONTROL];
+        const shiftPressed = event ? event.shiftKey : this.keyState[KEYS.SHIFT];
+        const altPressed = event ? event.altKey : this.keyState[KEYS.ALT];
+        
+        // Determine insert mode based on ctrl state and plainTextByDefault
+        const insertMode = this.plainTextByDefault
+            ? (ctrlPressed ? InsertMode.LINK : InsertMode.PLAINTEXT)
+            : (ctrlPressed ? InsertMode.PLAINTEXT : InsertMode.LINK);
+        
+        // Determine content format based on modifier keys
+        let contentFormat = ContentFormat.PRIMARY;
+        if (shiftPressed && altPressed) {
+            contentFormat = ContentFormat.DAILY_NOTE;
+        } else if (shiftPressed) {
+            contentFormat = ContentFormat.SUGGESTION_TEXT;
+        } else if (altPressed) {
+            contentFormat = ContentFormat.ALTERNATE;
         }
         
-        return updated;
+        return { insertMode, contentFormat };
     }
-
+    
     /**
-     * Get the current key state
+     * Check if a key is currently pressed
      */
-    getKeyState(): { shift: boolean, ctrl: boolean, alt: boolean } {
-        return { ...this.keyState };
+    isKeyPressed(key: string): boolean {
+        return this.keyState[key] || false;
     }
-
+    
     /**
-     * Set the key state directly (useful for syncing between components)
+     * Cleanup when unloading
      */
-    setKeyState(state: { shift: boolean, ctrl: boolean, alt: boolean }): void {
-        this.keyState = { ...state };
-    }
-
-    /**
-     * Get the current KeyCombo based on key state
-     */
-    getCurrentKeyCombo(): { insertMode: InsertMode, contentFormat: ContentFormat } {
-        let effectiveState = { ...this.keyState };
-        // Invert ctrl if plainTextByDefault is true
-        const combo = findKeyComboByModifiers(
-            effectiveState.shift, 
-            effectiveState.ctrl, 
-            effectiveState.alt,
-            this.plainTextByDefault // pass invertCtrl
-        );
-        return {
-            insertMode: combo.insertMode,
-            contentFormat: combo.contentFormat
-        };
-    }
-
-    /**
-     * Get the effective insert mode and content format for a given event or key state
-     * Always respects plainTextByDefault
-     */
-    getEffectiveInsertModeAndFormat(eventOrState?: KeyboardEvent | { shift: boolean, ctrl: boolean, alt: boolean }): { insertMode: InsertMode, contentFormat: ContentFormat } {
-        let shift: boolean, ctrl: boolean, alt: boolean;
-        if (!eventOrState) {
-            ({ shift, ctrl, alt } = this.keyState);
-        } else if ('shiftKey' in eventOrState) {
-            shift = eventOrState.shiftKey;
-            ctrl = eventOrState.ctrlKey;
-            alt = eventOrState.altKey;
-        } else {
-            ({ shift, ctrl, alt } = eventOrState);
-        }
-        // Invert ctrl if plainTextByDefault
-        const effectiveCtrl = this.plainTextByDefault ? !ctrl : ctrl;
-        const combo = findKeyComboByModifiers(shift, effectiveCtrl, alt, false);
-        return {
-            insertMode: combo.insertMode,
-            contentFormat: combo.contentFormat
-        };
+    unload(): void {
+        // Remove event listeners
+        document.removeEventListener(KEY_EVENTS.KEYDOWN, this.handleKeyEvent, true);
+        document.removeEventListener(KEY_EVENTS.KEYUP, this.handleKeyEvent, true);
+        this.keyStateChangeListeners = [];
     }
 }

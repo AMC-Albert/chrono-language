@@ -4,7 +4,7 @@ import { createDailyNoteLink, getDatePreview, getDailyNotePreview } from '../uti
 import { SuggestionProvider } from './suggestion-provider';
 import { InsertMode, ContentFormat, getAllKeyCombos } from '../definitions/types';
 import { KeyboardHandler } from '../utils/keyboard-handler';
-import { KEY_EVENTS, KEYS } from '../definitions/constants';
+import { KEYS } from '../definitions/constants';
 
 /**
  * A suggester for the editor that provides date parsing suggestions
@@ -17,47 +17,47 @@ export class EditorSuggester extends EditorSuggest<string> {
     constructor(plugin: ChronoLanguage) {
         super(plugin.app);
         this.plugin = plugin;
-        
+        this.initComponents();
+    }
+    
+    private initComponents() {
         // Initialize the keyboard handler with proper scope
         this.keyboardHandler = new KeyboardHandler(this.scope, this.plugin.settings.plainTextByDefault);
         
         // Initialize suggester after keyboard handler
         this.suggester = new SuggestionProvider(this.app, this.plugin);
         
-        // Register keyboard shortcuts with appropriate callbacks
-        this.setupKeyboardEventHandlers();
+        // Register keyboard shortcuts
+        this.registerKeyboardHandlers();
         
         // Initial setup of instructions
         this.updateInstructions();
     }
     
-    private setupKeyboardEventHandlers() {
-        // update our keyState on raw keydown/keyup
-        document.addEventListener(KEY_EVENTS.KEYDOWN,  e => this.keyboardHandler.updateKeyState(e, true));
-        document.addEventListener(KEY_EVENTS.KEYUP,    e => this.keyboardHandler.updateKeyState(e, false));
-
-        // Enter under every modifier combo
+    private registerKeyboardHandlers() {
+        // Register Enter key with all modifier combinations
         getAllKeyCombos().forEach(combo => {
             const mods: Modifier[] = [];
             if (combo.ctrl)  mods.push('Ctrl');
             if (combo.shift) mods.push('Shift');
             if (combo.alt)   mods.push('Alt');
-            this.scope.register(mods, KEYS.ENTER, (event) => {
-                if (!this.isOpen || !this.suggester) return false;
-                // sync preview state
-                this.suggester.syncKeyStateFrom(this.keyboardHandler);
-                return this.suggestions.useSelectedItem(event);
-            });
+            
+            this.scope.register(mods, KEYS.ENTER, this.handleSelectionKey);
         });
+        
+        // Register Tab key handlers
+        this.keyboardHandler.registerTabKeyHandlers(this.handleSelectionKey);
     }
+    
+    private handleSelectionKey = (event: KeyboardEvent): boolean => {
+        if (!this.isOpen || !this.suggester) return false;
+        return this.suggestions.useSelectedItem(event);
+    };
 
     /**
      * Updates the instructions based on current settings
-     * This should be called whenever settings change
      */
     updateInstructions() {
-        // Use keyboard handler to get the instructions
-        this.keyboardHandler.setPlainTextByDefault(this.plugin.settings.plainTextByDefault);
         this.setInstructions(this.keyboardHandler.getInstructions());
     }
     
@@ -65,6 +65,7 @@ export class EditorSuggester extends EditorSuggest<string> {
         if (this.suggester) {
             this.suggester.unload();
         }
+        this.keyboardHandler.unload();
     }
     
     onTrigger(cursor: EditorPosition, editor: Editor): EditorSuggestContext | null {
@@ -128,49 +129,63 @@ export class EditorSuggester extends EditorSuggest<string> {
     }
 
     selectSuggestion(item: string, event: KeyboardEvent | MouseEvent): void {
-        if (this.context) {
-            const { editor, start, end } = this.context;
-            // always derive insertMode/contentFormat from the actual event
-            const { insertMode, contentFormat } = 
-                this.keyboardHandler.getEffectiveInsertModeAndFormat(event as any);
-            
-            let insertText = "";
-
-            if (insertMode === InsertMode.PLAINTEXT) {
-                if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
-                    insertText = item;
-                }
-                else if (contentFormat === ContentFormat.DAILY_NOTE) {
-                    insertText = getDailyNotePreview(item);
-                }
-                else if (contentFormat === ContentFormat.ALTERNATE) {
-                    insertText = getDatePreview(item, this.plugin.settings, true);
-                }
-                else {  // PRIMARY
-                    insertText = getDatePreview(item, this.plugin.settings, false);
-                }
+        if (!this.context) return;
+        
+        const { editor, start, end } = this.context;
+        
+        // Get insert mode and format based on current key state
+        const { insertMode, contentFormat } = 
+            this.keyboardHandler.getEffectiveInsertModeAndFormat(event as KeyboardEvent);
+        
+        // Insert the text
+        editor.replaceRange(
+            this.generateInsertText(item, insertMode, contentFormat),
+            start, 
+            end
+        );
+    }
+    
+    // Generate text to insert based on mode and format
+    private generateInsertText(item: string, insertMode: InsertMode, contentFormat: ContentFormat): string {
+        if (insertMode === InsertMode.PLAINTEXT) {
+            // Handle plain text insertion
+            if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
+                return item;
             }
-            else {
-                // link insertion, force flags based on contentFormat
-                insertText = createDailyNoteLink(
-                    this.app,
-                    this.plugin.settings,
-                    this.context.file,
-                    item,
-                    contentFormat === ContentFormat.SUGGESTION_TEXT,
-                    contentFormat === ContentFormat.ALTERNATE,
-                    contentFormat === ContentFormat.DAILY_NOTE
-                );
+            if (contentFormat === ContentFormat.DAILY_NOTE) {
+                return getDailyNotePreview(item);
             }
-
-            editor.replaceRange(insertText, start, end);
+            if (contentFormat === ContentFormat.ALTERNATE) {
+                return getDatePreview(item, this.plugin.settings, true);
+            }
+            return getDatePreview(item, this.plugin.settings, false);
+        } else {
+            // Handle link insertion
+            return createDailyNoteLink(
+                this.app,
+                this.plugin.settings,
+                this.context!.file,
+                item,
+                contentFormat === ContentFormat.SUGGESTION_TEXT,
+                contentFormat === ContentFormat.ALTERNATE,
+                contentFormat === ContentFormat.DAILY_NOTE
+            );
         }
     }
 
-    // Public method to update renderer settings and force re-render
-    public updateRendererSettingsAndRerender() {
-        if (this.suggester && typeof this.suggester.updateSettingsAndRerender === 'function') {
-            this.suggester.updateSettingsAndRerender();
+    /**
+     * Update settings and trigger UI refresh
+     */
+    updateSettings(settings: { keyBindings?: Record<string, string>; plainTextByDefault?: boolean }): void {
+        // Update the keyboard handler
+        this.keyboardHandler.update(settings);
+        
+        // Update the UI
+        this.updateInstructions();
+        
+        // Update the suggester if needed
+        if (this.suggester) {
+            this.suggester.updateSettings(settings);
         }
     }
 }

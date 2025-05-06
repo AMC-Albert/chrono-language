@@ -5,18 +5,16 @@ import { getDailyNote, getAllDailyNotes } from 'obsidian-daily-notes-interface';
 import { EnhancedDateParser } from '../utils/parser';
 import { TFile } from 'obsidian';
 import { InsertMode, ContentFormat } from '../definitions/types';
-import { KEY_EVENTS, KEYS } from '../definitions/constants';
-// Ensure this import path is correct and points to the file where getCurrentKeyCombo is implemented
 import { KeyboardHandler } from '../utils/keyboard-handler';
 
 /**
- * Shared suggester for date suggestions
+ * Shared suggester for date suggestions. Handles rendering and updating of suggestions.
  */
 export class SuggestionProvider {
     app: App;
     plugin: ChronoLanguage;
     currentElements: Map<string, HTMLElement> = new Map();
-    contextProvider: any; // Add property to store the context provider
+    contextProvider: any;
     keyboardHandler: KeyboardHandler;
 
     constructor(app: App, plugin: ChronoLanguage) {
@@ -24,81 +22,84 @@ export class SuggestionProvider {
         this.plugin = plugin;
         // Initialize keyboard handler without requiring a scope
         this.keyboardHandler = new KeyboardHandler(undefined, plugin.settings.plainTextByDefault);
-        this.setupKeyEventListeners();
+        this.setupEventListeners();
+        
+        // Register for key state changes
+        this.keyboardHandler.addKeyStateChangeListener(this.handleKeyStateChange);
     }
     
-    setupKeyEventListeners() {
-        // use capture to intercept before default selection behavior
-        document.addEventListener(KEY_EVENTS.KEYDOWN, this.handleKeyDown, true);
-        document.addEventListener(KEY_EVENTS.KEYUP, this.handleKeyUp);
+    /**
+     * Handle key state changes by updating UI
+     */
+    handleKeyStateChange = (): void => {
+        // Update all UI elements when key state changes
+        requestAnimationFrame(() => this.updateAllPreviews());
+    };
+    
+    setupEventListeners() {
+        // Listen for Tab key to handle daily note actions
+        document.addEventListener('keydown', this.handleKeyboardNavigation);
     }
 
-    removeKeyEventListeners() {
-        document.removeEventListener(KEY_EVENTS.KEYDOWN, this.handleKeyDown, true);
-        document.removeEventListener(KEY_EVENTS.KEYUP, this.handleKeyUp);
+    removeEventListeners() {
+        document.removeEventListener('keydown', this.handleKeyboardNavigation);
+        this.keyboardHandler.removeKeyStateChangeListener(this.handleKeyStateChange);
     }
-
-    handleKeyDown = (e: KeyboardEvent) => {
-        // Ctrl+Tab opens in a new tab
-        if (e.key === KEYS.TAB && e.ctrlKey && !e.altKey && !e.shiftKey) {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            const sel = document.querySelector('.is-selected .chrono-suggestion-container') as HTMLElement;
-            const link = sel?.querySelector('a[data-href]') as HTMLElement;
-            if (link) {
-                link.dispatchEvent(new MouseEvent('click', {
-                    bubbles: true,
-                    cancelable: true,
-                    ctrlKey: true
-                }));
+    
+    // Handle keyboard navigation specifically for tab key
+    handleKeyboardNavigation = (e: KeyboardEvent) => {
+        // Only handle Tab key specifically for daily notes
+        if (e.key === 'Tab') {
+            // Handle open daily note in new tab
+            if (e.ctrlKey && !e.altKey && !e.shiftKey) {
+                this.handleDailyNoteAction(e, true);
+                return;
             }
-            return;
-        }
-
-        // Tab opens the daily‐note link of the highlighted suggestion
-        if (e.key === KEYS.TAB && !e.altKey && !e.ctrlKey && !e.shiftKey) {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            // find the currently highlighted container
-            const sel = document.querySelector('.is-selected .chrono-suggestion-container') as HTMLElement;
-            const link = sel?.querySelector('a[data-href]') as HTMLElement;
-            if (link) {
-                link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+            
+            // Handle open daily note in current pane
+            if (!e.ctrlKey && !e.altKey && !e.shiftKey) {
+                this.handleDailyNoteAction(e, false);
+                return;
             }
-            return;
         }
-
-        const navKeys = ['ArrowUp','ArrowDown','PageUp','PageDown','Home','End'];
+        
+        // Handle navigation keys with modifiers
+        const navKeys = ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'];
         if (navKeys.includes(e.key) && (e.altKey || e.ctrlKey || e.shiftKey)) {
             e.preventDefault();
             e.stopImmediatePropagation();  // prevent text-selection on Shift+Arrow
-            document.dispatchEvent(new KeyboardEvent(KEY_EVENTS.KEYDOWN, {
+            
+            // Re-dispatch the event without modifiers to prevent text selection
+            document.dispatchEvent(new KeyboardEvent('keydown', {
                 key: e.key,
                 code: e.code,
-                keyCode: e.keyCode,
                 bubbles: true,
                 cancelable: true
             }));
-            return;
-        }
-        const updated = this.keyboardHandler.updateKeyState(e, true);
-        if (updated) {
-            this.updateAllPreviews();
         }
     };
-
-    handleKeyUp = (e: KeyboardEvent) => {
-        // Use the keyboard handler to update key state
-        const updated = this.keyboardHandler.updateKeyState(e, false);
-        if (updated) {
-            this.updateAllPreviews();
+    
+    // Handle daily note opening actions
+    private handleDailyNoteAction(e: KeyboardEvent, newTab: boolean) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        
+        const sel = document.querySelector('.is-selected .chrono-suggestion-container') as HTMLElement;
+        const link = sel?.querySelector('a[data-href]') as HTMLElement;
+        
+        if (link) {
+            link.dispatchEvent(new MouseEvent('click', { 
+                bubbles: true, 
+                cancelable: true, 
+                ctrlKey: newTab 
+            }));
         }
-    };
+    }
 
     unload() {
-        // Remove event listeners when plugin is unloaded
-        this.removeKeyEventListeners();
+        this.removeEventListeners();
         this.currentElements.clear();
+        this.keyboardHandler.unload();
     }
 
     updateAllPreviews() {
@@ -108,9 +109,11 @@ export class SuggestionProvider {
         });
     }
 
-    // Add this method to allow settings update and force re-render
-    updateSettingsAndRerender() {
-        this.keyboardHandler.setPlainTextByDefault(this.plugin.settings.plainTextByDefault);
+    /**
+     * Update settings and force re-render
+     */
+    updateSettings(settings: { keyBindings?: Record<string, string>; plainTextByDefault?: boolean }): void {
+        this.keyboardHandler.update(settings);
         this.updateAllPreviews();
     }
 
@@ -140,8 +143,7 @@ export class SuggestionProvider {
             this.contextProvider = context;
         }
 
-        // Always update the preview for this item using the latest settings
-        this.keyboardHandler.setPlainTextByDefault(this.plugin.settings.plainTextByDefault);
+        // Update the preview for this item
         this.updatePreviewContent(item, container);
     }
 
@@ -151,15 +153,16 @@ export class SuggestionProvider {
         if (existingPreview) {
             existingPreview.remove();
         }
-        // Always use the latest settings for insert mode/content format
-        this.keyboardHandler.setPlainTextByDefault(this.plugin.settings.plainTextByDefault);
+        
+        // Get current key state and determine insert mode/content format
         const { insertMode, contentFormat } = this.keyboardHandler.getEffectiveInsertModeAndFormat();
+        
         const dailyNotePreview = getDailyNotePreview(item);
         let momentDate = moment(EnhancedDateParser.parseDate(item));
         const dailyNote = momentDate.isValid() ? getDailyNote(momentDate, getAllDailyNotes()) : null;
-        const dailyNoteClass = dailyNote instanceof TFile
-            ? ''
-            : 'chrono-is-unresolved';
+        const dailyNoteClass = dailyNote instanceof TFile ? '' : 'chrono-is-unresolved';
+        
+        // Determine the text to display based on content format
         let readableDatePreview: string;
         if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
             readableDatePreview = item;
@@ -173,9 +176,11 @@ export class SuggestionProvider {
                 false
             );
         }
-        const previewContainer = container.createEl('span', {
-            cls: 'chrono-suggestion-preview'
-        });
+        
+        // Create preview container
+        const previewContainer = container.createEl('span', { cls: 'chrono-suggestion-preview' });
+        
+        // Display content based on insert mode
         if (insertMode === InsertMode.PLAINTEXT) {
             if (readableDatePreview) {
                 previewContainer.appendText(`↳ ${readableDatePreview}`);
@@ -187,54 +192,57 @@ export class SuggestionProvider {
                 cls: dailyNoteClass, 
                 attr: { 'data-href': dailyNote?.path ?? '#', target: '_self', rel: 'noopener nofollow' }
             });
+            
+            // Add click handler for links
             linkEl.addEventListener('click', async (event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                const currentContext = this.contextProvider;
-                if (currentContext &&
-                    currentContext.context &&
-                    currentContext.context.editor &&
-                    currentContext.context.start &&
-                    currentContext.context.end) {
-                    const { editor, start, end } = currentContext.context;
-                    editor.replaceRange('', start, end);
-                }
-                if (currentContext) {
-                    if (typeof currentContext.close === 'function') {
-                        currentContext.close();
-                    } else if (typeof currentContext.suggestions?.close === 'function') {
-                        currentContext.suggestions.close();
-                    }
-                }
-                // Always create the daily note if needed
+                
+                // Close the suggester
+                this.closeSuggester();
+                
+                // Create and open the daily note
                 const file = await getOrCreateDailyNote(this.app, momentDate, true);
-                if (!file) {
-                    console.error("Failed to handle daily note for:", item);
-                } else {
-                    // open in new tab if Ctrl held, otherwise reuse current pane
+                if (file) {
                     const leaf = this.app.workspace.getLeaf(event.ctrlKey);
                     await leaf.openFile(file);
                 }
             });
+            
+            // Show additional preview if needed
             if (dailyNotePreview !== readableDatePreview && readableDatePreview) {
                 previewContainer.appendText(` ⭢ ${readableDatePreview}`);
             }
         } else if (readableDatePreview) {
             previewContainer.appendText(`↳ ${readableDatePreview}`);
         }
+        
+        // Remove empty preview containers
         if (!previewContainer.hasChildNodes() && !previewContainer.textContent?.trim()) {
             previewContainer.remove();
         }
     }
     
-    // Share the keyboard handler's key state with other components
-    syncKeyStateFrom(otherHandler: KeyboardHandler): void {
-        this.keyboardHandler.setKeyState(otherHandler.getKeyState());
-        // Keep plainTextByDefault in sync with plugin settings
-        this.keyboardHandler.setPlainTextByDefault(this.plugin.settings.plainTextByDefault);
+    // Helper method to close the suggester
+    private closeSuggester() {
+        const currentContext = this.contextProvider;
+        
+        // Clear out editor context if available
+        if (currentContext?.context?.editor && currentContext?.context?.start && currentContext?.context?.end) {
+            const { editor, start, end } = currentContext.context;
+            editor.replaceRange('', start, end);
+        }
+        
+        // Close the suggester
+        if (currentContext) {
+            if (typeof currentContext.close === 'function') {
+                currentContext.close();
+            } else if (typeof currentContext.suggestions?.close === 'function') {
+                currentContext.suggestions.close();
+            }
+        }
     }
     
-    // Allow other components to get this keyboard handler's key state
     getKeyboardHandler(): KeyboardHandler {
         return this.keyboardHandler;
     }

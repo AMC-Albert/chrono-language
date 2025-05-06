@@ -3,10 +3,12 @@ import { ChronoLanguageSettings, ChronoLanguageSettingTab, DEFAULT_SETTINGS } fr
 import { EditorSuggester } from './features/editor-suggester';
 import { OpenDailyNoteModal } from './features/open-daily-note';
 import { MODIFIER_BEHAVIOR } from './definitions/constants';
+import { SuggestionProvider } from './features/suggestion-provider';
 
 export default class ChronoLanguage extends Plugin {
 	settings: ChronoLanguageSettings;
 	editorSuggester: EditorSuggester;
+	suggestionProvider: SuggestionProvider;
 
 	async onload() {
 		await this.loadSettings();
@@ -35,7 +37,11 @@ export default class ChronoLanguage extends Plugin {
 		}
 		this.editorSuggester = new EditorSuggester(this);
 		this.registerEditorSuggest(this.editorSuggester);
-		this.editorSuggester.updateRendererSettingsAndRerender();
+		
+		// Use the new updateSettings method instead of updateRendererSettingsAndRerender
+		this.editorSuggester.updateSettings({
+			plainTextByDefault: this.settings.plainTextByDefault
+		});
 	}
 
 	async loadSettings() {
@@ -46,6 +52,25 @@ export default class ChronoLanguage extends Plugin {
 		await this.saveData(this.settings);
 		if (this.editorSuggester) {
 			this.editorSuggester.updateInstructions();
+		}
+	}
+
+	/**
+	 * Update key bindings in all components that use keyboard handlers
+	 */
+	updateKeyBindings(): void {
+		// Update the editor suggester keyboard bindings using the new updateSettings method
+		if (this.editorSuggester) {
+			this.editorSuggester.updateSettings({
+				keyBindings: this.settings.keyBindings
+			});
+		}
+		
+		// Update the suggestion provider keyboard bindings
+		if (this.suggestionProvider) {
+			this.suggestionProvider.updateSettings({
+				keyBindings: this.settings.keyBindings
+			});
 		}
 	}
 }
