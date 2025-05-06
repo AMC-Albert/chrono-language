@@ -2,7 +2,7 @@ import { Editor, EditorPosition, EditorSuggest, EditorSuggestContext, Modifier }
 import ChronoLanguage from '../main';
 import { createDailyNoteLink, getDatePreview, getDailyNotePreview } from '../utils/helpers';
 import { SuggestionProvider } from './suggestion-provider';
-import { InsertMode, ContentFormat, getAllKeyCombos } from '../definitions/types';
+import { InsertMode, ContentFormat } from '../definitions/types';
 import { KeyboardHandler } from '../utils/keyboard-handler';
 import { KEYS } from '../definitions/constants';
 
@@ -21,95 +21,107 @@ export class EditorSuggester extends EditorSuggest<string> {
     }
     
     private initComponents() {
-        // Initialize keyboard handler and suggester, register handlers, and update instructions
+        // Initialize keyboard handler and suggester
         this.keyboardHandler = new KeyboardHandler(this.scope, this.plugin.settings.plainTextByDefault);
         this.suggester = new SuggestionProvider(this.app, this.plugin);
+        
+        // Register keyboard handlers and update instructions
         this.registerKeyboardHandlers();
         this.updateInstructions();
     }
     
     private registerKeyboardHandlers() {
-        // Register Enter key for all modifier combos in a concise loop
-        getAllKeyCombos().forEach(({ ctrl, shift, alt }) => {
-            const mods: Modifier[] = [];
-            if (ctrl) mods.push('Ctrl');
-            if (shift) mods.push('Shift');
-            if (alt) mods.push('Alt');
-            this.scope.register(mods, KEYS.ENTER, this.handleSelectionKey);
-        });
+        // Register Enter key for selection (with various modifier combinations)
+        this.registerEnterKeyHandlers();
+        
         // Register Tab key handlers for daily note actions
         this.keyboardHandler.registerTabKeyHandlers(this.handleSelectionKey);
+    }
+    
+    private registerEnterKeyHandlers() {
+        // Register Enter key with all possible modifier combinations
+        const modifierCombos: Modifier[][] = [
+            [],                     // No modifiers
+            ['Ctrl'],               // Ctrl
+            ['Shift'],              // Shift
+            ['Alt'],                // Alt
+            ['Ctrl', 'Shift'],      // Ctrl+Shift
+            ['Ctrl', 'Alt'],        // Ctrl+Alt
+            ['Shift', 'Alt'],       // Shift+Alt
+            ['Ctrl', 'Shift', 'Alt'] // Ctrl+Shift+Alt
+        ];
+        
+        modifierCombos.forEach(mods => {
+            this.scope.register(mods, KEYS.ENTER, this.handleSelectionKey);
+        });
     }
     
     private handleSelectionKey = (event: KeyboardEvent): boolean => {
         if (!this.isOpen || !this.suggester || !this.context) return false;
 
         if (event.key === KEYS.TAB) {
-            // This was triggered by a Tab-related action (e.g., openDailyNote, openDailyNoteNewTab)
-            // Determine if Shift was pressed for "new tab" behavior.
-            // This assumes default bindings or similar structure for these actions.
-            const openInNewTab = event.shiftKey; // Simplified: assumes Shift is the distinguishing factor.
-                                                // A more robust check might involve consulting keyBindings config
-                                                // if Tab actions become more complexly configurable.
-
+            // Handle Tab key action (open daily note)
+            const openInNewTab = event.shiftKey;
             this.suggester.handleDailyNoteAction(event, openInNewTab, this.context);
-            // We've handled the action (opening a daily note), so close the suggester.
-            return true; 
+            return true;
         }
         
-        // For Enter key (and other non-Tab selections)
+        // For Enter key and other selection actions
         return this.suggestions.useSelectedItem(event);
     };
 
     /**
-     * Updates the instructions based on current settings
+     * Updates the instructions display based on keyboard handler settings
      */
     updateInstructions() {
         this.setInstructions(this.keyboardHandler.getInstructions());
     }
     
     unload() {
-        if (this.suggester) {
-            this.suggester.unload();
-        }
+        this.suggester?.unload();
         this.keyboardHandler.unload();
     }
     
     onTrigger(cursor: EditorPosition, editor: Editor): EditorSuggestContext | null {
-        if (!this.plugin.settings.triggerPhrase) return null;
+        const triggerPhrase = this.plugin.settings.triggerPhrase;
+        if (!triggerPhrase) return null;
 
         const line = editor.getLine(cursor.line);
-        const triggerPhrase = this.plugin.settings.triggerPhrase;
         const cursorSubstring = line.slice(0, cursor.ch);
-        const triggerHappy = this.plugin.settings.triggerHappy;
-
         const lastTriggerIndex = cursorSubstring.lastIndexOf(triggerPhrase);
 
-        if (lastTriggerIndex === -1) return null;
-
-        if (!triggerHappy) {
-            const charBefore = lastTriggerIndex > 0 ? cursorSubstring.charAt(lastTriggerIndex - 1) : ' ';
-            if (charBefore !== ' ' && charBefore !== '\t') {
-                return null;
-            }
+        // If trigger phrase not found or cursor is before the end of trigger phrase
+        if (lastTriggerIndex === -1 || cursor.ch < lastTriggerIndex + triggerPhrase.length) {
+            return null;
         }
-
+        
+        // Check for triggering conditions
+        const triggerHappy = this.plugin.settings.triggerHappy;
         const posAfterTrigger = lastTriggerIndex + triggerPhrase.length;
-
-        if (cursor.ch < posAfterTrigger) {
-             return null;
-        }
-
         const query = cursorSubstring.slice(posAfterTrigger);
 
+        // Early exit conditions
         if (query.startsWith(' ') || query.startsWith('\t')) {
             return null;
         }
-
-        if (!triggerHappy && query.length === 0) {
-            const charAfterInFullLine = posAfterTrigger < line.length ? line.charAt(posAfterTrigger) : ' ';
-            if (charAfterInFullLine !== ' ' && charAfterInFullLine !== '\t') {
-                return null;
+        
+        // When not in trigger-happy mode, check surrounding characters
+        if (!triggerHappy) {
+            // Check character before trigger
+            if (lastTriggerIndex > 0) {
+                const charBefore = cursorSubstring.charAt(lastTriggerIndex - 1);
+                if (charBefore !== ' ' && charBefore !== '\t') {
+                    return null;
+                }
+            }
+            
+            // Check character after trigger if query is empty
+            if (query.length === 0) {
+                const charAfterInFullLine = posAfterTrigger < line.length ? 
+                    line.charAt(posAfterTrigger) : ' ';
+                if (charAfterInFullLine !== ' ' && charAfterInFullLine !== '\t') {
+                    return null;
+                }
             }
         }
 
@@ -130,9 +142,7 @@ export class EditorSuggester extends EditorSuggest<string> {
     }
 
     renderSuggestion(item: string, el: HTMLElement) {
-        if (this.suggester) {
-            this.suggester.renderSuggestionContent(item, el, this);
-        }
+        this.suggester?.renderSuggestionContent(item, el, this);
     }
 
     selectSuggestion(item: string, event: KeyboardEvent | MouseEvent): void {
@@ -144,7 +154,7 @@ export class EditorSuggester extends EditorSuggest<string> {
         const { insertMode, contentFormat } = 
             this.keyboardHandler.getEffectiveInsertModeAndFormat(event as KeyboardEvent);
         
-        // Insert the text
+        // Insert the appropriate text
         editor.replaceRange(
             this.generateInsertText(item, insertMode, contentFormat),
             start, 
@@ -155,30 +165,38 @@ export class EditorSuggester extends EditorSuggest<string> {
     // Generate text to insert based on mode and format
     private generateInsertText(item: string, insertMode: InsertMode, contentFormat: ContentFormat): string {
         if (insertMode === InsertMode.PLAINTEXT) {
-            // Handle plain text insertion
-            if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
-                // When ContentFormat is SUGGESTION_TEXT, the raw item (suggestion string) is returned.
-                return item;
-            }
-            if (contentFormat === ContentFormat.DAILY_NOTE) {
-                return getDailyNotePreview(item);
-            }
-            if (contentFormat === ContentFormat.ALTERNATE) {
-                return getDatePreview(item, this.plugin.settings, true);
-            }
-            return getDatePreview(item, this.plugin.settings, false);
+            return this.generatePlainText(item, contentFormat);
         } else {
-            // Handle link insertion
-            return createDailyNoteLink(
-                this.app,
-                this.plugin.settings,
-                this.context!.file,
-                item,
-                contentFormat === ContentFormat.SUGGESTION_TEXT,
-                contentFormat === ContentFormat.ALTERNATE,
-                contentFormat === ContentFormat.DAILY_NOTE
-            );
+            return this.generateLink(item, contentFormat);
         }
+    }
+    
+    private generatePlainText(item: string, contentFormat: ContentFormat): string {
+        switch (contentFormat) {
+            case ContentFormat.SUGGESTION_TEXT:
+                return item;
+            case ContentFormat.DAILY_NOTE:
+                return getDailyNotePreview(item);
+            case ContentFormat.ALTERNATE:
+                return getDatePreview(item, this.plugin.settings, true);
+            default:
+                return getDatePreview(item, this.plugin.settings, false);
+        }
+    }
+    
+    private generateLink(item: string, contentFormat: ContentFormat): string {
+        const file = this.context?.file;
+        if (!file) return item;
+        
+        return createDailyNoteLink(
+            this.app,
+            this.plugin.settings,
+            file,
+            item,
+            contentFormat === ContentFormat.SUGGESTION_TEXT,
+            contentFormat === ContentFormat.ALTERNATE,
+            contentFormat === ContentFormat.DAILY_NOTE
+        );
     }
 
     /**

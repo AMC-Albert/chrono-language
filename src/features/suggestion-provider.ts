@@ -3,7 +3,7 @@ import ChronoLanguage from '../main';
 import { getDailyNotePreview, getDatePreview, getOrCreateDailyNote, getAllDailyNotesSafe } from '../utils/helpers';
 import { getDailyNote, getDailyNoteSettings } from 'obsidian-daily-notes-interface';
 import { EnhancedDateParser } from '../utils/parser';
-import { TFile, TFolder } from 'obsidian';
+import { TFile } from 'obsidian';
 import { InsertMode, ContentFormat } from '../definitions/types';
 import { KeyboardHandler } from '../utils/keyboard-handler';
 import { FileSystem } from 'obsidian-dev-utils/obsidian';
@@ -39,15 +39,9 @@ export class SuggestionProvider {
      */
     private initializeHolidaySuggestions(): void {
         try {
-            // Initialize parser with user's locale if available
             const locale = this.plugin.settings.holidayLocale || 'US';
             EnhancedDateParser.setLocale(locale);
-            
-            // Get all holiday names (including aliases)
-            this.holidaySuggestions = EnhancedDateParser.getHolidayNames();
-            
-            // Sort alphabetically for easier browsing
-            this.holidaySuggestions = this.holidaySuggestions.sort();
+            this.holidaySuggestions = EnhancedDateParser.getHolidayNames().sort();
         } catch (error) {
             console.error('Failed to initialize holiday suggestions:', error);
             this.holidaySuggestions = [];
@@ -86,41 +80,42 @@ export class SuggestionProvider {
         e.preventDefault();
         e.stopImmediatePropagation();
 
-        // Dynamically recalculate the range to remove the trigger phrase and query BEFORE switching notes
-        if (context && context.editor) {
-            const editor = context.editor;
-            const cursor = editor.getCursor();
-            const line = editor.getLine(cursor.line);
-            const triggerPhrase = this.plugin.settings.triggerPhrase;
-            const beforeCursor = line.slice(0, cursor.ch);
-            const lastTriggerIdx = beforeCursor.lastIndexOf(triggerPhrase);
-            if (lastTriggerIdx !== -1) {
-                const start = { line: cursor.line, ch: lastTriggerIdx };
-                const end = { line: cursor.line, ch: cursor.ch };
-                editor.replaceRange('', start, end);
-            }
-        }
+        this.cleanupTriggerPhrase(context);
+        const momentDate = this.getSelectedDate();
+        if (!momentDate) return;
 
-        const sel = document.querySelector('.is-selected .chrono-suggestion-container') as HTMLElement;
-        const raw = sel?.getAttribute('data-suggestion');
-        if (!raw) return;
-
-        const parsed = EnhancedDateParser.parseDate(raw);
-        if (!parsed) return;
-
-        const momentDate = moment(parsed);
         const file = await getOrCreateDailyNote(this.app, momentDate, false);
-
         if (file) {
-            if (newTab) {
-                const newLeaf = this.app.workspace.getLeaf(true);
-                await newLeaf.openFile(file);
-            } else {
-                const leaf = this.app.workspace.getLeaf(false);
-                await leaf.openFile(file);
-            }
+            const leaf = this.app.workspace.getLeaf(newTab);
+            await leaf.openFile(file);
         }
         this.closeSuggester();
+    }
+    
+    private cleanupTriggerPhrase(context?: any): void {
+        if (!context?.editor) return;
+        
+        const editor = context.editor;
+        const cursor = editor.getCursor();
+        const line = editor.getLine(cursor.line);
+        const triggerPhrase = this.plugin.settings.triggerPhrase;
+        const beforeCursor = line.slice(0, cursor.ch);
+        const lastTriggerIdx = beforeCursor.lastIndexOf(triggerPhrase);
+        
+        if (lastTriggerIdx !== -1) {
+            const start = { line: cursor.line, ch: lastTriggerIdx };
+            const end = { line: cursor.line, ch: cursor.ch };
+            editor.replaceRange('', start, end);
+        }
+    }
+    
+    private getSelectedDate(): moment.Moment | null {
+        const sel = document.querySelector('.is-selected .chrono-suggestion-container') as HTMLElement;
+        const raw = sel?.getAttribute('data-suggestion');
+        if (!raw) return null;
+
+        const parsed = EnhancedDateParser.parseDate(raw);
+        return parsed ? moment(parsed) : null;
     }
 
     unload() {
@@ -131,12 +126,9 @@ export class SuggestionProvider {
     }
 
     updateAllPreviews() {
-        // Only proceed if suggester is open
         if (!this.isSuggesterOpen) return;
-        
-        // Update all currently rendered suggestions
         this.currentElements.forEach((el, item) => {
-            this.updatePreviewContent(item, el);
+            if (el.isConnected) this.updatePreviewContent(item, el);
         });
     }
 
@@ -150,38 +142,30 @@ export class SuggestionProvider {
     }): void {
         this.keyboardHandler.update(settings);
         
-        // Update holiday locale if specified
         if (settings.holidayLocale) {
             this.updateHolidayLocale(settings.holidayLocale);
         }
         
-        // Only update previews if suggester is open
         if (this.isSuggesterOpen) {
             this.updateAllPreviews();
         }
     }
 
     getDateSuggestions(context: { query: string }, initialSuggestions?: string[]): string[] {
-        // Set the suggester as open when getting suggestions
         this.isSuggesterOpen = true;
-        
-        // Reset the folder creation notification flag when the suggester opens
         this.folderCreationNotified = false;
         
         const query = context.query.toLowerCase();
         const suggestions = initialSuggestions || this.plugin.settings.initialEditorSuggestions;
-        
-        // Combine the standard suggestions with relevant holiday suggestions
         let combinedSuggestions = [...suggestions];
         
         // Add matching holiday suggestions if query is long enough
         if (query.length >= 2) {
-            const matchingHolidays = this.holidaySuggestions.filter(
-                holiday => holiday.toLowerCase().includes(query)
-            );
+            const matchingHolidays = this.holidaySuggestions
+                .filter(holiday => holiday.toLowerCase().includes(query))
+                .slice(0, 5); // Limit to top 5 matches
             
-            // Add top 5 matching holidays to avoid overwhelming the UI
-            combinedSuggestions = [...combinedSuggestions, ...matchingHolidays.slice(0, 5)];
+            combinedSuggestions = [...combinedSuggestions, ...matchingHolidays];
         }
         
         // Filter all suggestions based on query
@@ -189,9 +173,8 @@ export class SuggestionProvider {
             c => c.toLowerCase().includes(query)
         );
 
-        // If no matches found, create a fallback suggestion with the user's input
+        // Create fallback suggestion if no matches
         if (filtered.length === 0 && query) {
-            // Capitalize first letter to match the style of other suggestions
             const capitalizedInput = query.charAt(0).toUpperCase() + query.slice(1);
             return [capitalizedInput];
         }
@@ -200,10 +183,7 @@ export class SuggestionProvider {
     }
 
     renderSuggestionContent(item: string, el: HTMLElement, context?: any) {
-        // Set the suggester as open when rendering content
         this.isSuggesterOpen = true;
-        
-        // Reset all modifier keys when suggestions are first rendered
         this.keyboardHandler.resetModifierKeys();
         
         const container = el.createEl('div', { cls: 'chrono-suggestion-container' });
@@ -216,123 +196,162 @@ export class SuggestionProvider {
 
     updatePreviewContent(item: string, container: HTMLElement) {
         try {
-            if (!this.isSuggesterOpen || !container.isConnected) return;
+            if (!this.isSuggesterOpen || !container.isConnected || 
+                container.hasAttribute('data-updating')) return;
             
-            // Remove any existing preview to prevent duplicates
+            container.setAttribute('data-updating', 'true');
+            
+            // Remove any existing preview
             container.querySelector('.chrono-suggestion-preview')?.remove();
             
             const { insertMode, contentFormat } = this.keyboardHandler.getEffectiveInsertModeAndFormat();
             const momentDate = moment(EnhancedDateParser.parseDate(item));
-            let dailyNote: TFile | null = null;
             
-            // Add a marker to prevent duplicate renders during async operations
-            if (container.hasAttribute('data-updating')) {
-                return;
-            }
-            container.setAttribute('data-updating', 'true');
-            
-            // Check if folder exists first to know if we need to show a creation notice later
-            const dailyNoteSettings = getDailyNoteSettings();
-            const folderPath = dailyNoteSettings.folder ?? '';
-            
-            // Use FileSystem utility to check if folder exists
-            const folderExists = folderPath === '' || FileSystem.getFolderOrNull(this.app, folderPath) !== null;
-                
-            // Use the enhanced getAllDailyNotesSafe with createIfNeeded=true to auto-create folder if missing
-            const allNotesPromise = getAllDailyNotesSafe(this.app, true, true);
-            let dailyNotePreview = item;
-            let dailyNoteClass = '';
-            
-            // Handle asynchronous getAllDailyNotesSafe
-            allNotesPromise.then(allNotes => {
-                // Only show the notice once per suggester session, and only when the folder is actually created
-                if (!folderExists && allNotes && !this.folderCreationNotified) {
-                    new Notice(`Created daily notes folder: ${folderPath}`, 3000);
-                    this.folderCreationNotified = true;
-                }
-                
-                if (momentDate.isValid() && allNotes) {
-                    const potentialDailyNote = getDailyNote(momentDate, allNotes);
-                    dailyNote = potentialDailyNote instanceof TFile ? potentialDailyNote : null;
-                    dailyNotePreview = getDailyNotePreview(item) ?? item;
-                    dailyNoteClass = dailyNote instanceof TFile ? '' : 'chrono-is-unresolved';
-                } else if (!allNotes) {
-                    dailyNotePreview = 'Daily notes folder missing';
-                    dailyNoteClass = 'chrono-is-unresolved';
-                }
-                
-                this.updatePreviewUI(container, momentDate, dailyNote, dailyNotePreview, dailyNoteClass, insertMode, contentFormat, item);
-                // Remove the marker after rendering is complete
+            // Check folder existence and create if needed
+            this.checkAndCreateFolder().then(allNotes => {
+                this.renderPreview(container, momentDate, item, insertMode, contentFormat, allNotes);
                 container.removeAttribute('data-updating');
             }).catch(() => {
-                // Make sure to clear the marker even if there's an error
                 container.removeAttribute('data-updating');
             });
         } catch (e) {
             console.error('Error updating preview content:', e);
-            // Clear the marker in case of error
             container?.removeAttribute?.('data-updating');
         }
     }
     
-    private updatePreviewUI(
+    private async checkAndCreateFolder(): Promise<Record<string, TFile> | null> {
+        // Check folder existence
+        const dailyNoteSettings = getDailyNoteSettings();
+        const folderPath = dailyNoteSettings.folder ?? '';
+        const folderExists = folderPath === '' || 
+                             FileSystem.getFolderOrNull(this.app, folderPath) !== null;
+        
+        // Get all notes and create folder if needed
+        const allNotes = await getAllDailyNotesSafe(this.app, true, true);
+        
+        // Show notification if folder was created
+        if (!folderExists && allNotes && !this.folderCreationNotified) {
+            new Notice(`Created daily notes folder: ${folderPath}`, 3000);
+            this.folderCreationNotified = true;
+        }
+        
+        return allNotes;
+    }
+    
+    private renderPreview(
         container: HTMLElement, 
         momentDate: moment.Moment,
-        dailyNote: TFile | null,
-        dailyNotePreview: string,
-        dailyNoteClass: string,
+        item: string,
         insertMode: InsertMode,
         contentFormat: ContentFormat,
-        item: string
-    ) {
-        // Remove any existing preview elements to prevent duplicates
-        container.querySelector('.chrono-suggestion-preview')?.remove();
+        allNotes: Record<string, TFile> | null
+    ): void {
+        let dailyNote: TFile | null = null;
+        let dailyNotePreview = item;
+        let dailyNoteClass = '';
+        
+        if (momentDate.isValid() && allNotes) {
+            dailyNote = getDailyNote(momentDate, allNotes);
+            dailyNotePreview = getDailyNotePreview(item) ?? item;
+            dailyNoteClass = dailyNote ? '' : 'chrono-is-unresolved';
+        } else if (!allNotes) {
+            dailyNotePreview = 'Daily notes folder missing';
+            dailyNoteClass = 'chrono-is-unresolved';
+        }
         
         // Determine preview text
-        let readableDatePreview: string;
-        if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
-            readableDatePreview = item;
-        } else if (contentFormat === ContentFormat.DAILY_NOTE) {
-            readableDatePreview = dailyNotePreview;
-        } else { // Primary or Alternate format
-            const useAlternate = contentFormat === ContentFormat.ALTERNATE;
-            readableDatePreview = getDatePreview(item, this.plugin.settings, useAlternate, false);
-        }
+        let readableDatePreview: string = this.getReadableDatePreview(item, dailyNotePreview, contentFormat);
 
         const previewContainer = container.createEl('span', { cls: 'chrono-suggestion-preview' });
 
         if (insertMode === InsertMode.PLAINTEXT) {
             previewContainer.appendText(`↳ ${readableDatePreview}`);
         } else if (dailyNotePreview) {
-            previewContainer.appendText('↳ ');
-            const linkEl = previewContainer.createEl('a', {
-                text: dailyNotePreview,
-                cls: dailyNoteClass, 
-                attr: { 'data-href': dailyNote?.path ?? '#', target: '_self', rel: 'noopener nofollow' }
-            });
-            linkEl.addEventListener('click', async (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                this.closeSuggester();
-                const file = await getOrCreateDailyNote(this.app, momentDate, true);
-                if (file) await this.app.workspace.getLeaf(event.ctrlKey).openFile(file);
-            });
-            if (dailyNotePreview !== readableDatePreview)
-                previewContainer.appendText(` ⭢ ${readableDatePreview}`);
+            this.createLinkPreview(previewContainer, dailyNotePreview, dailyNoteClass, momentDate, readableDatePreview);
         }
 
-        if (!previewContainer.hasChildNodes() && !previewContainer.textContent?.trim()) previewContainer.remove();
+        if (!previewContainer.hasChildNodes()) previewContainer.remove();
+    }
+    
+    private getReadableDatePreview(item: string, dailyNotePreview: string, contentFormat: ContentFormat): string {
+        if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
+            return item;
+        } else if (contentFormat === ContentFormat.DAILY_NOTE) {
+            return dailyNotePreview;
+        } else { // Primary or Alternate format
+            const useAlternate = contentFormat === ContentFormat.ALTERNATE;
+            return getDatePreview(item, this.plugin.settings, useAlternate, false);
+        }
+    }
+    
+    private createLinkPreview(
+        container: HTMLElement,
+        dailyNotePreview: string,
+        dailyNoteClass: string,
+        momentDate: moment.Moment,
+        readableDatePreview: string
+    ): void {
+        container.appendText('↳ ');
+        const linkEl = container.createEl('a', {
+            text: dailyNotePreview,
+            cls: dailyNoteClass, 
+            attr: { 
+                'data-href': '#', 
+                target: '_self', 
+                rel: 'noopener nofollow' 
+            }
+        });
+        
+        linkEl.addEventListener('click', async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            this.closeSuggester();
+            const file = await getOrCreateDailyNote(this.app, momentDate, true);
+            if (file) await this.app.workspace.getLeaf(event.ctrlKey).openFile(file);
+        });
+        
+        if (dailyNotePreview !== readableDatePreview) {
+            container.appendText(` ⭢ ${readableDatePreview}`);
+        }
     }
 
     // Helper method to close the suggester
     private closeSuggester() {
-        // Set suggester as closed
         this.isSuggesterOpen = false;
-        // Reset folder creation notification flag when suggester closes
         this.folderCreationNotified = false;
         
         const ctx = this.contextProvider;
-        ctx?.context?.editor?.replaceRange?.('', ctx.context.start, ctx.context.end);
+        
+        // Safely replace the trigger text if possible
+        if (ctx?.context?.editor) {
+            try {
+                const editor = ctx.context.editor;
+                const cursor = editor.getCursor();
+                
+                // Get the actual trigger phrase to ensure we're only removing what was typed
+                const triggerPhrase = this.plugin.settings.triggerPhrase;
+                const line = editor.getLine(cursor.line);
+                const beforeCursor = line.slice(0, cursor.ch);
+                const lastTriggerIdx = beforeCursor.lastIndexOf(triggerPhrase);
+                
+                if (lastTriggerIdx >= 0) {
+                    // Use the actual trigger location rather than the stored context
+                    const start = { line: cursor.line, ch: lastTriggerIdx };
+                    const end = { line: cursor.line, ch: cursor.ch };
+                    
+                    // Only remove text if there's actually something to remove
+                    if (start.ch < end.ch) {
+                        editor.replaceRange('', start, end);
+                    }
+                }
+            } catch (e) {
+                // Ignore range errors
+                console.debug("Error closing suggester (safe to ignore):", e);
+            }
+        }
+        
+        // Close the suggester UI
         ctx?.close?.() ?? ctx?.suggestions?.close?.();
     }
     

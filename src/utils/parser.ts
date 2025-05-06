@@ -44,39 +44,57 @@ export class EnhancedDateParser {
         this.holidayCache.clear();
         const currentYear = this.currentYear;
         
-        // Get holidays for current year and next year
-        [currentYear, currentYear + 1].forEach(year => {
-            const holidays = this.holidaysInstance.getHolidays(year);
-            holidays.forEach((holiday: any) => {
-                const name = holiday.name;
-                const lowerName = name.toLowerCase();
-                const date = new Date(holiday.date);
-                if (!this.holidayCache.has(lowerName)) {
-                    this.holidayCache.set(lowerName, { name, dates: [date] });
-                } else {
-                    this.holidayCache.get(lowerName)!.dates.push(date);
-                }
-                
-                // Also add short names and common variations
-                const shortName = lowerName.split(' ')[0];
-                if (shortName.length > 3) {
-                    if (!this.holidayCache.has(shortName)) {
-                        this.holidayCache.set(shortName, { name, dates: [date] });
-                    } else {
-                        this.holidayCache.get(shortName)!.dates.push(date);
-                    }
-                }
-            });
-        });
-
-        // Add common holiday aliases that might not be in the library
-        const aliases: Record<string, string> = {
+        // Process holidays for current and next year in one loop
+        this.processHolidaysForYears([currentYear, currentYear + 1]);
+        
+        // Add common holiday aliases
+        this.addHolidayAliases({
             "Xmas": 'christmas',
             "X-mas": 'christmas',
             "July 4th": 'independence day',
             "4th of July": 'independence day',
-        };
-
+        });
+    }
+    
+    /**
+     * Process holidays for multiple years
+     */
+    private static processHolidaysForYears(years: number[]): void {
+        years.forEach(year => {
+            const holidays = this.holidaysInstance.getHolidays(year);
+            holidays.forEach(this.addHolidayToCache.bind(this));
+        });
+    }
+    
+    /**
+     * Add a holiday to the cache
+     */
+    private static addHolidayToCache(holiday: any): void {
+        const name = holiday.name;
+        const lowerName = name.toLowerCase();
+        const date = new Date(holiday.date);
+        
+        if (!this.holidayCache.has(lowerName)) {
+            this.holidayCache.set(lowerName, { name, dates: [date] });
+        } else {
+            this.holidayCache.get(lowerName)!.dates.push(date);
+        }
+        
+        // Also add short names as aliases
+        const shortName = lowerName.split(' ')[0];
+        if (shortName.length > 3) {
+            if (!this.holidayCache.has(shortName)) {
+                this.holidayCache.set(shortName, { name, dates: [date] });
+            } else {
+                this.holidayCache.get(shortName)!.dates.push(date);
+            }
+        }
+    }
+    
+    /**
+     * Add aliases for holidays
+     */
+    private static addHolidayAliases(aliases: Record<string, string>): void {
         Object.entries(aliases).forEach(([alias, official]) => {
             const lowerAlias = alias.toLowerCase();
             if (this.holidayCache.has(official)) {
@@ -98,21 +116,17 @@ export class EnhancedDateParser {
 
     /**
      * Check if text contains a holiday reference and return the date if found
-     * @param text Text to check for holiday references
-     * @returns Date of the holiday if found, null otherwise
      */
     private static checkForHoliday(text: string): Date | null {
         if (!this.holidaysInstance) {
             this.initHolidays();
         }
 
-        // Clean and normalize the input
         const cleanedText = text.toLowerCase().trim();
         
         // Direct match in cache
         if (this.holidayCache.has(cleanedText)) {
-            const { dates } = this.holidayCache.get(cleanedText)!;
-            return this.getNextUpcomingDate(dates);
+            return this.getNextUpcomingDate(this.holidayCache.get(cleanedText)!.dates);
         }
 
         // Try to find partial matches
@@ -127,24 +141,20 @@ export class EnhancedDateParser {
 
     /**
      * Get the next upcoming date from a list of dates
-     * @param dates Array of dates
-     * @returns Next upcoming date or null if none found
      */
     private static getNextUpcomingDate(dates: Date[]): Date | null {
         const now = new Date();
-        // Sort dates and return the soonest date that is today or in the future
         const sorted = dates.slice().sort((a, b) => a.getTime() - b.getTime());
-        for (const date of sorted) {
-            if (date >= now) return date;
-        }
-        // If all dates are in the past, return the latest one
-        return sorted.length > 0 ? sorted[sorted.length - 1] : null;
+        
+        // Find the first date in the future
+        const futureDate = sorted.find(date => date >= now);
+        
+        // Return future date or the latest past date if no future dates exist
+        return futureDate || (sorted.length > 0 ? sorted[sorted.length - 1] : null);
     }
 
     /**
      * Modifies input text to enhance date parsing capabilities
-     * @param text Text to modify
-     * @returns Modified text for better date parsing
      */
     private static enhanceText(text: string): string {
         if (!text) return text;
@@ -158,45 +168,49 @@ export class EnhancedDateParser {
         }
         
         // If text ends with a number, append " days" for better relative date parsing
-        if (/\d$/.test(trimmedText)) {
-            // Check if it's just "in X" or "X"
-            if (/^in \d+$/.test(modifiedText) || /^\d+$/.test(trimmedText)) {
-                modifiedText = `${modifiedText} days`;
-            }
+        if (/\d$/.test(trimmedText) && 
+           (/^in \d+$/.test(modifiedText) || /^\d+$/.test(trimmedText))) {
+            modifiedText = `${modifiedText} days`;
         }
         
         return modifiedText;
     }
 
     /**
+     * Common parsing logic used by both parseDate and parse methods
+     */
+    private static handleParsing(text: string): { 
+        holidayDate: Date | null, 
+        modifiedText: string 
+    } {
+        if (!text) return { holidayDate: null, modifiedText: "" };
+        
+        // Check for holiday first
+        const holidayDate = this.checkForHoliday(text);
+        
+        // Only enhance text if not a holiday
+        const modifiedText = holidayDate ? text : this.enhanceText(text);
+        
+        return { holidayDate, modifiedText };
+    }
+
+    /**
      * Parse a date string with enhanced capabilities
-     * @param text Text to parse
-     * @returns Parsed date or null if parsing failed
      */
     static parseDate(text: string): Date | null {
-        if (!text) return null;
-        // First check if it's a recognized holiday (before enhancing text)
-        const holidayDate = this.checkForHoliday(text);
-        if (holidayDate) {
-            return holidayDate;
-        }
-        // Only enhance text if not a holiday
-        const modifiedText = this.enhanceText(text);
-        return chrono.parseDate(modifiedText);
+        const { holidayDate, modifiedText } = this.handleParsing(text);
+        return holidayDate || chrono.parseDate(modifiedText);
     }
 
     /**
      * Parse all possible dates from the text
-     * @param text Text to parse
-     * @returns Array of parsed results
      */
     static parse(text: string): chrono.ParsedResult[] {
-        if (!text) return [];
-        // First check if it's a recognized holiday (before enhancing text)
-        const holidayDate = this.checkForHoliday(text);
+        const { holidayDate, modifiedText } = this.handleParsing(text);
+        
         if (holidayDate) {
             // Create a chrono-like result for the holiday
-            const result: any = {
+            return [{
                 start: {
                     date: () => holidayDate
                 },
@@ -204,27 +218,22 @@ export class EnhancedDateParser {
                 index: 0,
                 text: text,
                 ref: new Date()
-            };
-            return [result];
+            } as chrono.ParsedResult];
         }
-        // Only enhance text if not a holiday
-        const modifiedText = this.enhanceText(text);
+        
         return chrono.parse(modifiedText);
     }
 
     /**
      * Get a list of all available holidays for the current locale and year
-     * @returns Array of holiday names
      */
     static getHolidayNames(): string[] {
         if (!this.holidaysInstance) {
             this.initHolidays();
         }
         // Return unique, capitalized holiday names
-        const names = new Set<string>();
-        for (const { name } of this.holidayCache.values()) {
-            names.add(name);
-        }
-        return Array.from(names);
+        return Array.from(new Set(
+            Array.from(this.holidayCache.values()).map(v => v.name)
+        ));
     }
 }

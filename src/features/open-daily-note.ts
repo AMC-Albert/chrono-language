@@ -7,8 +7,6 @@ import { ERRORS } from "../definitions/constants";
 
 /**
  * Modal for quickly opening daily notes via date parsing
- * 
- * Note: This class does not need any custom key handling
  */
 export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
   plugin: ChronoLanguage;
@@ -17,17 +15,12 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
   constructor(app: App, plugin: ChronoLanguage) {
     super(app);
     this.plugin = plugin;
-
-    // Initialize suggester
     this.suggester = new SuggestionProvider(this.app, this.plugin);
-
-    // Set placeholder text for the input field
     this.setPlaceholder("Enter a date or relative time...");
   }
 
   getItems(): string[] {
-    const inputEl = this.modalEl.querySelector(".prompt-input") as HTMLInputElement;
-    const query = inputEl?.value || "";
+    const query = (this.modalEl.querySelector(".prompt-input") as HTMLInputElement)?.value || "";
     return this.suggester.getDateSuggestions(
       { query },
       this.plugin.settings.initialOpenDailyNoteSuggestions
@@ -50,12 +43,9 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
         return;
       }
       
-      const momentDate = moment(parsed);
-      const file = await getOrCreateDailyNote(this.app, momentDate, true);
-      
-      // Use the active leaf to open the file
-      const leaf = this.app.workspace.getLeaf();
-      if (file) await leaf.openFile(file);
+      // Open the file in active leaf
+      const file = await getOrCreateDailyNote(this.app, moment(parsed), true);
+      if (file) await this.app.workspace.getLeaf().openFile(file);
     } catch (error) {
       console.error("Error opening daily note:", error);
       new Notice(ERRORS.FAILED_HANDLE_NOTE);
