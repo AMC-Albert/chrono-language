@@ -51,6 +51,11 @@ export class EditorSuggester extends EditorSuggest<string> {
     
     private handleSelectionKey = (event: KeyboardEvent): boolean => {
         if (!this.isOpen || !this.suggester) return false;
+        // Prevent insertion behavior for Tab and Shift+Tab (handled by daily note logic)
+        if (event.key === KEYS.TAB) {
+            // If Shift+Tab or Tab, handled elsewhere, do not insert, but return true to close suggester
+            return true;
+        }
         return this.suggestions.useSelectedItem(event);
     };
 

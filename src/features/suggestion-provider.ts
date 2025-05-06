@@ -50,15 +50,17 @@ export class SuggestionProvider {
     handleKeyboardNavigation = (e: KeyboardEvent) => {
         // Only handle Tab key specifically for daily notes
         if (e.key === 'Tab') {
+            // Get the current context from the contextProvider if available
+            const context = this.contextProvider?.context;
             // Handle open daily note in new tab
-            if (e.ctrlKey && !e.altKey && !e.shiftKey) {
-                this.handleDailyNoteAction(e, true);
+            if (e.shiftKey && !e.ctrlKey && !e.altKey) {
+                this.handleDailyNoteAction(e, true, context);
                 return;
             }
             
             // Handle open daily note in current pane
             if (!e.ctrlKey && !e.altKey && !e.shiftKey) {
-                this.handleDailyNoteAction(e, false);
+                this.handleDailyNoteAction(e, false, context);
                 return;
             }
         }
@@ -80,9 +82,24 @@ export class SuggestionProvider {
     };
     
     // Handle daily note opening actions
-    private async handleDailyNoteAction(e: KeyboardEvent, newTab: boolean) {
+    private async handleDailyNoteAction(e: KeyboardEvent, newTab: boolean, context?: any) {
         e.preventDefault();
         e.stopImmediatePropagation();
+
+        // Dynamically recalculate the range to remove the trigger phrase and query BEFORE switching notes
+        if (context && context.editor) {
+            const editor = context.editor;
+            const cursor = editor.getCursor();
+            const line = editor.getLine(cursor.line);
+            const triggerPhrase = this.plugin.settings.triggerPhrase;
+            const beforeCursor = line.slice(0, cursor.ch);
+            const lastTriggerIdx = beforeCursor.lastIndexOf(triggerPhrase);
+            if (lastTriggerIdx !== -1) {
+                const start = { line: cursor.line, ch: lastTriggerIdx };
+                const end = { line: cursor.line, ch: cursor.ch };
+                editor.replaceRange('', start, end);
+            }
+        }
 
         const sel = document.querySelector('.is-selected .chrono-suggestion-container') as HTMLElement;
         const raw = sel?.getAttribute('data-suggestion');
@@ -92,19 +109,18 @@ export class SuggestionProvider {
         if (!parsed) return;
 
         const momentDate = moment(parsed);
-        const file = await getOrCreateDailyNote(this.app, momentDate, false); // don't open in getOrCreateDailyNote
+        const file = await getOrCreateDailyNote(this.app, momentDate, false);
 
         if (file) {
             if (newTab) {
-                // Create a new tab and open the file there, do not open in the original tab
                 const newLeaf = this.app.workspace.getLeaf("tab");
                 await newLeaf.openFile(file);
             } else {
-                // Open in the current tab
                 const leaf = this.app.workspace.getLeaf(false);
                 await leaf.openFile(file);
             }
         }
+        this.closeSuggester();
     }
 
     unload() {

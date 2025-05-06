@@ -94,7 +94,8 @@ export const DESCRIPTIONS = {
     PLAINTEXT_SUGGESTION_TEXT: 'Use suggestion text',
     PLAINTEXT_ALTERNATE: 'Alternate format',
     PLAINTEXT_DAILY_NOTE: 'Force no alias',
-    OPEN_DAILY_NOTE: 'Open daily note'
+    OPEN_DAILY_NOTE: 'Open daily note',
+    OPEN_DAILY_NOTE_NEW_TAB: 'Open daily note in new tab',
 } as const;
 
 /**
