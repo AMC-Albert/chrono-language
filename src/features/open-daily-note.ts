@@ -3,7 +3,7 @@ import ChronoLanguage from "../main";
 import { Suggester } from "./suggestion-renderer";
 import { EnhancedDateParser } from "../utils/parser";
 import { getOrCreateDailyNote } from "../utils/helpers";
-import { KEY_EVENTS, ERRORS } from "../definitions/constants";
+import { ERRORS } from "../definitions/constants";
 
 export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
   plugin: ChronoLanguage;

@@ -115,8 +115,8 @@ export class Suggester {
         let momentDate = moment(EnhancedDateParser.parseDate(item));
         const dailyNote = momentDate.isValid() ? getDailyNote(momentDate, getAllDailyNotes()) : null;
         const dailyNoteClass = dailyNote instanceof TFile
-            ? 'cm-hmd-internal-link'
-            : 'is-unresolved';
+            ? ''
+            : 'chrono-is-unresolved';
         let readableDatePreview: string;
         if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
             readableDatePreview = item;
@@ -142,7 +142,7 @@ export class Suggester {
             const linkEl = previewContainer.createEl('a', {
                 text: dailyNotePreview,
                 cls: dailyNoteClass, 
-                attr: { 'data-href': dailyNote ? dailyNote.path : 'aa', target: '_blank', rel: 'noopener nofollow' }
+                attr: { 'data-href': dailyNote?.path ?? '#', target: '_self', rel: 'noopener nofollow' }
             });
             linkEl.addEventListener('click', async (event) => {
                 event.preventDefault();
