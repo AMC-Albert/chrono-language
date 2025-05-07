@@ -6,6 +6,7 @@ import { KEYS, MODIFIER_COMBOS, getInstructionDefinitions } from '../definitions
 
 //
 // TODO very easy to accidentally activate
+// Add 'Now' phrase
 //
 
 /**
