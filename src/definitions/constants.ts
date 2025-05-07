@@ -27,6 +27,28 @@ export const MODIFIER_KEY = {
 } as const;
 
 /**
+ * Centralized instruction definitions for key combos and their purposes
+ * Now a function to support swappable Ctrl/no-modifier behavior
+ */
+export function getInstructionDefinitions(plainTextByDefault: boolean) {
+    return [
+        {
+            command: 'None',
+            purpose: plainTextByDefault ? 'Insert as plain text' : 'Insert as link'
+        },
+        {
+            command: 'Ctrl',
+            purpose: plainTextByDefault ? 'Insert as link (toggle)' : 'Insert as plain text (toggle)'
+        },
+        { command: 'Alt', purpose: 'Use alternate date format' },
+        { command: 'Shift', purpose: 'Use suggestion text' },
+        { command: 'Shift+Alt', purpose: 'Use daily note format' },
+        { command: 'Tab', purpose: 'Open daily note' },
+        { command: 'Shift+Tab', purpose: 'Open daily note in new tab' }
+    ];
+}
+
+/**
  * Modifier behaviors - map physical keys to logical functions
  * This allows us to change which physical key controls which behavior
  */

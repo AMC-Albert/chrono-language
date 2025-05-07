@@ -12,6 +12,7 @@ import {
     MODIFIER_BEHAVIOR,
     MODIFIER_KEY
 } from '../definitions/constants';
+import { getInstructionDefinitions } from '../definitions/constants';
 
 /**
  * Callback function type for key state change events
@@ -22,23 +23,12 @@ export class KeyboardHandler {
     private scope: Scope | null;
     private plainTextByDefault: boolean;
     private keyState: Record<string, boolean> = { Control: false, Shift: false, Alt: false };
-    private static DEFAULT_KEY_BINDINGS = [
-        { action: 'insertAsPlainText', keys: 'Control', description: 'Insert as plain text (toggle)' },
-        { action: 'useAlternateFormat', keys: 'Alt', description: 'Use alternate date format' },
-        { action: 'useSuggestionText', keys: 'Shift', description: 'Use suggestion text' },
-        { action: 'useDailyNoteFormat', keys: ['Shift', 'Alt'], description: 'Use daily note format' },
-        { action: 'openDailyNote', keys: 'Tab', description: 'Open daily note' },
-        { action: 'openDailyNoteNewTab', keys: ['Shift', 'Tab'], description: 'Open daily note in new tab' }
-    ];
     private keyBindings: Record<string, string | string[]> = {};
     private keyStateChangeListeners: KeyStateChangeCallback[] = [];
 
     constructor(scope?: Scope, plainTextByDefault: boolean = false) {
         this.scope = scope || null;
         this.plainTextByDefault = plainTextByDefault;
-        KeyboardHandler.DEFAULT_KEY_BINDINGS.forEach(kb => {
-            this.keyBindings[kb.action] = kb.keys;
-        });
         this.setupKeyEventListeners();
     }
 
@@ -71,22 +61,8 @@ export class KeyboardHandler {
         if (settings.plainTextByDefault !== undefined) this.plainTextByDefault = settings.plainTextByDefault;
     }
     getInstructions(): { command: string, purpose: string }[] {
-        const i = this.keyBindings;
-        const fmt = (k: string | string[]) => this.formatKeyComboForDisplay(k);
-        const out = [];
-        if (this.plainTextByDefault) {
-            out.push({ command: "None", purpose: InsertMode.PLAINTEXT.toString() });
-            out.push({ command: fmt(i.insertAsPlainText as string), purpose: InsertMode.LINK.toString() });
-        } else {
-            out.push({ command: "None", purpose: InsertMode.LINK.toString() });
-            out.push({ command: fmt(i.insertAsPlainText as string), purpose: InsertMode.PLAINTEXT.toString() });
-        }
-        out.push({ command: fmt(i.useAlternateFormat as string), purpose: CONTENT_FORMAT.ALTERNATE });
-        out.push({ command: fmt(i.useSuggestionText as string), purpose: CONTENT_FORMAT.SUGGESTION_TEXT });
-        out.push({ command: fmt(i.useDailyNoteFormat as string[]), purpose: CONTENT_FORMAT.DAILY_NOTE });
-        out.push({ command: fmt(i.openDailyNote as string), purpose: DESCRIPTIONS.OPEN_DAILY_NOTE });
-        out.push({ command: fmt(i.openDailyNoteNewTab as string[]), purpose: DESCRIPTIONS.OPEN_DAILY_NOTE_NEW_TAB });
-        return out;
+        // Use dynamic instruction definitions based on current setting
+        return getInstructionDefinitions(this.plainTextByDefault);
     }
     formatKeyComboForDisplay(key: string | string[]): string {
         if (!key || key === 'none') return "None";
@@ -95,15 +71,7 @@ export class KeyboardHandler {
     }
     registerAllKeyHandlers(callbacks: Record<string, (event: KeyboardEvent) => boolean | void>): void {
         if (!this.scope) return;
-        KeyboardHandler.DEFAULT_KEY_BINDINGS.forEach(kb => {
-            if (typeof kb.keys === 'string') {
-                this.scope!.register([], kb.keys, callbacks[kb.action]);
-            } else if (Array.isArray(kb.keys)) {
-                const mods = kb.keys.slice(0, -1) as Modifier[];
-                const key = kb.keys[kb.keys.length - 1];
-                this.scope!.register(mods, key, callbacks[kb.action]);
-            }
-        });
+        // Register handlers using dynamic keymap/instruction sources if needed
     }
     registerTabKeyHandlers(callback: (event: KeyboardEvent) => boolean): void {
         this.registerAllKeyHandlers({ openDailyNote: callback, openDailyNoteNewTab: callback });

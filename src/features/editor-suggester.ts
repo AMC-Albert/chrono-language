@@ -5,6 +5,7 @@ import { SuggestionProvider } from './suggestion-provider';
 import { InsertMode, ContentFormat } from '../definitions/types';
 import { KeyboardHandler } from '../utils/keyboard-handler';
 import { KEYS, MODIFIER_COMBOS } from '../definitions/constants';
+import { getInstructionDefinitions } from '../definitions/constants';
 
 /**
  * A suggester for the editor that provides date parsing suggestions
@@ -62,7 +63,8 @@ export class EditorSuggester extends EditorSuggest<string> {
      * Updates the instructions display based on keyboard handler settings
      */
     updateInstructions() {
-        this.setInstructions(this.keyboardHandler.getInstructions());
+        // Use dynamic instruction definitions
+        this.setInstructions(getInstructionDefinitions(this.plugin.settings.plainTextByDefault));
         this.suggester?.updateSettings({
             plainTextByDefault: this.plugin.settings.plainTextByDefault,
             holidayLocale: this.plugin.settings.holidayLocale,
