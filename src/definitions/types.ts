@@ -204,17 +204,3 @@ function generateKeyMap(): Record<string, KeyMapEntry> {
 
 // Define the KEYMAP using dynamic generation
 export const KEYMAP = generateKeyMap();
-
-// Helper function to get all key combos
-export function getAllKeyCombos(): KeyCombo[] {
-    return Object.values(KEYMAP).map((entry: KeyMapEntry) => entry.combo);
-}
-
-// Helper function to find combo by modifier state
-export function findKeyComboByModifiers(shift: boolean, ctrl: boolean, alt: boolean, invertCtrl: boolean = false): KeyCombo {
-    // Invert ctrl if needed (for plainTextByDefault)
-    const effectiveCtrl = invertCtrl ? !ctrl : ctrl;
-    const modString = createModifierString(shift, effectiveCtrl, alt);
-    const entry = KEYMAP[modString];
-    return entry ? { ...entry.combo } : KEYMAP[MODIFIER_KEY.NONE].combo;
-}
