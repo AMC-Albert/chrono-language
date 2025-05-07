@@ -2,13 +2,10 @@ import { Plugin } from 'obsidian';
 import { ChronoLanguageSettings, ChronoLanguageSettingTab, DEFAULT_SETTINGS } from './settings';
 import { EditorSuggester } from './features/editor-suggester';
 import { OpenDailyNoteModal } from './features/open-daily-note';
-import { MODIFIER_BEHAVIOR } from './definitions/constants';
-import { SuggestionProvider } from './features/suggestion-provider';
 
 export default class ChronoLanguage extends Plugin {
 	settings: ChronoLanguageSettings;
 	editorSuggester: EditorSuggester;
-	suggestionProvider: SuggestionProvider;
 
 	async onload() {
 		await this.loadSettings();
@@ -26,7 +23,10 @@ export default class ChronoLanguage extends Plugin {
 		if (this.editorSuggester) this.editorSuggester.unload();
 		this.editorSuggester = new EditorSuggester(this);
 		this.registerEditorSuggest(this.editorSuggester);
-		this.editorSuggester.updateSettings({ plainTextByDefault: this.settings.plainTextByDefault });
+		this.editorSuggester.updateSettings({ 
+			plainTextByDefault: this.settings.plainTextByDefault,
+			holidayLocale: this.settings.holidayLocale 
+		});
 	}
 
 	async loadSettings() {
@@ -35,11 +35,13 @@ export default class ChronoLanguage extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
-		this.editorSuggester?.updateInstructions();
+		this.editorSuggester?.updateInstructions(); 
 	}
 
 	updateKeyBindings(): void {
-		this.editorSuggester?.updateSettings({ plainTextByDefault: this.settings.plainTextByDefault });
-		this.suggestionProvider?.updateSettings({ plainTextByDefault: this.settings.plainTextByDefault });
+		this.editorSuggester?.updateSettings({ 
+			plainTextByDefault: this.settings.plainTextByDefault,
+			holidayLocale: this.settings.holidayLocale
+		});
 	}
 }

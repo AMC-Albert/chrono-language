@@ -1,9 +1,8 @@
-import { App, moment, Notice } from 'obsidian';
+import { App, moment, Notice, TFile } from 'obsidian';
 import ChronoLanguage from '../main';
 import { getDailyNotePreview, getDatePreview, getOrCreateDailyNote, getAllDailyNotesSafe } from '../utils/helpers';
 import { getDailyNote, getDailyNoteSettings } from 'obsidian-daily-notes-interface';
 import { EnhancedDateParser } from '../utils/parser';
-import { TFile } from 'obsidian';
 import { InsertMode, ContentFormat } from '../definitions/types';
 import { KeyboardHandler } from '../utils/keyboard-handler';
 import { FileSystem } from 'obsidian-dev-utils/obsidian';
@@ -252,7 +251,7 @@ export class SuggestionProvider {
         let dailyNoteClass = '';
         
         if (momentDate.isValid() && allNotes) {
-            dailyNote = getDailyNote(momentDate, allNotes);
+            dailyNote = getDailyNote(momentDate, allNotes) as TFile;
             dailyNotePreview = getDailyNotePreview(item) ?? item;
             dailyNoteClass = dailyNote ? '' : 'chrono-is-unresolved';
         } else if (!allNotes) {

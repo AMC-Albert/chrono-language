@@ -79,6 +79,10 @@ export class EditorSuggester extends EditorSuggest<string> {
      */
     updateInstructions() {
         this.setInstructions(this.keyboardHandler.getInstructions());
+        this.suggester?.updateSettings({
+            plainTextByDefault: this.plugin.settings.plainTextByDefault,
+            holidayLocale: this.plugin.settings.holidayLocale,
+        });
     }
     
     unload() {
@@ -206,9 +210,12 @@ export class EditorSuggester extends EditorSuggest<string> {
     /**
      * Update settings and trigger UI refresh
      */
-    updateSettings(settings: { keyBindings?: Record<string, string>; plainTextByDefault?: boolean }): void {
+    updateSettings(settings: { keyBindings?: Record<string, string>; plainTextByDefault?: boolean; holidayLocale?: string }): void {
         this.keyboardHandler.update(settings);
         this.updateInstructions();
-        this.suggester?.updateSettings(settings);
+        this.suggester?.updateSettings({
+            plainTextByDefault: settings.plainTextByDefault ?? this.plugin.settings.plainTextByDefault,
+            holidayLocale: settings.holidayLocale ?? this.plugin.settings.holidayLocale,
+        });
     }
 }

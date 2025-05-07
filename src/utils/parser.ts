@@ -109,9 +109,9 @@ export class EnhancedDateParser {
      * @param locale Locale code (e.g., 'US', 'GB', 'DE')
      */
     static setLocale(locale: string): void {
-        if (this.currentLocale !== locale) {
-            this.initHolidays(locale);
-        }
+        // Always re-init holidays to ensure cache is refreshed,
+        // even if the locale string hasn't changed.
+        this.initHolidays(locale);
     }
 
     /**

@@ -13,6 +13,7 @@ export interface ChronoLanguageSettings {
 	plainTextByDefault: boolean;
 	initialEditorSuggestions: string[];
 	initialOpenDailyNoteSuggestions: string[];
+	holidayLocale: string;
 }
 
 export const DEFAULT_SETTINGS: ChronoLanguageSettings = {
@@ -25,6 +26,7 @@ export const DEFAULT_SETTINGS: ChronoLanguageSettings = {
 	plainTextByDefault: false,
 	initialEditorSuggestions: ['Today', 'Tomorrow', 'Yesterday'],
 	initialOpenDailyNoteSuggestions: ['Today', 'Tomorrow', 'Yesterday'],
+	holidayLocale: '',
 };
 
 export class ChronoLanguageSettingTab extends PluginSettingTab {
@@ -188,5 +190,29 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 					: DEFAULT_SETTINGS.initialOpenDailyNoteSuggestions;
 				await this.plugin.saveSettings();
 			});
+
+		new Setting(containerEl)
+			.setName("Holiday locale (IANA country code)")
+			.setDesc((() => {
+				const fragment = document.createDocumentFragment();
+				fragment.createSpan({
+					text: "Set your country code for holidays (IANA format, e.g. 'US', 'GB', 'DE'). "
+				});
+				fragment.createEl("a", {
+					text: "Check your locale code here",
+					href: "https://github.com/commenthol/date-holidays?tab=readme-ov-file#supported-countries-states-regions",
+					attr: { target: "_blank", rel: "noopener" }
+				});
+				return fragment;
+			})())
+			.addText((text) =>
+				text
+					.setPlaceholder("US")
+					.setValue(this.plugin.settings.holidayLocale)
+					.onChange(async (value) => {
+						this.plugin.settings.holidayLocale = value.trim();
+						await this.plugin.saveSettings();
+					})
+			);
 	}
 }
