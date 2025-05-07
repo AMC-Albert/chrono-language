@@ -35,6 +35,7 @@
 }
 
 .multiple-text-component textarea {
+  /* Does this have fine compatibility? */
   field-sizing: content;
   resize: none;
   min-width: 164.8px; 
