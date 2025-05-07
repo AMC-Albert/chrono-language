@@ -185,9 +185,18 @@ export class SuggestionProvider {
         this.isSuggesterOpen = true;
         this.keyboardHandler.resetModifierKeys();
         
-        const container = el.createEl('div', { cls: 'chrono-suggestion-container' });
-        container.setAttribute('data-suggestion', item);
-        container.createEl('span', { text: item, cls: 'chrono-suggestion-text' });
+        // Create container with data attribute
+        const container = el.createEl('div', { 
+            cls: 'chrono-suggestion-container',
+            attr: { 'data-suggestion': item }
+        });
+        
+        // Add suggestion text
+        container.createEl('span', { 
+            text: item, 
+            cls: 'chrono-suggestion-text' 
+        });
+        
         this.currentElements.set(item, container);
         if (context) this.contextProvider = context;
         this.updatePreviewContent(item, container);
@@ -249,39 +258,53 @@ export class SuggestionProvider {
         let dailyNote: TFile | null = null;
         let dailyNotePreview = item;
         let dailyNoteClass = '';
+        let suggestionPreviewClass = ''; 
         
         if (momentDate.isValid() && allNotes) {
             dailyNote = getDailyNote(momentDate, allNotes) as TFile;
             dailyNotePreview = getDailyNotePreview(item) ?? item;
-            dailyNoteClass = dailyNote ? '' : 'chrono-is-unresolved';
+            dailyNoteClass = dailyNote ? '' : 'chrono-is-unresolved-link';
+            suggestionPreviewClass = dailyNote ? '' : 'chrono-is-unresolved-text';
         } else if (!allNotes) {
             dailyNotePreview = 'Daily notes folder missing';
-            dailyNoteClass = 'chrono-is-unresolved';
+            dailyNoteClass = 'chrono-is-unresolved-link';
+            suggestionPreviewClass = 'chrono-is-unresolved-text';
         }
         
-        // Determine preview text
-        let readableDatePreview: string = this.getReadableDatePreview(item, dailyNotePreview, contentFormat);
-
+        // Create preview container
         const previewContainer = container.createEl('span', { cls: 'chrono-suggestion-preview' });
-
+        
         if (insertMode === InsertMode.PLAINTEXT) {
-            previewContainer.appendText(`↳ ${readableDatePreview}`);
+            previewContainer.createEl('span', { text: '↳ ' });
+            this.appendReadableDatePreview(previewContainer, item, dailyNotePreview, contentFormat, suggestionPreviewClass);
         } else if (dailyNotePreview) {
-            this.createLinkPreview(previewContainer, dailyNotePreview, dailyNoteClass, momentDate, readableDatePreview);
+            this.createLinkPreview(previewContainer, dailyNotePreview, dailyNoteClass, momentDate, item, contentFormat, suggestionPreviewClass);
         }
 
         if (!previewContainer.hasChildNodes()) previewContainer.remove();
     }
     
-    private getReadableDatePreview(item: string, dailyNotePreview: string, contentFormat: ContentFormat): string {
+    private appendReadableDatePreview(
+        container: HTMLElement,
+        item: string, 
+        dailyNotePreview: string, 
+        contentFormat: ContentFormat, 
+        suggestionPreviewClass: string
+    ): HTMLElement {
+        let text: string;
         if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
-            return item;
+            text = item;
         } else if (contentFormat === ContentFormat.DAILY_NOTE) {
-            return dailyNotePreview;
+            text = dailyNotePreview;
         } else { // Primary or Alternate format
             const useAlternate = contentFormat === ContentFormat.ALTERNATE;
-            return getDatePreview(item, this.plugin.settings, useAlternate, false);
+            text = getDatePreview(item, this.plugin.settings, useAlternate, false);
         }
+        
+        return container.createEl('span', { 
+            text: text,
+            cls: suggestionPreviewClass 
+        });
     }
     
     private createLinkPreview(
@@ -289,9 +312,14 @@ export class SuggestionProvider {
         dailyNotePreview: string,
         dailyNoteClass: string,
         momentDate: moment.Moment,
-        readableDatePreview: string
+        item: string,
+        contentFormat: ContentFormat,
+        suggestionPreviewClass: string
     ): void {
-        container.appendText('↳ ');
+        // Add arrow prefix
+        container.createEl('span', { text: '↳ ' });
+        
+        // Create link element
         const linkEl = container.createEl('a', {
             text: dailyNotePreview,
             cls: dailyNoteClass, 
@@ -302,6 +330,7 @@ export class SuggestionProvider {
             }
         });
         
+        // Add click handler to link
         linkEl.addEventListener('click', async (event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -310,8 +339,23 @@ export class SuggestionProvider {
             if (file) await this.app.workspace.getLeaf(event.ctrlKey).openFile(file);
         });
         
-        if (dailyNotePreview !== readableDatePreview) {
-            container.appendText(` ⭢ ${readableDatePreview}`);
+        // Add the readable date preview if different from dailyNotePreview
+        const readableDateText = this.getReadableDateText(item, dailyNotePreview, contentFormat);
+        if (dailyNotePreview !== readableDateText) {
+            container.createEl('span', { text: ' ⭢ ', cls: suggestionPreviewClass });
+            container.createEl('span', { text: readableDateText, cls: suggestionPreviewClass 
+            });
+        }
+    }
+
+    private getReadableDateText(item: string, dailyNotePreview: string, contentFormat: ContentFormat): string {
+        if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
+            return item;
+        } else if (contentFormat === ContentFormat.DAILY_NOTE) {
+            return dailyNotePreview;
+        } else { // Primary or Alternate format
+            const useAlternate = contentFormat === ContentFormat.ALTERNATE;
+            return getDatePreview(item, this.plugin.settings, useAlternate, false);
         }
     }
 

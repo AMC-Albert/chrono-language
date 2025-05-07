@@ -7,13 +7,17 @@
   
 }
 
-.chrono-is-unresolved {
+.chrono-is-unresolved-link {
   text-decoration-line: var(--link-decoration);
   text-decoration-style: var(--link-unresolved-decoration-style);
   text-decoration-color: var(--link-unresolved-decoration-color);
   color: var(--link-unresolved-color);
   opacity: var(--link-unresolved-opacity);
   filter: var(--link-unresolved-filter);
+}
+
+.chrono-is-unresolved-text {
+  opacity: var(--link-unresolved-opacity);
 }
 
 .chrono-suggestion-preview {
