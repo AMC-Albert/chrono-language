@@ -116,8 +116,7 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 				})
 		);
 
-		new Setting(containerEl).setName('Link Format').setHeading().setDesc(
-			"Adjust how inserted links are formatted. Chrono Language respects your native Obsidian settings for using wikilinks/markdown links and relative paths.");
+		new Setting(containerEl).setName('Link Format').setHeading();
 
 		const includeFoldersSetting = new Setting(containerEl)
 			.setName("Include folders in links")

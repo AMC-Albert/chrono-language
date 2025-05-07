@@ -24,6 +24,9 @@ export class DateFormatter {
      * Determines if a suggestion contains specific time components
      */
     public static isTimeRelevantSuggestion(item: string): boolean {
+        // Special case for "now"
+        if (item.toLowerCase() === "now") return true;
+        
         // Skip holidays
         const isHoliday = EnhancedDateParser.getHolidayNames().some(
             h => h.toLowerCase() === item.trim().toLowerCase()
