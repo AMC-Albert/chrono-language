@@ -203,28 +203,6 @@ export class EnhancedDateParser {
     }
 
     /**
-     * Parse all possible dates from the text
-     */
-    static parse(text: string): chrono.ParsedResult[] {
-        const { holidayDate, modifiedText } = this.handleParsing(text);
-        
-        if (holidayDate) {
-            // Create a chrono-like result for the holiday
-            return [{
-                start: {
-                    date: () => holidayDate
-                },
-                end: null,
-                index: 0,
-                text: text,
-                ref: new Date()
-            } as chrono.ParsedResult];
-        }
-        
-        return chrono.parse(modifiedText);
-    }
-
-    /**
      * Get a list of all available holidays for the current locale and year
      */
     static getHolidayNames(): string[] {

@@ -31,38 +31,12 @@ export class EditorSuggester extends EditorSuggest<string> {
     }
     
     private registerKeyboardHandlers() {
-        // Register Enter key for selection (with various modifier combinations)
-        this.registerEnterKeyHandlers();
-        
         // Register Tab key handlers for daily note actions
         this.keyboardHandler.registerTabKeyHandlers(this.handleSelectionKey);
     }
     
-    private registerEnterKeyHandlers() {
-        // Register Enter key with all possible modifier combinations
-        const modifierCombos: Modifier[][] = [
-            [],                     // No modifiers
-            ['Ctrl'],               // Ctrl
-            ['Shift'],              // Shift
-            ['Alt'],                // Alt
-            ['Ctrl', 'Shift'],      // Ctrl+Shift
-            ['Ctrl', 'Alt'],        // Ctrl+Alt
-            ['Shift', 'Alt'],       // Shift+Alt
-            ['Ctrl', 'Shift', 'Alt'] // Ctrl+Shift+Alt
-        ];
-        
-        modifierCombos.forEach(mods => {
-            this.scope.register(mods, KEYS.ENTER, this.handleSelectionKey);
-        });
-    }
-    
     private handleSelectionKey = (event: KeyboardEvent): boolean => {
         if (!this.isOpen || !this.suggester || !this.context) return false;
-
-        // Always prevent default behavior for selection keys
-        event.preventDefault();
-        event.stopImmediatePropagation();
-
         if (event.key === KEYS.TAB) {
             // Handle Tab key action (open daily note)
             const openInNewTab = event.shiftKey;

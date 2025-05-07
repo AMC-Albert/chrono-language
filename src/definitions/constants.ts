@@ -68,6 +68,15 @@ export const KEYS = {
 } as const;
 
 /**
+ * Navigation keys that should be prevented from propagating to Obsidian
+ * when modifier keys are pressed
+ */
+export const NAVIGATION_KEYS = [
+    'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+    'PageUp', 'PageDown', 'Home', 'End'
+] as const;
+
+/**
  * Constants for key event types
  */
 export const KEY_EVENTS = {
