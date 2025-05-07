@@ -1,12 +1,15 @@
 import { App, moment, Notice, TFile } from 'obsidian';
 import ChronoLanguage from '../main';
-import { getDailyNotePreview, getDatePreview, getOrCreateDailyNote, getAllDailyNotesSafe } from '../utils/helpers';
+import { getDailyNotePreview, getDatePreview, getOrCreateDailyNote, getAllDailyNotesSafe, createDailyNoteLink } from '../utils/helpers';
 import { getDailyNote, getDailyNoteSettings } from 'obsidian-daily-notes-interface';
 import { EnhancedDateParser } from '../utils/parser';
 import { InsertMode, ContentFormat } from '../definitions/types';
 import { KeyboardHandler } from '../utils/keyboard-handler';
-import { FileSystem } from 'obsidian-dev-utils/obsidian';
+import { FileSystem, Link } from 'obsidian-dev-utils/obsidian';
 import { CLASSES } from '../definitions/constants';
+import { DateFormatter } from '../utils/date-formatter';
+import { ChronoLanguageSettings, DEFAULT_SETTINGS } from '../settings';
+import { DEFAULT_DAILY_NOTE_FORMAT } from 'obsidian-daily-notes-interface';
 
 /**
  * Shared suggester for date suggestions. Handles rendering and updating of suggestions.
@@ -237,6 +240,11 @@ export class SuggestionProvider {
         return finalSuggestions.slice(0, 15); // Limit total suggestions
     }
 
+    // Check if a suggestion is time-relevant (has specific time components)
+    private isTimeRelevantSuggestion(item: string): boolean {
+        return DateFormatter.isTimeRelevantSuggestion(item);
+    }
+
     renderSuggestionContent(item: string, el: HTMLElement, context?: any) {
         this.isSuggesterOpen = true;
         this.keyboardHandler.resetModifierKeys();
@@ -247,20 +255,9 @@ export class SuggestionProvider {
             attr: { 'data-suggestion': item }
         });
 
-        // Check if this suggestion is time-relevant (but not a holiday)
-        const isHoliday = EnhancedDateParser.getHolidayNames().some(
-            h => h.toLowerCase() === item.trim().toLowerCase()
-        );
-        const parsedDate = EnhancedDateParser.parseDate(item);
-        if (parsedDate && !isHoliday) {
-            const now = new Date();
-            if (
-                parsedDate.getHours() !== now.getHours() ||
-                parsedDate.getMinutes() !== now.getMinutes() ||
-                parsedDate.getSeconds() !== now.getSeconds()
-            ) {
-                container.addClass(CLASSES.timeRelevantSuggestion);
-            }
+        // Mark time-relevant suggestions
+        if (this.isTimeRelevantSuggestion(item)) {
+            container.addClass(CLASSES.timeRelevantSuggestion);
         }
         
         // Add suggestion text
@@ -382,15 +379,7 @@ export class SuggestionProvider {
             });
         }
 
-        let text: string;
-        if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
-            text = item;
-        } else if (contentFormat === ContentFormat.DAILY_NOTE) {
-            text = dailyNotePreview;
-        } else { // Primary or Alternate format
-            const useAlternate = contentFormat === ContentFormat.ALTERNATE;
-            text = getDatePreview(item, this.plugin.settings, useAlternate, false);
-        }
+        let text = DateFormatter.getFormattedDateText(item, dailyNotePreview, contentFormat, this.plugin.settings);
         
         return container.createEl('span', { 
             text: text,
@@ -436,7 +425,7 @@ export class SuggestionProvider {
         });
         
         // Add the readable date preview if different from dailyNotePreview
-        const readableDateText = this.getReadableDateText(item, dailyNotePreview, contentFormat);
+        const readableDateText = DateFormatter.getFormattedDateText(item, dailyNotePreview, contentFormat, this.plugin.settings);
         if (dailyNotePreview !== readableDateText) {
             container.createEl('span', { text: ' ⭢ ' });
             
@@ -452,17 +441,6 @@ export class SuggestionProvider {
                 text: readableDateText,
                 cls: suggestionPreviewClass 
             });
-        }
-    }
-
-    private getReadableDateText(item: string, dailyNotePreview: string, contentFormat: ContentFormat): string {
-        if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
-            return item;
-        } else if (contentFormat === ContentFormat.DAILY_NOTE) {
-            return dailyNotePreview;
-        } else { // Primary or Alternate format
-            const useAlternate = contentFormat === ContentFormat.ALTERNATE;
-            return getDatePreview(item, this.plugin.settings, useAlternate, false);
         }
     }
 
@@ -507,5 +485,79 @@ export class SuggestionProvider {
     
     getKeyboardHandler(): KeyboardHandler {
         return this.keyboardHandler;
+    }
+
+    public getFinalInsertText(
+        itemText: string,
+        insertMode: InsertMode,
+        contentFormat: ContentFormat,
+        settings: ChronoLanguageSettings,
+        activeFile: TFile,
+        app: App
+    ): string {
+        const parsedDate = EnhancedDateParser.parseDate(itemText);
+        const isItemTimeRelevant = DateFormatter.isTimeRelevantSuggestion(itemText); // Determine time relevance once
+
+        if (!parsedDate) { // itemText is not a parsable date string
+            if (insertMode === InsertMode.PLAINTEXT) {
+                return itemText;
+            } else { // InsertMode.LINK
+                const alias = (contentFormat === ContentFormat.SUGGESTION_TEXT) ? itemText : undefined;
+                return Link.generateMarkdownLink({
+                    app,
+                    targetPathOrFile: itemText, // Treat itemText as the note name
+                    sourcePathOrFile: activeFile.path,
+                    alias: alias,
+                    isNonExistingFileAllowed: true,
+                    isEmbed: false
+                });
+            }
+        }
+
+        // itemText IS a parsable date string
+        const momentDate = moment(parsedDate);
+        const dailySettings = getDailyNoteSettings();
+
+        if (insertMode === InsertMode.PLAINTEXT) {
+            // If contentFormat is SUGGESTION_TEXT, return the original itemText directly for plain text mode.
+            if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
+                return itemText;
+            }
+
+            let baseFormat: string;
+            switch (contentFormat) {
+                case ContentFormat.PRIMARY:
+                    baseFormat = settings.primaryFormat || dailySettings.format || DEFAULT_DAILY_NOTE_FORMAT;
+                    break;
+                case ContentFormat.ALTERNATE:
+                    baseFormat = settings.alternateFormat || DEFAULT_SETTINGS.alternateFormat;
+                    break;
+                case ContentFormat.DAILY_NOTE:
+                    return momentDate.format(dailySettings.format || DEFAULT_DAILY_NOTE_FORMAT);
+            }
+
+            let finalFormattedDate = momentDate.format(baseFormat);
+            // Append time if relevant and not DAILY_NOTE format
+            if (settings.timeFormat && isItemTimeRelevant) { // Use pre-determined isItemTimeRelevant
+                const timeString = momentDate.format(settings.timeFormat);
+                finalFormattedDate += ` ${timeString}`;
+            }
+            return finalFormattedDate;
+
+        } else { // InsertMode.LINK for a parsedDate
+            const forceTextAsAlias = contentFormat === ContentFormat.SUGGESTION_TEXT;
+            const useAlternateFormatForAlias = contentFormat === ContentFormat.ALTERNATE;
+            const forceNoAlias = contentFormat === ContentFormat.DAILY_NOTE;
+
+            return createDailyNoteLink(
+                app,
+                settings,
+                activeFile,
+                itemText, 
+                forceTextAsAlias,
+                useAlternateFormatForAlias,
+                forceNoAlias
+            );
+        }
     }
 }

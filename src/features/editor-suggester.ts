@@ -1,11 +1,8 @@
 import { Editor, EditorPosition, EditorSuggest, EditorSuggestContext, Modifier } from 'obsidian';
 import ChronoLanguage from '../main';
-import { createDailyNoteLink, getDatePreview, getDailyNotePreview } from '../utils/helpers';
 import { SuggestionProvider } from './suggestion-provider';
-import { InsertMode, ContentFormat } from '../definitions/types';
 import { KeyboardHandler } from '../utils/keyboard-handler';
-import { KEYS, MODIFIER_COMBOS } from '../definitions/constants';
-import { getInstructionDefinitions } from '../definitions/constants';
+import { KEYS, MODIFIER_COMBOS, getInstructionDefinitions } from '../definitions/constants';
 
 /**
  * A suggester for the editor that provides date parsing suggestions
@@ -143,57 +140,22 @@ export class EditorSuggester extends EditorSuggest<string> {
     }
 
     selectSuggestion(item: string, event: KeyboardEvent | MouseEvent): void {
-        if (!this.context) return;
-        
-        const { editor, start, end } = this.context;
-        
-        // Get insert mode and format based on current key state
-        const { insertMode, contentFormat } = 
-            this.keyboardHandler.getEffectiveInsertModeAndFormat(event as KeyboardEvent);
-        
-        // Insert the appropriate text
-        editor.replaceRange(
-            this.generateInsertText(item, insertMode, contentFormat),
-            start, 
-            end
-        );
-    }
-    
-    // Generate text to insert based on mode and format
-    private generateInsertText(item: string, insertMode: InsertMode, contentFormat: ContentFormat): string {
-        if (insertMode === InsertMode.PLAINTEXT) {
-            return this.generatePlainText(item, contentFormat);
-        } else {
-            return this.generateLink(item, contentFormat);
-        }
-    }
-    
-    private generatePlainText(item: string, contentFormat: ContentFormat): string {
-        switch (contentFormat) {
-            case ContentFormat.SUGGESTION_TEXT:
-                return item;
-            case ContentFormat.DAILY_NOTE:
-                return getDailyNotePreview(item);
-            case ContentFormat.ALTERNATE:
-                return getDatePreview(item, this.plugin.settings, true);
-            default:
-                return getDatePreview(item, this.plugin.settings, false);
-        }
-    }
-    
-    private generateLink(item: string, contentFormat: ContentFormat): string {
-        const file = this.context?.file;
-        if (!file) return item;
-        
-        return createDailyNoteLink(
-            this.app,
-            this.plugin.settings,
-            file,
+        if (!this.context || !this.suggester) return;
+
+        const { editor, start, end, file } = this.context;
+        const { insertMode, contentFormat } = this.keyboardHandler.getEffectiveInsertModeAndFormat(event as KeyboardEvent);
+
+        // Use the new method in SuggestionProvider to get the final text
+        const finalText = this.suggester.getFinalInsertText(
             item,
-            contentFormat === ContentFormat.SUGGESTION_TEXT,
-            contentFormat === ContentFormat.ALTERNATE,
-            contentFormat === ContentFormat.DAILY_NOTE
+            insertMode,
+            contentFormat,
+            this.plugin.settings,
+            file, // Pass the active TFile
+            this.app // Pass the App instance
         );
+
+        editor.replaceRange(finalText, start, end);
     }
 
     /**

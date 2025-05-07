@@ -3,7 +3,8 @@ import { Link, ObsidianSettings, FileSystem } from 'obsidian-dev-utils/obsidian'
 import { getDailyNoteSettings, getDailyNote, getAllDailyNotes, createDailyNote, DEFAULT_DAILY_NOTE_FORMAT } from 'obsidian-daily-notes-interface';
 import { ChronoLanguageSettings } from '../settings';
 import { EnhancedDateParser } from './parser';
-import { ERRORS } from '../definitions/constants';
+import { ERRORS, COMMON_STRINGS } from '../definitions/constants';
+import { DateFormatter } from './date-formatter'; // Added import
 
 /**
  * Returns a human readable preview of the parsed date
@@ -68,8 +69,9 @@ export function getDailyNotePreview(dateText: string): string {
  * @param momentDate Moment.js date object
  * @param dailyNoteFormat The format used for daily notes
  * @param filePath The file path for the daily note
+ * @param originalInputText The original text input by the user (e.g., "tomorrow", "in 3 hours")
+ * @param isOriginalInputTimeRelevant Whether the originalInputText itself implies a specific time // New parameter
  * @param forceTextAsAlias If true, uses the original text as alias
- * @param originalText The original text to use as alias when forceTextAsAlias is true
  * @param useAlternateFormat If true, uses the alternate format for alias
  * @param forceNoAlias If true, forces no alias in the link
  * @returns The alias to use for the link, or undefined if no alias should be used
@@ -80,72 +82,60 @@ export function determineDailyNoteAlias(
     momentDate: moment.Moment,
     dailyNoteFormat: string,
     filePath: string,
+    originalInputText: string, 
+    isOriginalInputTimeRelevant: boolean, // New parameter
     forceTextAsAlias = false,
-    originalText?: string,
     useAlternateFormat = false,
     forceNoAlias = false
 ): string | undefined {
+    let currentAlias: string | undefined;
+
     // If forcing no alias, return undefined
     if (forceNoAlias) {
         return undefined;
     }
 
     // Case 1: Force original text as alias
-    if (forceTextAsAlias && originalText) {
-        return originalText;
+    if (forceTextAsAlias && originalInputText) {
+        currentAlias = originalInputText;
     }
         
     // Case 2: Use alternate format if specified and useAlternateFormat is true
-    if (useAlternateFormat && settings.alternateFormat) {
-        return momentDate.format(settings.alternateFormat);
+    else if (useAlternateFormat && settings.alternateFormat) {
+        currentAlias = momentDate.format(settings.alternateFormat);
     }
 
     // Case 3: Use readable format if specified and different from daily note format
-    if (settings.primaryFormat && dailyNoteFormat !== settings.primaryFormat) {
-        return momentDate.format(settings.primaryFormat);
+    else if (settings.primaryFormat && dailyNoteFormat !== settings.primaryFormat) {
+        currentAlias = momentDate.format(settings.primaryFormat);
     }
     
     // Case 4: Not including folders in links -> just use the date
-    if (!settings.includeFolderInLinks) {
-        return momentDate.format(dailyNoteFormat);
+    else if (!settings.includeFolderInLinks) {
+        currentAlias = momentDate.format(dailyNoteFormat);
     }
     
     // Case 5: Including folders but want to hide them -> use date as alias
-    if (settings.HideFolders) {
-        return momentDate.format(dailyNoteFormat);
+    else if (settings.HideFolders) {
+        currentAlias = momentDate.format(dailyNoteFormat);
     }
     
     // Case 6: Using markdown links and showing folders -> use full path as alias
-    if (!ObsidianSettings.shouldUseWikilinks(app) && settings.includeFolderInLinks) {
-        return filePath;
+    else if (!ObsidianSettings.shouldUseWikilinks(app) && settings.includeFolderInLinks) {
+        currentAlias = filePath;
     }
     
-    // Default case: No alias needed
-    return undefined;
-}
+    // Default case: No alias needed (currentAlias remains undefined)
 
-/**
- * Gets the path to a daily note for a specific date
- */
-export function getDailyNotePath(
-    app: App,
-    settings: ChronoLanguageSettings,
-    momentDate: moment.Moment
-): string {
-    const dailyNoteSettings = getDailyNoteSettings();
-
-    // Format the date according to daily note settings
-    const formattedDate = momentDate.format(dailyNoteSettings.format || DEFAULT_DAILY_NOTE_FORMAT);
+    // Append timestamp to the determined alias if relevant
+    if (currentAlias && settings.timeFormat) {
+        if (isOriginalInputTimeRelevant) { // Use the new parameter
+            const timeString = momentDate.format(settings.timeFormat);
+            currentAlias += ` ${timeString}`;
+        }
+    }
     
-    const usingRelativeLinks = ObsidianSettings.shouldUseRelativeLinks(app);
-    
-    // If using relative links, ignore includeFolderInLinks and use full path anyway
-    const shouldIncludeFullPath = settings.includeFolderInLinks || usingRelativeLinks;
-    
-    // Create the target path based on settings
-    return shouldIncludeFullPath
-        ? normalizePath(`${dailyNoteSettings.folder}/${formattedDate}`)
-        : formattedDate;
+    return currentAlias;
 }
 
 /**
@@ -181,6 +171,9 @@ export function createDailyNoteLink(
     // Get the path to the daily note
     const targetPath = getDailyNotePath(app, settings, momentDate);
     
+    // Determine if the original input text was time-relevant
+    const isInputTimeRelevant = DateFormatter.isTimeRelevantSuggestion(dateText);
+
     // Get the appropriate alias for the link
     const alias = determineDailyNoteAlias(
         app,
@@ -188,8 +181,9 @@ export function createDailyNoteLink(
         momentDate,
         dailyNoteFormat,
         targetPath,
+        dateText, 
+        isInputTimeRelevant, // Pass the determined time relevance
         forceTextAsAlias,
-        dateText,
         useAlternateFormat,
         forceNoAlias
     );
@@ -203,6 +197,30 @@ export function createDailyNoteLink(
         isNonExistingFileAllowed: true,
         isEmbed: false
     });
+}
+
+/**
+ * Gets the path to a daily note for a specific date
+ */
+export function getDailyNotePath(
+    app: App,
+    settings: ChronoLanguageSettings,
+    momentDate: moment.Moment
+): string {
+    const dailyNoteSettings = getDailyNoteSettings();
+
+    // Format the date according to daily note settings
+    const formattedDate = momentDate.format(dailyNoteSettings.format || DEFAULT_DAILY_NOTE_FORMAT);
+    
+    const usingRelativeLinks = ObsidianSettings.shouldUseRelativeLinks(app);
+    
+    // If using relative links, ignore includeFolderInLinks and use full path anyway
+    const shouldIncludeFullPath = settings.includeFolderInLinks || usingRelativeLinks;
+    
+    // Create the target path based on settings
+    return shouldIncludeFullPath
+        ? normalizePath(`${dailyNoteSettings.folder}/${formattedDate}`)
+        : formattedDate;
 }
 
 /**
