@@ -40,7 +40,7 @@
 }
 
 .chrono-error-text {
-  color: var(--text-error);
+  font-style: italic;
 }
 
 .multiple-text-component {
