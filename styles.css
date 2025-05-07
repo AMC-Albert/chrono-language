@@ -25,6 +25,10 @@
   font-size: 0.9em;
 }
 
+.chrono-error-text {
+  color: var(--text-error);
+}
+
 .multiple-text-component {
   /* Not sure if there is a non-hardcoded way to align with other single-line text components */
   min-width: 164.8px;

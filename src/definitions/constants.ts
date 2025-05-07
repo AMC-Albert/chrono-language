@@ -156,6 +156,18 @@ export const DESCRIPTIONS = {
 } as const;
 
 /**
+ * CSS class names
+ */
+export const CLASSES = {
+    suggestionContainer: 'chrono-suggestion-container',
+    suggestionText: 'chrono-suggestion-text',
+    suggestionPreview: 'chrono-suggestion-preview',
+    unresolvedLink: 'chrono-is-unresolved-link',
+    unresolvedText: 'chrono-is-unresolved-text',
+    errorText: 'chrono-error-text',
+};
+
+/**
  * Constants for error messages
  */
 export const ERRORS = {

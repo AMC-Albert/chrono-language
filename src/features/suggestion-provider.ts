@@ -6,6 +6,7 @@ import { EnhancedDateParser } from '../utils/parser';
 import { InsertMode, ContentFormat } from '../definitions/types';
 import { KeyboardHandler } from '../utils/keyboard-handler';
 import { FileSystem } from 'obsidian-dev-utils/obsidian';
+import { CLASSES } from '../definitions/constants';
 
 /**
  * Shared suggester for date suggestions. Handles rendering and updating of suggestions.
@@ -242,14 +243,14 @@ export class SuggestionProvider {
         
         // Create container with data attribute
         const container = el.createEl('div', { 
-            cls: 'chrono-suggestion-container',
+            cls: [CLASSES.suggestionContainer],
             attr: { 'data-suggestion': item }
         });
         
         // Add suggestion text
         container.createEl('span', { 
             text: item, 
-            cls: 'chrono-suggestion-text' 
+            cls: [CLASSES.suggestionText]
         });
         
         this.currentElements.set(item, container);
@@ -312,28 +313,40 @@ export class SuggestionProvider {
     ): void {
         let dailyNote: TFile | null = null;
         let dailyNotePreview = item;
-        let dailyNoteClass = '';
-        let suggestionPreviewClass = ''; 
         
         if (momentDate.isValid() && allNotes) {
             dailyNote = getDailyNote(momentDate, allNotes) as TFile;
             dailyNotePreview = getDailyNotePreview(item) ?? item;
-            dailyNoteClass = dailyNote ? '' : 'chrono-is-unresolved-link';
-            suggestionPreviewClass = dailyNote ? '' : 'chrono-is-unresolved-text';
         } else if (!allNotes) {
             dailyNotePreview = 'Daily notes folder missing';
-            dailyNoteClass = 'chrono-is-unresolved-link';
-            suggestionPreviewClass = 'chrono-is-unresolved-text';
         }
         
         // Create preview container
-        const previewContainer = container.createEl('span', { cls: 'chrono-suggestion-preview' });
+        const previewContainer = container.createEl('span', { cls: [CLASSES.suggestionPreview] });
         
         if (insertMode === InsertMode.PLAINTEXT) {
             previewContainer.createEl('span', { text: '↳ ' });
-            this.appendReadableDatePreview(previewContainer, item, dailyNotePreview, contentFormat, suggestionPreviewClass);
+            if (!momentDate.isValid()) {
+                previewContainer.createEl('span', { text: 'Unable to parse date', cls: [CLASSES.errorText] });
+            } else {
+                this.appendReadableDatePreview(
+                    previewContainer,
+                    item,
+                    dailyNotePreview,
+                    contentFormat,
+                    dailyNote && momentDate.isValid() && allNotes ? [] : [CLASSES.unresolvedText]
+                );
+            }
         } else if (dailyNotePreview) {
-            this.createLinkPreview(previewContainer, dailyNotePreview, dailyNoteClass, momentDate, item, contentFormat, suggestionPreviewClass);
+            this.createLinkPreview(
+                previewContainer,
+                dailyNotePreview,
+                dailyNote && momentDate.isValid() && allNotes ? [] : [CLASSES.unresolvedLink],
+                momentDate,
+                item,
+                contentFormat,
+                dailyNote && momentDate.isValid() && allNotes ? [] : [CLASSES.unresolvedText]
+            );
         }
 
         if (!previewContainer.hasChildNodes()) previewContainer.remove();
@@ -344,7 +357,7 @@ export class SuggestionProvider {
         item: string, 
         dailyNotePreview: string, 
         contentFormat: ContentFormat, 
-        suggestionPreviewClass: string
+        suggestionPreviewClass: string[]
     ): HTMLElement {
         let text: string;
         if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
@@ -365,15 +378,19 @@ export class SuggestionProvider {
     private createLinkPreview(
         container: HTMLElement,
         dailyNotePreview: string,
-        dailyNoteClass: string,
+        dailyNoteClass: string[],
         momentDate: moment.Moment,
         item: string,
         contentFormat: ContentFormat,
-        suggestionPreviewClass: string
+        suggestionPreviewClass: string[]
     ): void {
         // Add arrow prefix
         container.createEl('span', { text: '↳ ' });
         
+        if (!momentDate.isValid()) {
+            container.createEl('span', { text: 'Unable to parse date', cls: [CLASSES.errorText] });
+            return;
+        }
         // Create link element
         const linkEl = container.createEl('a', {
             text: dailyNotePreview,
