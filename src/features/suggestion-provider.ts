@@ -537,10 +537,16 @@ export class SuggestionProvider {
             }
 
             let finalFormattedDate = momentDate.format(baseFormat);
-            // Append time if relevant and not DAILY_NOTE format
-            if (settings.timeFormat && isItemTimeRelevant) { // Use pre-determined isItemTimeRelevant
+            const isToday = momentDate.isSame(moment(), 'day');
+
+            // Handle timeOnly setting or append time
+            if (settings.timeFormat && isItemTimeRelevant) {
                 const timeString = momentDate.format(settings.timeFormat);
-                finalFormattedDate += ` ${timeString}`;
+                if (settings.timeOnly && isToday) {
+                    finalFormattedDate = timeString; // Replace with time only
+                } else {
+                    finalFormattedDate += ` ${timeString}`; // Append time
+                }
             }
             return finalFormattedDate;
 

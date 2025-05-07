@@ -65,77 +65,65 @@ export function getDailyNotePreview(dateText: string): string {
 
 /**
  * Determines the appropriate alias for a daily note link based on settings
+ * @param app The Obsidian app instance
  * @param settings Plugin settings
- * @param momentDate Moment.js date object
- * @param dailyNoteFormat The format used for daily notes
- * @param filePath The file path for the daily note
- * @param originalInputText The original text input by the user (e.g., "tomorrow", "in 3 hours")
- * @param isOriginalInputTimeRelevant Whether the originalInputText itself implies a specific time // New parameter
+ * @param itemText The original suggestion text, e.g., "Next Friday at 3pm"
  * @param forceTextAsAlias If true, uses the original text as alias
- * @param useAlternateFormat If true, uses the alternate format for alias
+ * @param useAlternateFormatForAlias If true, uses the alternate format for alias
  * @param forceNoAlias If true, forces no alias in the link
+ * @param momentDate The parsed date object
  * @returns The alias to use for the link, or undefined if no alias should be used
  */
 export function determineDailyNoteAlias(
     app: App,
-    settings: ChronoLanguageSettings, 
-    momentDate: moment.Moment,
-    dailyNoteFormat: string,
-    filePath: string,
-    originalInputText: string, 
-    isOriginalInputTimeRelevant: boolean, // New parameter
-    forceTextAsAlias = false,
-    useAlternateFormat = false,
-    forceNoAlias = false
+    settings: ChronoLanguageSettings,
+    itemText: string, // The original suggestion text, e.g., "Next Friday at 3pm"
+    forceTextAsAlias: boolean,
+    useAlternateFormatForAlias: boolean,
+    forceNoAlias: boolean,
+    momentDate: moment.Moment // The parsed date object
 ): string | undefined {
-    let currentAlias: string | undefined;
+    if (forceNoAlias) return undefined;
+    if (forceTextAsAlias) return itemText;
 
-    // If forcing no alias, return undefined
-    if (forceNoAlias) {
-        return undefined;
+    const dailySettings = getDailyNoteSettings();
+    const isOriginalInputTimeRelevant = DateFormatter.isTimeRelevantSuggestion(itemText);
+    const isToday = momentDate.isSame(moment(), 'day');
+
+    let alias: string | undefined = undefined;
+
+    // Determine the base alias format
+    if (useAlternateFormatForAlias && settings.alternateFormat) {
+        alias = momentDate.format(settings.alternateFormat);
+    } else if (settings.primaryFormat) {
+        alias = momentDate.format(settings.primaryFormat);
+    } else if (dailySettings.format) {
+        // Fallback to daily note format if primary/alternate are not set
+        alias = momentDate.format(dailySettings.format);
     }
 
-    // Case 1: Force original text as alias
-    if (forceTextAsAlias && originalInputText) {
-        currentAlias = originalInputText;
-    }
-        
-    // Case 2: Use alternate format if specified and useAlternateFormat is true
-    else if (useAlternateFormat && settings.alternateFormat) {
-        currentAlias = momentDate.format(settings.alternateFormat);
-    }
-
-    // Case 3: Use readable format if specified and different from daily note format
-    else if (settings.primaryFormat && dailyNoteFormat !== settings.primaryFormat) {
-        currentAlias = momentDate.format(settings.primaryFormat);
-    }
-    
-    // Case 4: Not including folders in links -> just use the date
-    else if (!settings.includeFolderInLinks) {
-        currentAlias = momentDate.format(dailyNoteFormat);
-    }
-    
-    // Case 5: Including folders but want to hide them -> use date as alias
-    else if (settings.HideFolders) {
-        currentAlias = momentDate.format(dailyNoteFormat);
-    }
-    
-    // Case 6: Using markdown links and showing folders -> use full path as alias
-    else if (!ObsidianSettings.shouldUseWikilinks(app) && settings.includeFolderInLinks) {
-        currentAlias = filePath;
-    }
-    
-    // Default case: No alias needed (currentAlias remains undefined)
-
-    // Append timestamp to the determined alias if relevant
-    if (currentAlias && settings.timeFormat) {
-        if (isOriginalInputTimeRelevant) { // Use the new parameter
-            const timeString = momentDate.format(settings.timeFormat);
-            currentAlias += ` ${timeString}`;
+    // Handle timeOnly setting or append time to the alias
+    if (settings.timeFormat && isOriginalInputTimeRelevant) {
+        const timeString = momentDate.format(settings.timeFormat);
+        if (settings.timeOnly && isToday) {
+            alias = timeString; // Replace with time only
+        } else if (alias) {
+            alias += ` ${timeString}`; // Append time if alias exists
+        } else {
+            // If no base alias, use time string directly (should ideally not happen if formats are set)
+            alias = timeString;
         }
     }
-    
-    return currentAlias;
+
+    // If after all logic, alias is still undefined (e.g. no formats defined and not time relevant), 
+    // and we are not forcing text as alias, then return undefined for no alias.
+    // However, if it's different from the daily note name, it might be useful as an alias.
+    const dailyNoteName = momentDate.format(dailySettings.format || DEFAULT_DAILY_NOTE_FORMAT);
+    if (alias === dailyNoteName) {
+        return undefined; // No alias if it's identical to the note name
+    }
+
+    return alias;
 }
 
 /**
@@ -178,14 +166,11 @@ export function createDailyNoteLink(
     const alias = determineDailyNoteAlias(
         app,
         settings,
-        momentDate,
-        dailyNoteFormat,
-        targetPath,
-        dateText, 
-        isInputTimeRelevant, // Pass the determined time relevance
+        dateText, // Pass the original suggestion text
         forceTextAsAlias,
         useAlternateFormat,
-        forceNoAlias
+        forceNoAlias,
+        momentDate // Pass the parsed date object
     );
     
     // Generate the link using Link utility
