@@ -279,17 +279,19 @@ export class SuggestionProvider {
             container.querySelector('.chrono-suggestion-preview')?.remove();
             
             const { insertMode, contentFormat } = this.keyboardHandler.getEffectiveInsertModeAndFormat();
-            const parsedDate = EnhancedDateParser.parseDate(item);
+            const parsedDate = EnhancedDateParser.parseDate(item); // Capture raw parsing result
             const momentDate = parsedDate ? moment(parsedDate) : moment(); // Fallback to now if parsing fails
             
             // Get all notes, create folder if needed (notification handled by helper)
             getAllDailyNotesSafe(this.app, true).then(allNotes => {
-                this.renderPreview(container, momentDate, item, insertMode, contentFormat, allNotes);
+                // Pass parsedDate as the new first argument to renderPreview
+                this.renderPreview(container, item, parsedDate, momentDate, insertMode, contentFormat, allNotes);
                 container.removeAttribute('data-updating');
             }).catch((error) => {
                 console.error("Error in getAllDailyNotesSafe chain:", error);
                 // Still render a basic preview or error state if appropriate
-                this.renderPreview(container, momentDate, item, insertMode, contentFormat, null); // Pass null for allNotes
+                // Pass parsedDate here as well
+                this.renderPreview(container, item, parsedDate, momentDate, insertMode, contentFormat, null); // Pass null for allNotes
                 container.removeAttribute('data-updating');
             });
         } catch (e) {
@@ -300,26 +302,26 @@ export class SuggestionProvider {
     
     private renderPreview(
         container: HTMLElement, 
-        momentDate: moment.Moment, // Ensure this is always a valid moment object
-        item: string,
+        item: string, // Original item text
+        rawParsedDate: Date | null, // Result of EnhancedDateParser.parseDate(item)
+        momentDate: moment.Moment, // moment(rawParsedDate) or moment() as fallback
         insertMode: InsertMode,
         contentFormat: ContentFormat,
         allNotes: Record<string, TFile> | null
     ): void {
         let dailyNote: TFile | null = null;
-        // Use momentDate directly for daily note operations
         const dailyNoteSettings = getDailyNoteSettings();
+        // dailyNoteFilenameCandidate relies on momentDate which is prepared based on rawParsedDate or fallback
         const dailyNoteFilenameCandidate = momentDate.isValid() ? momentDate.format(dailyNoteSettings.format || DEFAULT_DAILY_NOTE_FORMAT) : item;
         
-        if (momentDate.isValid() && allNotes) {
+        if (momentDate.isValid() && allNotes && rawParsedDate) { // Ensure rawParsedDate was valid for daily note lookup
             dailyNote = getDailyNote(momentDate, allNotes) as TFile;
         }
         
         const previewContainer = container.createEl('span', { cls: [CLASSES.suggestionPreview] });
         
-        if (!momentDate.isValid()) {
+        if (!rawParsedDate) { // Check if the original item string failed to parse
             previewContainer.createEl('span', { text: '↳ Unable to parse date', cls: [CLASSES.errorText] });
-            if (!previewContainer.hasChildNodes()) previewContainer.remove();
             return;
         }
 
@@ -378,7 +380,7 @@ export class SuggestionProvider {
         container: HTMLElement,
         linkText: string, // This is the daily note filename candidate
         dailyNoteClass: string[],
-        momentDate: moment.Moment,
+        momentDate: moment.Moment, // This should be valid if rawParsedDate was valid
         item: string, // Original item text for formatting readable part
         contentFormat: ContentFormat,
         suggestionPreviewClass: string[]
