@@ -8,6 +8,18 @@ import { getDatePreview, getDailyNotePreview } from './helpers';
  */
 export class DateFormatter {
     /**
+     * Determine if only time should be rendered based on settings and date
+     */
+    public static shouldRenderTimeOnly(item: string, settings: any, momentDate: moment.Moment): boolean {
+        return(
+            settings.timeOnly &&
+            settings.timeFormat && settings.timeFormat.trim() !== "" &&
+            this.isTimeRelevantSuggestion(item) &&
+            momentDate.isSame(moment(), 'day')
+        );
+    }
+
+    /**
      * Determines if a suggestion contains specific time components
      */
     public static isTimeRelevantSuggestion(item: string): boolean {

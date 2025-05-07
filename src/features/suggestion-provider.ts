@@ -379,6 +379,12 @@ export class SuggestionProvider {
             });
         }
 
+        // Only render time if setting demands it
+        const parsed = moment(EnhancedDateParser.parseDate(item));
+        if (DateFormatter.shouldRenderTimeOnly(item, this.plugin.settings, parsed)) {
+            return container.createEl('span', { text: parsed.format(this.plugin.settings.timeFormat), cls: suggestionPreviewClass });
+        }
+
         let text = DateFormatter.getFormattedDateText(item, dailyNotePreview, contentFormat, this.plugin.settings);
         
         return container.createEl('span', { 
@@ -404,9 +410,13 @@ export class SuggestionProvider {
             return;
         }
         
+        // Determine display text, respecting timeOnly setting
+        const timeFormat = this.plugin.settings.timeFormat;
+        const linkText = dailyNotePreview;
+        
         // Create link element
         const linkEl = container.createEl('a', {
-            text: dailyNotePreview,
+            text: linkText,
             cls: dailyNoteClass, 
             attr: { 
                 'data-href': '#', 
@@ -425,8 +435,11 @@ export class SuggestionProvider {
         });
         
         // Add the readable date preview if different from dailyNotePreview
-        const readableDateText = DateFormatter.getFormattedDateText(item, dailyNotePreview, contentFormat, this.plugin.settings);
-        if (dailyNotePreview !== readableDateText) {
+        const readableText = DateFormatter.shouldRenderTimeOnly(item, this.plugin.settings, momentDate)
+            ? momentDate.format(timeFormat)
+            : DateFormatter.getFormattedDateText(item, dailyNotePreview, contentFormat, this.plugin.settings);
+        
+        if (dailyNotePreview !== readableText) {
             container.createEl('span', { text: ' ⭢ ' });
             
             // For time-relevant suggestions, add the clock icon before the text
@@ -438,7 +451,7 @@ export class SuggestionProvider {
             }
             
             container.createEl('span', { 
-                text: readableDateText,
+                text: readableText,
                 cls: suggestionPreviewClass 
             });
         }
