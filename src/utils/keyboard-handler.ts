@@ -23,7 +23,6 @@ export class KeyboardHandler {
     private scope: Scope | null;
     private plainTextByDefault: boolean;
     private keyState: Record<string, boolean> = { Control: false, Shift: false, Alt: false };
-    private keyBindings: Record<string, string | string[]> = {};
     private keyStateChangeListeners: KeyStateChangeCallback[] = [];
 
     constructor(scope?: Scope, plainTextByDefault: boolean = false) {
@@ -56,22 +55,23 @@ export class KeyboardHandler {
             }
         }
     };
-    update(settings: Partial<{ keyBindings: Record<string, string | string[]>; plainTextByDefault: boolean }>): void {
-        if (settings.keyBindings) Object.assign(this.keyBindings, settings.keyBindings);
+    update(settings: Partial<{ plainTextByDefault: boolean }>): void {
         if (settings.plainTextByDefault !== undefined) this.plainTextByDefault = settings.plainTextByDefault;
     }
     getInstructions(): { command: string, purpose: string }[] {
         // Use dynamic instruction definitions based on current setting
         return getInstructionDefinitions(this.plainTextByDefault);
     }
-    formatKeyComboForDisplay(key: string | string[]): string {
-        if (!key || key === 'none') return "None";
-        if (Array.isArray(key)) return key.map(k => k.charAt(0).toUpperCase() + k.slice(1)).join('+');
-        return key.split('+').map(k => k.charAt(0).toUpperCase() + k.slice(1)).join('+');
-    }
     registerAllKeyHandlers(callbacks: Record<string, (event: KeyboardEvent) => boolean | void>): void {
         if (!this.scope) return;
-        // Register handlers using dynamic keymap/instruction sources if needed
+        // Register Tab and Shift+Tab explicitly for openDailyNote actions
+        this.scope.register([], KEYS.TAB, (event: KeyboardEvent) => {
+            if (callbacks.openDailyNote) return callbacks.openDailyNote(event);
+        });
+        this.scope.register([MODIFIER_KEY.SHIFT], KEYS.TAB, (event: KeyboardEvent) => {
+            if (callbacks.openDailyNoteNewTab) return callbacks.openDailyNoteNewTab(event);
+        });
+        // ...other dynamic key registrations if needed...
     }
     registerTabKeyHandlers(callback: (event: KeyboardEvent) => boolean): void {
         this.registerAllKeyHandlers({ openDailyNote: callback, openDailyNoteNewTab: callback });

@@ -31,21 +31,26 @@ export const MODIFIER_KEY = {
  * Now a function to support swappable Ctrl/no-modifier behavior
  */
 export function getInstructionDefinitions(plainTextByDefault: boolean) {
-    return [
-        {
+    // Main insert/format instructions
+    const instructions = [
+/*         {
             command: 'None',
-            purpose: plainTextByDefault ? 'Insert as plain text' : 'Insert as link'
-        },
+            purpose: plainTextByDefault ? 'Plain text' : 'Link'
+        }, */
         {
             command: 'Ctrl',
-            purpose: plainTextByDefault ? 'Insert as link (toggle)' : 'Insert as plain text (toggle)'
+            purpose: plainTextByDefault ? 'Link' : 'Plain text'
         },
-        { command: 'Alt', purpose: 'Use alternate date format' },
-        { command: 'Shift', purpose: 'Use suggestion text' },
-        { command: 'Shift+Alt', purpose: 'Use daily note format' },
-        { command: 'Tab', purpose: 'Open daily note' },
-        { command: 'Shift+Tab', purpose: 'Open daily note in new tab' }
+        { command: 'Alt', purpose: 'Alternate date format' },
+        { command: 'Shift', purpose: 'Suggestion text' },
+        { command: 'Shift+Alt', purpose: 'Daily note format' }
     ];
+    // Always include Tab actions
+    instructions.push(
+        { command: 'Tab', purpose: 'Open' },
+        { command: 'Shift+Tab', purpose: 'New tab' }
+    );
+    return instructions;
 }
 
 /**
