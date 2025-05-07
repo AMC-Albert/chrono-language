@@ -150,35 +150,90 @@ export class SuggestionProvider {
         }
     }
 
-    getDateSuggestions(context: { query: string }, initialSuggestions?: string[]): string[] {
+    getDateSuggestions(context: { query: string }, initialSuggestionsFromCaller?: string[]): string[] {
         this.isSuggesterOpen = true;
         this.folderCreationNotified = false;
-        
-        const query = context.query.toLowerCase();
-        const suggestions = initialSuggestions || this.plugin.settings.initialEditorSuggestions;
-        let combinedSuggestions = [...suggestions];
-        
-        // Add matching holiday suggestions if query is long enough
-        if (query.length >= 2) {
-            const matchingHolidays = this.holidaySuggestions
-                .filter(holiday => holiday.toLowerCase().includes(query))
-                .slice(0, 5); // Limit to top 5 matches
-            
-            combinedSuggestions = [...combinedSuggestions, ...matchingHolidays];
+
+        const rawQuery = context.query; 
+        const lowerQuery = rawQuery.toLowerCase().trim();
+
+        const baseInitialSuggestions = initialSuggestionsFromCaller || []; 
+
+        const uniqueSuggestionsList: string[] = [];
+        const processedLowerCaseSuggestions = new Set<string>();
+
+        const addSuggestionIfNotDuplicate = (suggestion: string) => {
+            const lowerSuggestion = suggestion.toLowerCase();
+            if (!processedLowerCaseSuggestions.has(lowerSuggestion)) {
+                processedLowerCaseSuggestions.add(lowerSuggestion);
+                uniqueSuggestionsList.push(suggestion);
+            }
+        };
+
+        // 1. Add initial suggestions if query is empty or they match
+        if (!lowerQuery) {
+            baseInitialSuggestions.forEach(addSuggestionIfNotDuplicate);
+        } else {
+            baseInitialSuggestions.forEach(s => {
+                if (s.toLowerCase().includes(lowerQuery)) {
+                    addSuggestionIfNotDuplicate(s);
+                }
+            });
         }
         
-        // Filter all suggestions based on query
-        const filtered = combinedSuggestions.filter(
-            c => c.toLowerCase().includes(query)
-        );
+        // 2. Add pattern-based suggestions from EnhancedDateParser if there's a query
+        if (rawQuery.trim()) {
+            const patternSuggestions = EnhancedDateParser.getPatternSuggestions(rawQuery.trim());
+            patternSuggestions.forEach(addSuggestionIfNotDuplicate);
+        }
 
-        // Create fallback suggestion if no matches
-        if (filtered.length === 0 && query) {
-            const capitalizedInput = query.charAt(0).toUpperCase() + query.slice(1);
+        // 3. Add matching holiday suggestions
+        if (lowerQuery.length >= 1) { 
+            const matchingHolidays = this.holidaySuggestions
+                .filter(holiday => holiday.toLowerCase().includes(lowerQuery))
+                .slice(0, 5); 
+            matchingHolidays.forEach(addSuggestionIfNotDuplicate);
+        }
+        
+        let finalSuggestions = [...uniqueSuggestionsList]; // Use the de-duplicated list
+
+        // If the query is not empty, filter all collected suggestions again to ensure relevance
+        // This secondary filter is on the already de-duplicated list.
+        if (lowerQuery) {
+            finalSuggestions = finalSuggestions.filter(s => s.toLowerCase().includes(lowerQuery));
+        }
+        
+        // 4. Fallback if no suggestions found and query is not empty
+        if (finalSuggestions.length === 0 && rawQuery.trim()) {
+            const capitalizedInput = rawQuery.trim().charAt(0).toUpperCase() + rawQuery.trim().slice(1);
             return [capitalizedInput];
         }
+        
+        // Sort suggestions:
+        finalSuggestions.sort((a, b) => {
+            const aLower = a.toLowerCase();
+            const bLower = b.toLowerCase();
 
-        return filtered;
+            const aIsExactMatch = aLower === lowerQuery;
+            const bIsExactMatch = bLower === lowerQuery;
+            if (aIsExactMatch && !bIsExactMatch) return -1;
+            if (!aIsExactMatch && bIsExactMatch) return 1;
+
+            const aStartsWithQuery = aLower.startsWith(lowerQuery);
+            const bStartsWithQuery = bLower.startsWith(lowerQuery);
+            if (aStartsWithQuery && !bStartsWithQuery) return -1;
+            if (!aStartsWithQuery && bStartsWithQuery) return 1;
+            
+            // If both start with query or neither, sort by length then alphabetically
+            if (aStartsWithQuery && bStartsWithQuery) {
+                if (a.length !== b.length) {
+                    return a.length - b.length;
+                }
+            }
+            return aLower.localeCompare(bLower);
+        });
+
+        return finalSuggestions.slice(0, 15); // Limit total suggestions
     }
 
     renderSuggestionContent(item: string, el: HTMLElement, context?: any) {

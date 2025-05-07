@@ -4,7 +4,7 @@ import { createDailyNoteLink, getDatePreview, getDailyNotePreview } from '../uti
 import { SuggestionProvider } from './suggestion-provider';
 import { InsertMode, ContentFormat } from '../definitions/types';
 import { KeyboardHandler } from '../utils/keyboard-handler';
-import { KEYS } from '../definitions/constants';
+import { KEYS, MODIFIER_COMBOS } from '../definitions/constants';
 
 /**
  * A suggester for the editor that provides date parsing suggestions
@@ -31,8 +31,18 @@ export class EditorSuggester extends EditorSuggest<string> {
     }
     
     private registerKeyboardHandlers() {
+        // Register Enter key for selection (with various modifier combinations)
+        this.registerEnterKeyHandlers();
+        
         // Register Tab key handlers for daily note actions
         this.keyboardHandler.registerTabKeyHandlers(this.handleSelectionKey);
+    }
+    
+    private registerEnterKeyHandlers() {
+        // Register Enter key with all possible modifier combinations
+        MODIFIER_COMBOS.forEach(mods => {
+            this.scope.register(mods, KEYS.ENTER, this.handleSelectionKey);
+        });
     }
     
     private handleSelectionKey = (event: KeyboardEvent): boolean => {
@@ -120,7 +130,10 @@ export class EditorSuggester extends EditorSuggest<string> {
     }
 
     getSuggestions(ctx: EditorSuggestContext): string[] {
-        return this.suggester ? this.suggester.getDateSuggestions({ query: ctx.query }) : [];
+        return this.suggester ? this.suggester.getDateSuggestions(
+            { query: ctx.query },
+            this.plugin.settings.initialEditorSuggestions // Pass specific initial suggestions
+        ) : [];
     }
 
     renderSuggestion(item: string, el: HTMLElement) {

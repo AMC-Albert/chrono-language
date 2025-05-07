@@ -20,10 +20,10 @@ export const CONTENT_FORMAT = {
  * Modifier keys
  */
 export const MODIFIER_KEY = {
-    NONE: 'none',
-    CTRL: 'ctrl',
-    SHIFT: 'shift',
-    ALT: 'alt'
+    NONE: 'none', // Used for string constants, not directly as an Obsidian modifier
+    CTRL: 'Ctrl',
+    SHIFT: 'Shift',
+    ALT: 'Alt'
 } as const;
 
 /**
@@ -46,15 +46,43 @@ export const MODIFIER_BEHAVIOR = {
  * These are derived from the basic modifier keys
  */
 export const MODIFIERS = {
-    NONE: 'none',
-    CTRL: MODIFIER_KEY.CTRL,
-    SHIFT: MODIFIER_KEY.SHIFT,
-    ALT: MODIFIER_KEY.ALT,
-    CTRL_SHIFT: `${MODIFIER_KEY.CTRL}+${MODIFIER_KEY.SHIFT}`,
-    CTRL_ALT: `${MODIFIER_KEY.CTRL}+${MODIFIER_KEY.ALT}`,
-    SHIFT_ALT: `${MODIFIER_KEY.SHIFT}+${MODIFIER_KEY.ALT}`,
-    CTRL_SHIFT_ALT: `${MODIFIER_KEY.CTRL}+${MODIFIER_KEY.SHIFT}+${MODIFIER_KEY.ALT}`
+    NONE: MODIFIER_KEY.NONE, // This will be 'none'
+    CTRL: MODIFIER_KEY.CTRL, // This will be 'Ctrl'
+    SHIFT: MODIFIER_KEY.SHIFT, // This will be 'Shift'
+    ALT: MODIFIER_KEY.ALT, // This will be 'Alt'
+    CTRL_SHIFT: `${MODIFIER_KEY.CTRL}+${MODIFIER_KEY.SHIFT}`, // 'Ctrl+Shift'
+    CTRL_ALT: `${MODIFIER_KEY.CTRL}+${MODIFIER_KEY.ALT}`, // 'Ctrl+Alt'
+    SHIFT_ALT: `${MODIFIER_KEY.SHIFT}+${MODIFIER_KEY.ALT}`, // 'Shift+Alt'
+    CTRL_SHIFT_ALT: `${MODIFIER_KEY.CTRL}+${MODIFIER_KEY.SHIFT}+${MODIFIER_KEY.ALT}` // 'Ctrl+Shift+Alt'
 } as const;
+
+/**
+ * Array of modifier key combinations for registering hotkeys.
+ * Uses Obsidian's Modifier type.
+ */
+export const MODIFIER_COMBOS: import('obsidian').Modifier[][] = [
+    [], // No modifiers
+    [MODIFIER_KEY.CTRL], // Ctrl
+    [MODIFIER_KEY.SHIFT], // Shift
+    [MODIFIER_KEY.ALT], // Alt
+    [ // Ctrl+Shift
+        MODIFIER_KEY.CTRL,
+        MODIFIER_KEY.SHIFT
+    ],
+    [ // Ctrl+Alt
+        MODIFIER_KEY.CTRL,
+        MODIFIER_KEY.ALT
+    ],
+    [ // Shift+Alt
+        MODIFIER_KEY.SHIFT,
+        MODIFIER_KEY.ALT
+    ],
+    [ // Ctrl+Shift+Alt
+        MODIFIER_KEY.CTRL,
+        MODIFIER_KEY.SHIFT,
+        MODIFIER_KEY.ALT
+    ]
+];
 
 /**
  * Constants for keyboard keys
@@ -119,4 +147,65 @@ export const HIDDEN_ACTIONS = [
     { insertMode: INSERT_MODE.PLAINTEXT, contentFormat: CONTENT_FORMAT.SUGGESTION_TEXT },
     { insertMode: INSERT_MODE.PLAINTEXT, contentFormat: CONTENT_FORMAT.ALTERNATE },
     { insertMode: INSERT_MODE.PLAINTEXT, contentFormat: CONTENT_FORMAT.DAILY_NOTE },
+] as const;
+
+/**
+ * Common string constants, typically in lowercase for matching.
+ */
+export const COMMON_STRINGS = {
+    TODAY: 'today',
+    TOMORROW: 'tomorrow',
+    YESTERDAY: 'yesterday',
+    NOW: 'now',
+    NEXT: 'next',
+    LAST: 'last',
+    AGO: 'ago',
+    IN: 'in',
+
+    // Time units (singular, lowercase)
+    YEAR: 'year',
+    MONTH: 'month',
+    WEEK: 'week',
+    DAY: 'day',
+    HOUR: 'hour',
+    MINUTE: 'minute',
+    SECOND: 'second',
+
+    // Days of the week (full name, lowercase)
+    MONDAY: 'monday',
+    TUESDAY: 'tuesday',
+    WEDNESDAY: 'wednesday',
+    THURSDAY: 'thursday',
+    FRIDAY: 'friday',
+    SATURDAY: 'saturday',
+    SUNDAY: 'sunday',
+
+    // Months of the year (full name, lowercase)
+    JANUARY: 'january',
+    FEBRUARY: 'february',
+    MARCH: 'march',
+    APRIL: 'april',
+    MAY: 'may',
+    JUNE: 'june',
+    JULY: 'july',
+    AUGUST: 'august',
+    SEPTEMBER: 'september',
+    OCTOBER: 'october',
+    NOVEMBER: 'november',
+    DECEMBER: 'december',
+
+    // Relative terms
+    THIS: 'this',
+} as const;
+
+/**
+ * Arrays of day and month names, capitalized.
+ */
+export const DAYS_OF_THE_WEEK = [
+    'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
+] as const;
+
+export const MONTHS_OF_THE_YEAR = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
 ] as const;

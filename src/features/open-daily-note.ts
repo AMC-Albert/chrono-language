@@ -23,7 +23,7 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
     const query = (this.modalEl.querySelector(".prompt-input") as HTMLInputElement)?.value || "";
     return this.suggester.getDateSuggestions(
       { query },
-      this.plugin.settings.initialOpenDailyNoteSuggestions
+      this.plugin.settings.initialOpenDailyNoteSuggestions // Pass specific initial suggestions
     );
   }
 
