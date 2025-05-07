@@ -1,6 +1,7 @@
 .chrono-suggestion-container {
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .chrono-suggestion-text {
@@ -23,6 +24,19 @@
 .chrono-suggestion-preview {
   color: var(--text-muted);
   font-size: 0.9em;
+  display: flex;
+  align-items: center;
+  gap: 0.25em;
+}
+
+.chrono-clock-icon {
+  margin-right: 2px;
+  display: inline;
+}
+
+.chrono-suggestion-preview > * {
+  display: inline;
+  white-space: nowrap;
 }
 
 .chrono-error-text {

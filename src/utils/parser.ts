@@ -1,6 +1,6 @@
 import * as chrono from 'chrono-node';
 import Holidays from 'date-holidays';
-import { COMMON_STRINGS, DAYS_OF_THE_WEEK, MONTHS_OF_THE_YEAR } from '../definitions/constants';
+import { COMMON_STRINGS, DAYS_OF_THE_WEEK, MONTHS_OF_THE_YEAR, TIME_OF_DAY_PHRASES } from '../definitions/constants';
 
 /**
  * Enhanced date parsing that adds additional capabilities to chrono
@@ -118,6 +118,19 @@ export class EnhancedDateParser {
                               .map(opt => EnhancedDateParser.capitalizeFirstLetter(opt));
             },
             priority: 70
+        },
+        // Time-of-day phrases (e.g., Noon, Midday, etc.)
+        {
+            pattern: (input: string) => {
+                const lower = input.trim().toLowerCase();
+                if (lower.length < 1) return false;
+                return TIME_OF_DAY_PHRASES.some(phrase => phrase.toLowerCase().startsWith(lower));
+            },
+            generate: (input: string) => {
+                const lower = input.trim().toLowerCase();
+                return TIME_OF_DAY_PHRASES.filter(phrase => phrase.toLowerCase().startsWith(lower));
+            },
+            priority: 60
         },
         // Holiday pattern (if partially matching a known holiday)
         {

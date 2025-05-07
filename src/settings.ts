@@ -14,6 +14,7 @@ export interface ChronoLanguageSettings {
 	initialEditorSuggestions: string[];
 	initialOpenDailyNoteSuggestions: string[];
 	holidayLocale: string;
+	timeFormat: string;
 }
 
 export const DEFAULT_SETTINGS: ChronoLanguageSettings = {
@@ -27,6 +28,7 @@ export const DEFAULT_SETTINGS: ChronoLanguageSettings = {
 	initialEditorSuggestions: ['Today', 'Tomorrow', 'Yesterday'],
 	initialOpenDailyNoteSuggestions: ['Today', 'Tomorrow', 'Yesterday'],
 	holidayLocale: '',
+	timeFormat: '',
 };
 
 export class ChronoLanguageSettingTab extends PluginSettingTab {
@@ -142,7 +144,7 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 
 		this.hideFoldersSetting = hideFoldersSetting.settingEl;
 
-		new Setting(containerEl).setName('Editor suggester').setHeading();
+		new Setting(containerEl).setName('Editor suggester').setHeading()
 
 		new Setting(containerEl)
 			.setName("Trigger phrase")
@@ -183,6 +185,19 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 						this.plugin.updateKeyBindings();
 					})
 			);
+
+		new Setting(containerEl)
+		.setName("Timestamp format")
+		.setDesc("When inserting a time/date with specified hours/minutes (e.g. 'in 3 hours'), append a timestamp to the insertion. Specify the time format to use, or leave empty to disable this feature.")
+		.addText((text) =>
+			text
+				.setPlaceholder("LT")
+				.setValue(this.plugin.settings.timeFormat)
+				.onChange(async (value) => {
+					this.plugin.settings.timeFormat = value;
+					await this.plugin.saveSettings();
+				})
+		);
 
 		const initialEditorSuggestionsSettings = new Setting(containerEl)
 			.setName("Initial suggestions")

@@ -246,6 +246,22 @@ export class SuggestionProvider {
             cls: [CLASSES.suggestionContainer],
             attr: { 'data-suggestion': item }
         });
+
+        // Check if this suggestion is time-relevant (but not a holiday)
+        const isHoliday = EnhancedDateParser.getHolidayNames().some(
+            h => h.toLowerCase() === item.trim().toLowerCase()
+        );
+        const parsedDate = EnhancedDateParser.parseDate(item);
+        if (parsedDate && !isHoliday) {
+            const now = new Date();
+            if (
+                parsedDate.getHours() !== now.getHours() ||
+                parsedDate.getMinutes() !== now.getMinutes() ||
+                parsedDate.getSeconds() !== now.getSeconds()
+            ) {
+                container.addClass(CLASSES.timeRelevantSuggestion);
+            }
+        }
         
         // Add suggestion text
         container.createEl('span', { 
@@ -320,7 +336,6 @@ export class SuggestionProvider {
         } else if (!allNotes) {
             dailyNotePreview = 'Daily notes folder missing';
         }
-        
         // Create preview container
         const previewContainer = container.createEl('span', { cls: [CLASSES.suggestionPreview] });
         
@@ -359,6 +374,14 @@ export class SuggestionProvider {
         contentFormat: ContentFormat, 
         suggestionPreviewClass: string[]
     ): HTMLElement {
+        // For time-relevant suggestions, add the clock icon before the text
+        if (container.parentElement?.classList.contains(CLASSES.timeRelevantSuggestion)) {
+            container.createEl('span', { 
+                text: '◴ ', 
+                cls: ['chrono-clock-icon'] 
+            });
+        }
+
         let text: string;
         if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
             text = item;
@@ -391,6 +414,7 @@ export class SuggestionProvider {
             container.createEl('span', { text: 'Unable to parse date', cls: [CLASSES.errorText] });
             return;
         }
+        
         // Create link element
         const linkEl = container.createEl('a', {
             text: dailyNotePreview,
@@ -414,8 +438,19 @@ export class SuggestionProvider {
         // Add the readable date preview if different from dailyNotePreview
         const readableDateText = this.getReadableDateText(item, dailyNotePreview, contentFormat);
         if (dailyNotePreview !== readableDateText) {
-            container.createEl('span', { text: ' ⭢ ', cls: suggestionPreviewClass });
-            container.createEl('span', { text: readableDateText, cls: suggestionPreviewClass 
+            container.createEl('span', { text: ' ⭢ ' });
+            
+            // For time-relevant suggestions, add the clock icon before the text
+            if (container.parentElement?.classList.contains(CLASSES.timeRelevantSuggestion)) {
+                container.createEl('span', { 
+                    text: '◴ ', 
+                    cls: ['chrono-clock-icon'] 
+                });
+            }
+            
+            container.createEl('span', { 
+                text: readableDateText,
+                cls: suggestionPreviewClass 
             });
         }
     }

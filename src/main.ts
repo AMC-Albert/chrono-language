@@ -41,7 +41,7 @@ export default class ChronoLanguage extends Plugin {
 	updateKeyBindings(): void {
 		this.editorSuggester?.updateSettings({ 
 			plainTextByDefault: this.settings.plainTextByDefault,
-			holidayLocale: this.settings.holidayLocale
+			holidayLocale: this.settings.holidayLocale,
 		});
 	}
 }

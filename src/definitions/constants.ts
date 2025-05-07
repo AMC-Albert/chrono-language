@@ -165,6 +165,7 @@ export const CLASSES = {
     unresolvedLink: 'chrono-is-unresolved-link',
     unresolvedText: 'chrono-is-unresolved-text',
     errorText: 'chrono-error-text',
+    timeRelevantSuggestion: 'chrono-time-relevant-suggestion',
 };
 
 /**
@@ -247,4 +248,17 @@ export const DAYS_OF_THE_WEEK = [
 export const MONTHS_OF_THE_YEAR = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
+] as const;
+
+/**
+ * Common time-of-day phrases (capitalized for display, chrono can parse these)
+ */
+export const TIME_OF_DAY_PHRASES = [
+    'Noon',
+    'Midday',
+    'Midnight',
+    'Morning',
+    'Afternoon',
+    'Evening',
+    'Night'
 ] as const;
