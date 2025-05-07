@@ -74,7 +74,8 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Alternate date format")
 			.setDesc("Specify your alternate human-readable date format. \
-				It will be used for link aliases and plain text dates (when the alternate format action is triggered in the editor suggester). \
+				It will be used for link aliases and plain text dates \
+				(when the Alt key is held while using the editor suggester). \
 				It does not need to match your daily note format.")
 			.addText((text) =>
 				text
@@ -85,6 +86,34 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+
+		new Setting(containerEl)
+		.setName("Holiday locale (IANA country code)")
+		.setDesc((() => {
+			const fragment = document.createDocumentFragment();
+			fragment.createSpan({
+				text: "Set your country/region code to show region-specific holidays (IANA format, e.g. 'US', 'GB', 'DE')."
+			});
+			fragment.createEl("br");
+			fragment.createEl("a", {
+				text: "Check if your region is supported here.",
+				href: "https://github.com/commenthol/date-holidays?tab=readme-ov-file#supported-countries-states-regions",
+				attr: { target: "_blank", rel: "noopener" }
+			});
+			return fragment;
+		})())
+		.addText((text) =>
+			text
+				.setPlaceholder("US")
+				.setValue(this.plugin.settings.holidayLocale)
+				.onChange(async (value) => {
+					this.plugin.settings.holidayLocale = value.trim();
+					await this.plugin.saveSettings();
+				})
+		);
+
+		new Setting(containerEl).setName('Link Format').setHeading().setDesc(
+			"Adjust how inserted links are formatted. Chrono Language respects your native Obsidian settings for using wikilinks/markdown links and relative paths.");
 
 		const includeFoldersSetting = new Setting(containerEl)
 			.setName("Include folders in links")
@@ -101,8 +130,7 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 
 		const hideFoldersSetting = new Setting(containerEl)
 			.setName("Hide folders in links using aliases")
-			.setDesc("If including folders in links, and no alias is being used, \
-				use an alias anyway (the note name) to hide the folder path.")
+			.setDesc("If including folders in links, and no unique alias is being used, use an alias anyway (the note name) to hide the folder path.")
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.HideFolders)
@@ -144,7 +172,7 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Insert plain text by default")
-			.setDesc("When enabled, insert suggestions as plain text by default, and use the modifier for link insertion to insert as a link.")
+			.setDesc("When enabled, insert suggestions as plain text by default, and use the Ctrl key modifier to insert as a link.")
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.plainTextByDefault)
@@ -190,29 +218,5 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 					: DEFAULT_SETTINGS.initialOpenDailyNoteSuggestions;
 				await this.plugin.saveSettings();
 			});
-
-		new Setting(containerEl)
-			.setName("Holiday locale (IANA country code)")
-			.setDesc((() => {
-				const fragment = document.createDocumentFragment();
-				fragment.createSpan({
-					text: "Set your country code for holidays (IANA format, e.g. 'US', 'GB', 'DE'). "
-				});
-				fragment.createEl("a", {
-					text: "Check your locale code here",
-					href: "https://github.com/commenthol/date-holidays?tab=readme-ov-file#supported-countries-states-regions",
-					attr: { target: "_blank", rel: "noopener" }
-				});
-				return fragment;
-			})())
-			.addText((text) =>
-				text
-					.setPlaceholder("US")
-					.setValue(this.plugin.settings.holidayLocale)
-					.onChange(async (value) => {
-						this.plugin.settings.holidayLocale = value.trim();
-						await this.plugin.saveSettings();
-					})
-			);
 	}
 }
