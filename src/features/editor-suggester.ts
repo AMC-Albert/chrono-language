@@ -4,6 +4,10 @@ import { SuggestionProvider } from './suggestion-provider';
 import { KeyboardHandler } from '../utils/keyboard-handler';
 import { KEYS, MODIFIER_COMBOS, getInstructionDefinitions } from '../definitions/constants';
 
+//
+// TODO very easy to accidentally activate
+//
+
 /**
  * A suggester for the editor that provides date parsing suggestions
  */
