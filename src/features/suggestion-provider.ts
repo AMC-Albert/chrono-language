@@ -371,6 +371,11 @@ export class SuggestionProvider {
         contentFormat: ContentFormat, 
         suggestionPreviewClass: string[]
     ): HTMLElement {
+        // SUGGESTION_TEXT mode overrides timeOnly
+        if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
+            return container.createEl('span', { text: item, cls: suggestionPreviewClass });
+        }
+
         // For time-relevant suggestions, add the clock icon before the text
         if (container.parentElement?.classList.contains(CLASSES.timeRelevantSuggestion)) {
             container.createEl('span', { 
@@ -412,6 +417,12 @@ export class SuggestionProvider {
         
         // Determine display text, respecting timeOnly setting
         const timeFormat = this.plugin.settings.timeFormat;
+        const readableText = contentFormat === ContentFormat.SUGGESTION_TEXT
+            ? item
+            : DateFormatter.shouldRenderTimeOnly(item, this.plugin.settings, momentDate)
+                ? momentDate.format(timeFormat)
+                : DateFormatter.getFormattedDateText(item, dailyNotePreview, contentFormat, this.plugin.settings);
+        
         const linkText = dailyNotePreview;
         
         // Create link element
@@ -435,10 +446,6 @@ export class SuggestionProvider {
         });
         
         // Add the readable date preview if different from dailyNotePreview
-        const readableText = DateFormatter.shouldRenderTimeOnly(item, this.plugin.settings, momentDate)
-            ? momentDate.format(timeFormat)
-            : DateFormatter.getFormattedDateText(item, dailyNotePreview, contentFormat, this.plugin.settings);
-        
         if (dailyNotePreview !== readableText) {
             container.createEl('span', { text: ' ⭢ ' });
             
