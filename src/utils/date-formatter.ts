@@ -1,7 +1,8 @@
 import { moment } from 'obsidian';
 import { EnhancedDateParser } from './parser';
 import { ContentFormat } from '../definitions/types';
-import { getDatePreview, getDailyNotePreview } from './helpers';
+import { ChronoLanguageSettings, DEFAULT_SETTINGS } from '../settings';
+import { getDailyNoteSettings, DEFAULT_DAILY_NOTE_FORMAT } from 'obsidian-daily-notes-interface';
 
 /**
  * Centralized date formatting utility for consistent date handling across components
@@ -10,10 +11,10 @@ export class DateFormatter {
     /**
      * Determine if only time should be rendered based on settings and date
      */
-    public static shouldRenderTimeOnly(item: string, settings: any, momentDate: moment.Moment): boolean {
-        return(
+    public static shouldRenderTimeOnly(item: string, settings: ChronoLanguageSettings, momentDate: moment.Moment): boolean {
+        return (
             settings.timeOnly &&
-            settings.timeFormat && settings.timeFormat.trim() !== "" &&
+            !!settings.timeFormat && settings.timeFormat.trim() !== "" &&
             this.isTimeRelevantSuggestion(item) &&
             momentDate.isSame(moment(), 'day')
         );
@@ -42,44 +43,57 @@ export class DateFormatter {
     }
 
     /**
-     * Gets formatted text for a date suggestion based on content format
+     * Gets formatted text for a date suggestion based on content format,
+     * incorporating time formatting logic (timeOnly, append time).
      */
     public static getFormattedDateText(
-        item: string, 
-        dailyNotePreview: string, 
+        itemText: string, // Original suggestion text for time relevance and SUGGESTION_TEXT format
+        momentDate: moment.Moment, // Parsed date
+        settings: ChronoLanguageSettings, // For formats, timeFormat, timeOnly
         contentFormat: ContentFormat,
-        settings: any,
-        includeTime: boolean = true
+        dailyNoteSettings: ReturnType<typeof getDailyNoteSettings> // Explicit type for daily note settings
     ): string {
-        let result: string;
-        
+        if (!momentDate || !momentDate.isValid()) {
+            return itemText; // Fallback for invalid dates
+        }
+
+        if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
+            return itemText; // SUGGESTION_TEXT format should return the item text as is.
+        }
+    
+        let baseFormatString: string;
         switch (contentFormat) {
-            case ContentFormat.SUGGESTION_TEXT:
-                result = item;
-                break;
             case ContentFormat.DAILY_NOTE:
-                result = dailyNotePreview;
+                baseFormatString = dailyNoteSettings.format || DEFAULT_DAILY_NOTE_FORMAT;
                 break;
             case ContentFormat.ALTERNATE:
-                result = getDatePreview(item, settings, true, false);
+                baseFormatString = settings.alternateFormat || DEFAULT_SETTINGS.alternateFormat;
                 break;
+            case ContentFormat.PRIMARY:
             default:
-                result = getDatePreview(item, settings, false, false);
+                baseFormatString = settings.primaryFormat || dailyNoteSettings.format || DEFAULT_DAILY_NOTE_FORMAT;
                 break;
         }
         
-        // Add time to time-relevant suggestions if timeFormat is set
-        if (includeTime) {
-            const timeFormat = settings.timeFormat;
-            if (timeFormat && timeFormat.trim() !== "" && this.isTimeRelevantSuggestion(item)) {
-                const parsedDate = EnhancedDateParser.parseDate(item);
-                if (parsedDate) {
-                    const formattedTime = moment(parsedDate).format(timeFormat);
-                    result += ` ${formattedTime}`;
+        let formattedDate = momentDate.format(baseFormatString);
+        const isItemTimeRelevant = DateFormatter.isTimeRelevantSuggestion(itemText);
+    
+        // Apply time formatting if applicable
+        if (settings.timeFormat && settings.timeFormat.trim() !== "" && isItemTimeRelevant) {
+            const timeString = momentDate.format(settings.timeFormat);
+            const isToday = momentDate.isSame(moment(), 'day');
+    
+            if (settings.timeOnly && isToday) {
+                return timeString; // Override baseText with time only
+            } else {
+                // Avoid appending time if the base format string already likely includes it (heuristic)
+                const baseIncludesTime = /[HhmsSaAZ]/.test(baseFormatString);
+                if (!baseIncludesTime) {
+                    return `${formattedDate} ${timeString}`; // Append time to baseText
                 }
             }
         }
-        
-        return result;
+    
+        return formattedDate; // Return baseText if no time formatting is applied or base included time
     }
 }

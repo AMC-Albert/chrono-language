@@ -1,10 +1,11 @@
-import { App, normalizePath, Notice, TFile, TFolder, moment } from 'obsidian';
+import { App, normalizePath, Notice, TFile, moment } from 'obsidian';
 import { Link, ObsidianSettings, FileSystem } from 'obsidian-dev-utils/obsidian';
 import { getDailyNoteSettings, getDailyNote, getAllDailyNotes, createDailyNote, DEFAULT_DAILY_NOTE_FORMAT } from 'obsidian-daily-notes-interface';
 import { ChronoLanguageSettings } from '../settings';
 import { EnhancedDateParser } from './parser';
-import { ERRORS, COMMON_STRINGS } from '../definitions/constants';
-import { DateFormatter } from './date-formatter'; // Added import
+import { ERRORS } from '../definitions/constants';
+import { DateFormatter } from './date-formatter';
+import { ContentFormat } from '../definitions/types'; // Added import
 
 /**
  * Returns a human readable preview of the parsed date
@@ -87,43 +88,23 @@ export function determineDailyNoteAlias(
     if (forceTextAsAlias) return itemText;
 
     const dailySettings = getDailyNoteSettings();
-    const isOriginalInputTimeRelevant = DateFormatter.isTimeRelevantSuggestion(itemText);
-    const isToday = momentDate.isSame(moment(), 'day');
+    
+    const aliasContentFormat = useAlternateFormatForAlias ? ContentFormat.ALTERNATE : ContentFormat.PRIMARY;
 
-    let alias: string | undefined = undefined;
+    const alias = DateFormatter.getFormattedDateText(
+        itemText,
+        momentDate,
+        settings,
+        aliasContentFormat,
+        dailySettings
+    );
 
-    // Determine the base alias format
-    if (useAlternateFormatForAlias && settings.alternateFormat) {
-        alias = momentDate.format(settings.alternateFormat);
-    } else if (settings.primaryFormat) {
-        alias = momentDate.format(settings.primaryFormat);
-    } else if (dailySettings.format) {
-        // Fallback to daily note format if primary/alternate are not set
-        alias = momentDate.format(dailySettings.format);
-    }
-
-    // Handle timeOnly setting or append time to the alias
-    if (settings.timeFormat && isOriginalInputTimeRelevant) {
-        const timeString = momentDate.format(settings.timeFormat);
-        if (settings.timeOnly && isToday) {
-            alias = timeString; // Replace with time only
-        } else if (alias) {
-            alias += ` ${timeString}`; // Append time if alias exists
-        } else {
-            // If no base alias, use time string directly (should ideally not happen if formats are set)
-            alias = timeString;
-        }
-    }
-
-    // If after all logic, alias is still undefined (e.g. no formats defined and not time relevant), 
-    // and we are not forcing text as alias, then return undefined for no alias.
-    // However, if it's different from the daily note name, it might be useful as an alias.
     const dailyNoteName = momentDate.format(dailySettings.format || DEFAULT_DAILY_NOTE_FORMAT);
     if (alias === dailyNoteName) {
         return undefined; // No alias if it's identical to the note name
     }
 
-    return alias;
+    return alias || undefined; // Ensure undefined if empty string (though unlikely with new formatter)
 }
 
 /**
@@ -225,7 +206,7 @@ export async function getOrCreateDailyNote(
     const dailyNoteSettings = getDailyNoteSettings();
 
     // Check if the daily note exists
-    const allNotes = await getAllDailyNotesSafe(app, silent, true);
+    const allNotes = await getAllDailyNotesSafe(app, true, silent);
     if (!allNotes) return null;
     
     let dailyNote = getDailyNote(momentDate, allNotes);
@@ -283,40 +264,31 @@ export async function createDailyNotesFolderIfNeeded(app: App, silent: boolean =
 /**
  * Wrapper to safely get all daily notes only if the folder exists
  * @param app The Obsidian app instance
- * @param silent If true, no error notice will be displayed if the folder is missing
  * @param createIfNeeded If true, attempts to create the folder if it doesn't exist
+ * @param silentIfMissingAndNotCreating If true, no error notice will be displayed if the folder is missing and not creating
  * @returns Record of daily notes or null if the folder is missing
  */
 export async function getAllDailyNotesSafe(
     app: App, 
-    silent: boolean = false,
-    createIfNeeded: boolean = false
+    createIfNeeded: boolean = false,
+    silentIfMissingAndNotCreating: boolean = false
 ): Promise<Record<string, TFile> | null> {
     const dailyNoteSettings = getDailyNoteSettings();
-    // Allow empty string (root folder), but must be a valid AbstractFile (TFolder or root)
     const folderPath = dailyNoteSettings.folder ?? '';
     
-    // Use FileSystem.getFolderOrNull utility
-    const folder = FileSystem.getFolderOrNull(app, folderPath);
+    let folder = FileSystem.getFolderOrNull(app, folderPath);
     
-    // Accept root (empty string) or TFolder
-    if (
-        (folderPath === '' && app.vault.getRoot() !== null) ||
-        folder !== null
-    ) {
-        // Add type assertion to resolve incompatible TFile types
+    if ((folderPath === '' && app.vault.getRoot() !== null) || folder !== null) {
         return getAllDailyNotes() as Record<string, TFile>;
     } else if (createIfNeeded) {
-        // Try to create the folder
-        const created = await createDailyNotesFolderIfNeeded(app, silent);
+        const created = await createDailyNotesFolderIfNeeded(app, true); // silent=true for createDailyNotesFolderIfNeeded
         if (created) {
-            // Add type assertion to resolve incompatible TFile types
+            new Notice(`Created daily notes folder: ${folderPath}`, 3000); // Notify here
             return getAllDailyNotes() as Record<string, TFile>;
         }
     }
     
-    // Folder doesn't exist and either we didn't try to create it or creation failed
-    if (!silent) {
+    if (!silentIfMissingAndNotCreating) {
         new Notice(ERRORS.DAILY_NOTES_FOLDER_MISSING, 5000);
     }
     return null;

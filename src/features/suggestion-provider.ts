@@ -1,16 +1,14 @@
-import { App, moment, Notice, TFile } from 'obsidian';
 import ChronoLanguage from '../main';
-import { getDailyNotePreview, getDatePreview, getOrCreateDailyNote, getAllDailyNotesSafe, createDailyNoteLink } from '../utils/helpers';
-import { getDailyNote, getDailyNoteSettings } from 'obsidian-daily-notes-interface';
+import { App, moment, Notice, TFile } from 'obsidian';
+import { getDailyNote, getDailyNoteSettings, DEFAULT_DAILY_NOTE_FORMAT } from 'obsidian-daily-notes-interface';
+import { getOrCreateDailyNote, getAllDailyNotesSafe, createDailyNoteLink } from '../utils/helpers';
 import { EnhancedDateParser } from '../utils/parser';
 import { InsertMode, ContentFormat } from '../definitions/types';
 import { KeyboardHandler } from '../utils/keyboard-handler';
-import { FileSystem, Link } from 'obsidian-dev-utils/obsidian';
+import { Link } from 'obsidian-dev-utils/obsidian';
 import { CLASSES } from '../definitions/constants';
 import { DateFormatter } from '../utils/date-formatter';
-import { ChronoLanguageSettings, DEFAULT_SETTINGS } from '../settings';
-import { DEFAULT_DAILY_NOTE_FORMAT } from 'obsidian-daily-notes-interface';
-
+import { ChronoLanguageSettings } from '../settings';
 /**
  * Shared suggester for date suggestions. Handles rendering and updating of suggestions.
  */
@@ -21,7 +19,6 @@ export class SuggestionProvider {
     contextProvider: any;
     keyboardHandler: KeyboardHandler;
     isSuggesterOpen: boolean = false;
-    private folderCreationNotified: boolean = false;
     private holidaySuggestions: string[] = [];
 
     constructor(app: App, plugin: ChronoLanguage) {
@@ -74,6 +71,7 @@ export class SuggestionProvider {
     handleKeyStateChange = (): void => {
         // Only update previews if suggester is open
         if (this.isSuggesterOpen) {
+            // Debounce or throttle this if it becomes too frequent
             requestAnimationFrame(() => this.updateAllPreviews());
         }
     };
@@ -145,7 +143,7 @@ export class SuggestionProvider {
     }): void {
         this.keyboardHandler.update(settings);
         
-        if (settings.holidayLocale) {
+        if (typeof settings.holidayLocale === 'string') { // Ensure holidayLocale is a string
             this.updateHolidayLocale(settings.holidayLocale);
         }
         
@@ -156,7 +154,6 @@ export class SuggestionProvider {
 
     getDateSuggestions(context: { query: string }, initialSuggestionsFromCaller?: string[]): string[] {
         this.isSuggesterOpen = true;
-        this.folderCreationNotified = false;
 
         const rawQuery = context.query; 
         const lowerQuery = rawQuery.toLowerCase().trim();
@@ -282,13 +279,17 @@ export class SuggestionProvider {
             container.querySelector('.chrono-suggestion-preview')?.remove();
             
             const { insertMode, contentFormat } = this.keyboardHandler.getEffectiveInsertModeAndFormat();
-            const momentDate = moment(EnhancedDateParser.parseDate(item));
+            const parsedDate = EnhancedDateParser.parseDate(item);
+            const momentDate = parsedDate ? moment(parsedDate) : moment(); // Fallback to now if parsing fails
             
-            // Check folder existence and create if needed
-            this.checkAndCreateFolder().then(allNotes => {
+            // Get all notes, create folder if needed (notification handled by helper)
+            getAllDailyNotesSafe(this.app, true).then(allNotes => {
                 this.renderPreview(container, momentDate, item, insertMode, contentFormat, allNotes);
                 container.removeAttribute('data-updating');
-            }).catch(() => {
+            }).catch((error) => {
+                console.error("Error in getAllDailyNotesSafe chain:", error);
+                // Still render a basic preview or error state if appropriate
+                this.renderPreview(container, momentDate, item, insertMode, contentFormat, null); // Pass null for allNotes
                 container.removeAttribute('data-updating');
             });
         } catch (e) {
@@ -297,67 +298,49 @@ export class SuggestionProvider {
         }
     }
     
-    private async checkAndCreateFolder(): Promise<Record<string, TFile> | null> {
-        // Check folder existence
-        const dailyNoteSettings = getDailyNoteSettings();
-        const folderPath = dailyNoteSettings.folder ?? '';
-        const folderExists = folderPath === '' || 
-                             FileSystem.getFolderOrNull(this.app, folderPath) !== null;
-        
-        // Get all notes and create folder if needed
-        const allNotes = await getAllDailyNotesSafe(this.app, true, true);
-        
-        // Show notification if folder was created
-        if (!folderExists && allNotes && !this.folderCreationNotified) {
-            new Notice(`Created daily notes folder: ${folderPath}`, 3000);
-            this.folderCreationNotified = true;
-        }
-        
-        return allNotes;
-    }
-    
     private renderPreview(
         container: HTMLElement, 
-        momentDate: moment.Moment,
+        momentDate: moment.Moment, // Ensure this is always a valid moment object
         item: string,
         insertMode: InsertMode,
         contentFormat: ContentFormat,
         allNotes: Record<string, TFile> | null
     ): void {
         let dailyNote: TFile | null = null;
-        let dailyNotePreview = item;
+        // Use momentDate directly for daily note operations
+        const dailyNoteSettings = getDailyNoteSettings();
+        const dailyNoteFilenameCandidate = momentDate.isValid() ? momentDate.format(dailyNoteSettings.format || DEFAULT_DAILY_NOTE_FORMAT) : item;
         
         if (momentDate.isValid() && allNotes) {
             dailyNote = getDailyNote(momentDate, allNotes) as TFile;
-            dailyNotePreview = getDailyNotePreview(item) ?? item;
-        } else if (!allNotes) {
-            dailyNotePreview = 'Daily notes folder missing';
         }
-        // Create preview container
+        
         const previewContainer = container.createEl('span', { cls: [CLASSES.suggestionPreview] });
         
+        if (!momentDate.isValid()) {
+            previewContainer.createEl('span', { text: '↳ Unable to parse date', cls: [CLASSES.errorText] });
+            if (!previewContainer.hasChildNodes()) previewContainer.remove();
+            return;
+        }
+
         if (insertMode === InsertMode.PLAINTEXT) {
             previewContainer.createEl('span', { text: '↳ ' });
-            if (!momentDate.isValid()) {
-                previewContainer.createEl('span', { text: 'Unable to parse date', cls: [CLASSES.errorText] });
-            } else {
-                this.appendReadableDatePreview(
-                    previewContainer,
-                    item,
-                    dailyNotePreview,
-                    contentFormat,
-                    dailyNote && momentDate.isValid() && allNotes ? [] : [CLASSES.unresolvedText]
-                );
-            }
-        } else if (dailyNotePreview) {
+            this.appendReadableDatePreview(
+                previewContainer,
+                item,
+                momentDate,
+                contentFormat,
+                dailyNote && allNotes ? [] : [CLASSES.unresolvedText]
+            );
+        } else { // InsertMode.LINK
             this.createLinkPreview(
                 previewContainer,
-                dailyNotePreview,
-                dailyNote && momentDate.isValid() && allNotes ? [] : [CLASSES.unresolvedLink],
+                dailyNoteFilenameCandidate, // This is the text for the link itself (filename)
+                dailyNote && allNotes ? [] : [CLASSES.unresolvedLink],
                 momentDate,
-                item,
+                item, // Original item text for formatting readable part
                 contentFormat,
-                dailyNote && momentDate.isValid() && allNotes ? [] : [CLASSES.unresolvedText]
+                dailyNote && allNotes ? [] : [CLASSES.unresolvedText] // Class for the readable part
             );
         }
 
@@ -367,32 +350,25 @@ export class SuggestionProvider {
     private appendReadableDatePreview(
         container: HTMLElement,
         item: string, 
-        dailyNotePreview: string, 
+        momentDate: moment.Moment,
         contentFormat: ContentFormat, 
         suggestionPreviewClass: string[]
-    ): HTMLElement {
-        // SUGGESTION_TEXT mode overrides timeOnly
-        if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
-            return container.createEl('span', { text: item, cls: suggestionPreviewClass });
-        }
+    ): void { // HTMLElement return type was for the created span, now appends to container
+        const dailySettings = getDailyNoteSettings();
+        const text = DateFormatter.getFormattedDateText(
+            item,
+            momentDate,
+            this.plugin.settings,
+            contentFormat,
+            dailySettings
+        );
 
-        // For time-relevant suggestions, add the clock icon before the text
-        if (container.parentElement?.classList.contains(CLASSES.timeRelevantSuggestion)) {
-            container.createEl('span', { 
-                text: '◴ ', 
-                cls: ['chrono-clock-icon'] 
-            });
+        if (contentFormat !== ContentFormat.SUGGESTION_TEXT &&
+            container.parentElement?.classList.contains(CLASSES.timeRelevantSuggestion)) {
+            container.createEl('span', { text: '◴ ', cls: ['chrono-clock-icon'] });
         }
-
-        // Only render time if setting demands it
-        const parsed = moment(EnhancedDateParser.parseDate(item));
-        if (DateFormatter.shouldRenderTimeOnly(item, this.plugin.settings, parsed)) {
-            return container.createEl('span', { text: parsed.format(this.plugin.settings.timeFormat), cls: suggestionPreviewClass });
-        }
-
-        let text = DateFormatter.getFormattedDateText(item, dailyNotePreview, contentFormat, this.plugin.settings);
         
-        return container.createEl('span', { 
+        container.createEl('span', { 
             text: text,
             cls: suggestionPreviewClass 
         });
@@ -400,34 +376,26 @@ export class SuggestionProvider {
     
     private createLinkPreview(
         container: HTMLElement,
-        dailyNotePreview: string,
+        linkText: string, // This is the daily note filename candidate
         dailyNoteClass: string[],
         momentDate: moment.Moment,
-        item: string,
+        item: string, // Original item text for formatting readable part
         contentFormat: ContentFormat,
         suggestionPreviewClass: string[]
     ): void {
-        // Add arrow prefix
         container.createEl('span', { text: '↳ ' });
         
-        if (!momentDate.isValid()) {
-            container.createEl('span', { text: 'Unable to parse date', cls: [CLASSES.errorText] });
-            return;
-        }
+        const dailySettings = getDailyNoteSettings();
+        const readableText = DateFormatter.getFormattedDateText(
+            item,
+            momentDate,
+            this.plugin.settings,
+            contentFormat,
+            dailySettings
+        );
         
-        // Determine display text, respecting timeOnly setting
-        const timeFormat = this.plugin.settings.timeFormat;
-        const readableText = contentFormat === ContentFormat.SUGGESTION_TEXT
-            ? item
-            : DateFormatter.shouldRenderTimeOnly(item, this.plugin.settings, momentDate)
-                ? momentDate.format(timeFormat)
-                : DateFormatter.getFormattedDateText(item, dailyNotePreview, contentFormat, this.plugin.settings);
-        
-        const linkText = dailyNotePreview;
-        
-        // Create link element
         const linkEl = container.createEl('a', {
-            text: linkText,
+            text: linkText, // Use the passed linkText (filename candidate)
             cls: dailyNoteClass, 
             attr: { 
                 'data-href': '#', 
@@ -445,20 +413,17 @@ export class SuggestionProvider {
             if (file) await this.app.workspace.getLeaf(event.ctrlKey).openFile(file);
         });
         
-        // Add the readable date preview if different from dailyNotePreview
-        if (dailyNotePreview !== readableText) {
+        if (linkText !== readableText) {
             container.createEl('span', { text: ' ⭢ ' });
             
-            // For time-relevant suggestions, add the clock icon before the text
-            if (container.parentElement?.classList.contains(CLASSES.timeRelevantSuggestion)) {
-                container.createEl('span', { 
-                    text: '◴ ', 
-                    cls: ['chrono-clock-icon'] 
-                });
+            let textForDisplay = readableText;
+            if (contentFormat !== ContentFormat.SUGGESTION_TEXT &&
+                container.parentElement?.classList.contains(CLASSES.timeRelevantSuggestion)) {
+                textForDisplay = '◴ ' + readableText;
             }
             
             container.createEl('span', { 
-                text: readableText,
+                text: textForDisplay,
                 cls: suggestionPreviewClass 
             });
         }
@@ -467,7 +432,6 @@ export class SuggestionProvider {
     // Helper method to close the suggester
     private closeSuggester() {
         this.isSuggesterOpen = false;
-        this.folderCreationNotified = false;
         
         const ctx = this.contextProvider;
         
@@ -477,29 +441,24 @@ export class SuggestionProvider {
                 const editor = ctx.context.editor;
                 const cursor = editor.getCursor();
                 
-                // Get the actual trigger phrase to ensure we're only removing what was typed
                 const triggerPhrase = this.plugin.settings.triggerPhrase;
                 const line = editor.getLine(cursor.line);
                 const beforeCursor = line.slice(0, cursor.ch);
                 const lastTriggerIdx = beforeCursor.lastIndexOf(triggerPhrase);
                 
                 if (lastTriggerIdx >= 0) {
-                    // Use the actual trigger location rather than the stored context
                     const start = { line: cursor.line, ch: lastTriggerIdx };
                     const end = { line: cursor.line, ch: cursor.ch };
                     
-                    // Only remove text if there's actually something to remove
                     if (start.ch < end.ch) {
                         editor.replaceRange('', start, end);
                     }
                 }
             } catch (e) {
-                // Ignore range errors
                 console.debug("Error closing suggester (safe to ignore):", e);
             }
         }
         
-        // Close the suggester UI
         ctx?.close?.() ?? ctx?.suggestions?.close?.();
     }
     
@@ -516,7 +475,7 @@ export class SuggestionProvider {
         app: App
     ): string {
         const parsedDate = EnhancedDateParser.parseDate(itemText);
-        const isItemTimeRelevant = DateFormatter.isTimeRelevantSuggestion(itemText); // Determine time relevance once
+        const isItemTimeRelevant = DateFormatter.isTimeRelevantSuggestion(itemText); 
 
         if (!parsedDate) { // itemText is not a parsable date string
             if (insertMode === InsertMode.PLAINTEXT) {
@@ -534,42 +493,17 @@ export class SuggestionProvider {
             }
         }
 
-        // itemText IS a parsable date string
         const momentDate = moment(parsedDate);
         const dailySettings = getDailyNoteSettings();
 
         if (insertMode === InsertMode.PLAINTEXT) {
-            // If contentFormat is SUGGESTION_TEXT, return the original itemText directly for plain text mode.
-            if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
-                return itemText;
-            }
-
-            let baseFormat: string;
-            switch (contentFormat) {
-                case ContentFormat.PRIMARY:
-                    baseFormat = settings.primaryFormat || dailySettings.format || DEFAULT_DAILY_NOTE_FORMAT;
-                    break;
-                case ContentFormat.ALTERNATE:
-                    baseFormat = settings.alternateFormat || DEFAULT_SETTINGS.alternateFormat;
-                    break;
-                case ContentFormat.DAILY_NOTE:
-                    return momentDate.format(dailySettings.format || DEFAULT_DAILY_NOTE_FORMAT);
-            }
-
-            let finalFormattedDate = momentDate.format(baseFormat);
-            const isToday = momentDate.isSame(moment(), 'day');
-
-            // Handle timeOnly setting or append time
-            if (settings.timeFormat && isItemTimeRelevant) {
-                const timeString = momentDate.format(settings.timeFormat);
-                if (settings.timeOnly && isToday) {
-                    finalFormattedDate = timeString; // Replace with time only
-                } else {
-                    finalFormattedDate += ` ${timeString}`; // Append time
-                }
-            }
-            return finalFormattedDate;
-
+            return DateFormatter.getFormattedDateText(
+                itemText,
+                momentDate,
+                settings,
+                contentFormat,
+                dailySettings
+            );
         } else { // InsertMode.LINK for a parsedDate
             const forceTextAsAlias = contentFormat === ContentFormat.SUGGESTION_TEXT;
             const useAlternateFormatForAlias = contentFormat === ContentFormat.ALTERNATE;

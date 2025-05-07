@@ -1,14 +1,12 @@
-import { Modifier, Scope } from 'obsidian';
+import { Scope } from 'obsidian';
 import { 
     InsertMode,
     ContentFormat,
     createModifierString,
 } from '../definitions/types';
 import { 
-    DESCRIPTIONS, 
     KEY_EVENTS, 
     KEYS, 
-    CONTENT_FORMAT,
     MODIFIER_BEHAVIOR,
     MODIFIER_KEY
 } from '../definitions/constants';
