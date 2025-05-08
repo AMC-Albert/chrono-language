@@ -1,6 +1,16 @@
 .chrono-active-trigger {
-  color: green;
-  margin-right: 1em;
+  -webkit-app-region: no-drag;
+  padding: 2px 6px;
+  background-color: var(--background-secondary);
+  border-radius: var(--radius-l);
+  border-color: var(--color-accent);
+  margin-inline-end: 0.5em;
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+}
+
+.chrono-active-trigger::after {
+  content: " ⭢";
 }
 
 .chrono-suggestion-container {

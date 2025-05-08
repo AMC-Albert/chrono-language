@@ -1,8 +1,8 @@
-import { Editor, EditorPosition, EditorSuggest, EditorSuggestContext, Modifier } from 'obsidian';
+import { Editor, EditorPosition, EditorSuggest, EditorSuggestContext } from 'obsidian';
 import { EditorView } from '@codemirror/view';
+import { StateEffect } from '@codemirror/state'; 
 import ChronoLanguage from '../main';
-// Import the effects from main.ts
-import { addTriggerDecorationEffect, clearTriggerDecorationsEffect } from '../main';
+import { addTriggerDecorationEffect, addSpacerWidgetEffect, safelyClearDecorations } from '../cm-decorations';
 import { SuggestionProvider } from './suggestion-provider';
 import { KeyboardHandler } from '../utils/keyboard-handler';
 import { KEYS, MODIFIER_COMBOS, getInstructionDefinitions } from '../definitions/constants';
@@ -20,6 +20,7 @@ export class EditorSuggester extends EditorSuggest<string> {
     private lastInsertionEnd: { line: number, ch: number } | null = null;
 
     private decoratedEditorView: EditorView | null = null; // To track editor view with active decorations
+    private firstSpaceBlocked = false; // Track if we've already blocked the first space
 
     constructor(plugin: ChronoLanguage) {
         super(plugin.app);
@@ -43,6 +44,9 @@ export class EditorSuggester extends EditorSuggest<string> {
 
         // Register Tab key handlers for daily note actions
         this.keyboardHandler.registerTabKeyHandlers(this.handleSelectionKey);
+        
+        // Register space key handler to intercept spaces at beginning of query
+        this.keyboardHandler.registerSpaceKeyHandler(this.handleSpaceKey);
     }
 
     private registerEnterKeyHandlers() {
@@ -66,6 +70,59 @@ export class EditorSuggester extends EditorSuggest<string> {
     };
 
     /**
+     * Handles space key events to intercept spaces at the beginning of a query
+     * Returns true if the event was handled (should be prevented)
+     */
+    private handleSpaceKey = (event: KeyboardEvent): boolean => {
+        // Only intercept space if the suggester is open
+        if (!this.isOpen || !this.context) return false;
+        
+        const editor = this.context.editor;
+        const cursor = editor.getCursor();
+        const line = editor.getLine(cursor.line);
+        const cursorSubstring = line.slice(0, cursor.ch);
+        const triggerPhrase = this.plugin.settings.triggerPhrase;
+        if (!triggerPhrase) return false;
+        
+        const lastTriggerIndex = cursorSubstring.lastIndexOf(triggerPhrase);
+        if (lastTriggerIndex === -1) return false;
+        
+        const posAfterTrigger = lastTriggerIndex + triggerPhrase.length;
+        const query = cursorSubstring.slice(posAfterTrigger);
+        
+        // Check if we're at the beginning of query (right after trigger phrase)
+        if (cursor.ch === posAfterTrigger || query.trim() === '') {
+            if (!this.firstSpaceBlocked) {
+                // This is the first space - block it
+                this.firstSpaceBlocked = true;
+                return true; // Prevent the space
+            } else {
+                // This is the second space - insert space and dismiss suggester
+                
+                // Reset flag before we do anything else
+                this.firstSpaceBlocked = false;
+                
+                // Set flags to prevent immediate re-trigger
+                this.lastReplacedTriggerStart = { line: cursor.line, ch: lastTriggerIndex };
+                this.lastInsertionEnd = { line: cursor.line, ch: cursor.ch + 1 };
+                
+                // Let the default space pass through by returning false
+                // This will insert the space naturally
+                
+                // Close the suggester after the space has been added
+                setTimeout(() => {
+                    this.close();
+                }, 0);
+                
+                // Do NOT prevent default! Let the space through
+                return false;
+            }
+        }
+        
+        return false; // Not at beginning of query, don't intercept
+    };
+
+    /**
      * Updates the instructions display based on keyboard handler settings
      */
     updateInstructions() {
@@ -86,33 +143,66 @@ export class EditorSuggester extends EditorSuggest<string> {
     private clearDecorations(editorViewToClear?: EditorView) {
         const view = editorViewToClear || this.decoratedEditorView;
         if (view) {
-            try {
-                // Check if the view is still part of the document to avoid errors on destroyed views
-                if (view.dom.isConnected) {
-                    view.dispatch({
-                        effects: clearTriggerDecorationsEffect.of(null)
-                    });
-                }
-            } catch (e) {
-                // console.warn("Chrono: Error clearing decorations, view might be destroyed.", e);
-            }
-
+            // Use the safer function to clear decorations
+            safelyClearDecorations(view);
             if (this.decoratedEditorView === view) {
                 this.decoratedEditorView = null;
             }
         }
     }
 
-    onTrigger(cursor: EditorPosition, editor: Editor): EditorSuggestContext | null {
-        // If this suggester instance had decorations on the current editor, clear them first.
-        // This handles re-evaluation (e.g., typing more characters, backspacing).
-        // editor.cm is the CodeMirror EditorView instance.
-        if (this.decoratedEditorView && editor.cm && this.decoratedEditorView === editor.cm) {
-            this.clearDecorations(editor.cm);
-        }
+    // Track when the suggester is opened
+    open(): void {
+        super.open();
+        // Apply decorations only when the suggester is actually open
+        this.applyTriggerDecorations();
+    }
 
+    // Clear decorations when suggester is closed
+    close() {
+        // Always clear decorations first when closing
+        this.clearDecorations();
+        
+        // Reset flags
+        this.firstSpaceBlocked = false;
+        
+        super.close();
+    }
+
+    // Apply decorations based on current context
+    private applyTriggerDecorations(): void {
+        if (!this.isOpen || !this.context) return;
+        
+        const editor = this.context.editor;
+        const triggerPhrase = this.plugin.settings.triggerPhrase;
+        if (!editor.cm || !triggerPhrase) return;
+        
+        // Clear any existing decorations first
+        this.clearDecorations();
+        
+        // Only apply new decorations if the suggester is open
+        const triggerStartOffset = editor.posToOffset(this.context.start);
+        const triggerEndOffset = triggerStartOffset + triggerPhrase.length;
+        const effects: StateEffect<any>[] = [addTriggerDecorationEffect.of({ from: triggerStartOffset, to: triggerEndOffset })];
+        
+        // Add spacer widget if query is empty
+        const query = this.context.query;
+        if (query === '') effects.push(addSpacerWidgetEffect.of(triggerEndOffset));
+        
+        try {
+            if (editor.cm.dom.isConnected) {
+                editor.cm.dispatch({
+                    effects: effects
+                });
+                this.decoratedEditorView = editor.cm;
+            }
+        } catch (e) {
+            this.decoratedEditorView = null;
+        }
+    }
+    
+    onTrigger(cursor: EditorPosition, editor: Editor): EditorSuggestContext | null {
         // Store and immediately clear the post-selection state flags
-        // This ensures they are used only for the first onTrigger call after a selection.
         const localLastReplacedTriggerStart = this.lastReplacedTriggerStart;
         const localLastInsertionEnd = this.lastInsertionEnd;
         this.lastReplacedTriggerStart = null;
@@ -121,110 +211,67 @@ export class EditorSuggester extends EditorSuggest<string> {
         const triggerPhrase = this.plugin.settings.triggerPhrase;
         if (!triggerPhrase) return null;
 
+        // Get the current line and find the last trigger phrase
         const line = editor.getLine(cursor.line);
         const cursorSubstring = line.slice(0, cursor.ch);
         const lastTriggerIndex = cursorSubstring.lastIndexOf(triggerPhrase);
 
         // If trigger phrase not found or cursor is before the end of trigger phrase
         if (lastTriggerIndex === -1 || cursor.ch < lastTriggerIndex + triggerPhrase.length) {
+            this.firstSpaceBlocked = false;
             return null;
         }
 
-        // Post-selection re-trigger prevention logic (for selection/replacement)
+        const posAfterTrigger = lastTriggerIndex + triggerPhrase.length;
+        let query = cursorSubstring.slice(posAfterTrigger);
+
+        // Check for spacey trigger scenario - this is when a trigger phrase is followed by spaces
+        // If the query is just spaces or starts with a space, we should not re-trigger
+        if (query.trim() === '' || query.startsWith(' ')) {
+            // If we previously closed the suggester (via second space), don't re-trigger
+            if (localLastReplacedTriggerStart && localLastInsertionEnd) {
+                if (cursor.line === localLastInsertionEnd.line) {
+                    // Prevent re-triggering when we're on the same line as a previous space dismissal
+                    return null;
+                }
+            }
+            
+            // If we just opened and immediately see spaces, don't continue
+            if (!this.isOpen && query.startsWith(' ')) {
+                return null;
+            }
+        }
+
+        // Handle normal trigger prevention logic
         if (localLastReplacedTriggerStart && localLastInsertionEnd) {
             if (cursor.line === localLastInsertionEnd.line && cursor.ch === localLastInsertionEnd.ch) {
-                if (lastTriggerIndex < localLastReplacedTriggerStart.ch && cursor.line === localLastReplacedTriggerStart.line) {
-                    // The found trigger is on the same line but *before* the trigger that was just replaced.
-                    // Prevent re-triggering on this earlier, stale trigger.
+                // We're at the insertion point of a previous selection
+                if (lastTriggerIndex <= localLastReplacedTriggerStart.ch) {
+                    // The trigger is at or before the previous trigger
+                    this.firstSpaceBlocked = false;
                     return null;
                 }
             }
         }
 
-        const triggerHappy = this.plugin.settings.triggerHappy;
-        const posAfterTrigger = lastTriggerIndex + triggerPhrase.length; // Based on current lastTriggerIndex
-        let query = cursorSubstring.slice(posAfterTrigger);
-        // Handle leading spaces: dismiss on double space, trim single leading space
-        if (query.startsWith('  ')) return null;
-        if (query.startsWith(' ')) query = query.slice(1);
-
-        // Stash previous context if suggester was open, to detect if lastTriggerIndex shifted backwards
-        const prevContext = (this.isOpen && this.context) ? { line: this.context.start.line, ch: this.context.start.ch } : null;
-
-        // Early escape if query starts with tab
-        if (query.startsWith('\t')) {
-            return null;
-        }
-
-        // Universal Check 2: Boundary conditions.
-        let blockActivation = false;
-
-        if (prevContext && cursor.line === prevContext.line && lastTriggerIndex < prevContext.ch) {
-            // Suggester was open, but current evaluation points to an *earlier* trigger on the same line
-            const charAfterEarlierTrigger = posAfterTrigger < line.length ? line.charAt(posAfterTrigger) : ' ';
-            if (charAfterEarlierTrigger !== ' ' && charAfterEarlierTrigger !== '\t') {
-                blockActivation = true;
-            }
-
-            if (!blockActivation && !triggerHappy) {
-                if (lastTriggerIndex > 0) {
-                    const charBeforeEarlierTrigger = cursorSubstring.charAt(lastTriggerIndex - 1);
-                    if (charBeforeEarlierTrigger !== ' ' && charBeforeEarlierTrigger !== '\t') {
-                        blockActivation = true;
-                    }
-                }
-            }
-        } else if (!this.isOpen) {
-            // Suggester is not currently open, so these are standard "initiation" checks.
-            const charAfterTrigger = posAfterTrigger < line.length ? line.charAt(posAfterTrigger) : ' ';
-            if (charAfterTrigger !== ' ' && charAfterTrigger !== '\t') {
-                blockActivation = true;
-            }
-
-            if (!blockActivation && !triggerHappy) {
-                if (lastTriggerIndex > 0) {
-                    const charBeforeTrigger = cursorSubstring.charAt(lastTriggerIndex - 1);
-                    if (charBeforeTrigger !== ' ' && charBeforeTrigger !== '\t') {
-                        blockActivation = true;
-                    }
-                }
-            }
-        }
-
-        if (blockActivation) {
-            return null;
+        // Trim leading space for processing
+        if (query.startsWith(' ')) {
+            query = query.slice(1);
         }
 
         const activeFile = this.app.workspace.getActiveFile();
-        if (!activeFile) return null;
-
-        // All checks passed. Suggester will open. Apply decorations.
-        const contextStartPos = { line: cursor.line, ch: lastTriggerIndex };
-
-        if (editor.cm) { // editor.cm is the EditorView
-            const triggerStartOffset = editor.posToOffset(contextStartPos);
-            const triggerEndOffset = triggerStartOffset + triggerPhrase.length;
-
-            try {
-                // Ensure view is connected before dispatching
-                if (editor.cm.dom.isConnected) {
-                    editor.cm.dispatch({
-                        effects: addTriggerDecorationEffect.of({ from: triggerStartOffset, to: triggerEndOffset })
-                    });
-                    this.decoratedEditorView = editor.cm;
-                } else {
-                    // console.warn("Chrono: EditorView not connected, skipping decoration.");
-                    this.decoratedEditorView = null; // Ensure it's null if we can't decorate
-                }
-            } catch (e) {
-                // console.warn("Chrono: Error applying decorations", e);
-                this.decoratedEditorView = null;
-            }
+        if (!activeFile) {
+            this.firstSpaceBlocked = false;
+            return null;
         }
 
+        // All checks passed. Create context without decorations.
+        const contextStartPos = { line: cursor.line, ch: lastTriggerIndex };
+
+        // Return context without applying decorations
         return {
-            start: contextStartPos, // This is the start of the trigger phrase
-            end: cursor,            // This is the current cursor position
+            start: contextStartPos,
+            end: cursor,
             query: query,
             editor,
             file: activeFile
@@ -265,12 +312,6 @@ export class EditorSuggester extends EditorSuggest<string> {
         this.lastInsertionEnd = { line: start.line, ch: start.ch + finalText.length };
 
         editor.replaceRange(finalText, start, end);
-    }
-
-    close() {
-        // Clear decorations when the suggester is explicitly closed.
-        this.clearDecorations();
-        super.close();
     }
 
     /**

@@ -17,11 +17,18 @@ import { getInstructionDefinitions } from '../definitions/constants';
  */
 type KeyStateChangeCallback = () => void;
 
+/**
+ * Type definition for space key event handler
+ * Returns true if the event was handled (should be prevented)
+ */
+type SpaceKeyEventHandler = (event: KeyboardEvent) => boolean;
+
 export class KeyboardHandler {
     private scope: Scope | null;
     private plainTextByDefault: boolean;
     private keyState: Record<string, boolean> = { Control: false, Shift: false, Alt: false };
     private keyStateChangeListeners: KeyStateChangeCallback[] = [];
+    private spaceKeyHandlers: SpaceKeyEventHandler[] = [];
 
     constructor(scope?: Scope, plainTextByDefault: boolean = false) {
         this.scope = scope || null;
@@ -46,6 +53,14 @@ export class KeyboardHandler {
     private handleKeyEvent = (event: KeyboardEvent): void => {
         const key = event.key;
         const isKeyDown = event.type === KEY_EVENTS.KEYDOWN;
+        
+        // Handle space key intercept if this is a keydown event
+        if (isKeyDown && key === ' ' && this.handleSpaceKeyEvent(event)) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
+        
         if (key === KEYS.CONTROL || key === KEYS.SHIFT || key === KEYS.ALT) {
             if (this.keyState[key] !== isKeyDown) {
                 this.keyState[key] = isKeyDown;
@@ -53,6 +68,40 @@ export class KeyboardHandler {
             }
         }
     };
+    
+    /**
+     * Handles space key events by passing them to registered handlers
+     * @param event The keyboard event
+     * @returns true if the event was handled and should be prevented
+     */
+    private handleSpaceKeyEvent(event: KeyboardEvent): boolean {
+        for (const handler of this.spaceKeyHandlers) {
+            if (handler(event)) {
+                return true; // Event was handled
+            }
+        }
+        return false; // No handler prevented the event
+    }
+    
+    /**
+     * Registers a handler for space key events
+     * @param handler Function that returns true if the space key was handled
+     */
+    registerSpaceKeyHandler(handler: SpaceKeyEventHandler): void {
+        this.spaceKeyHandlers.push(handler);
+    }
+    
+    /**
+     * Unregisters a space key event handler
+     * @param handler The handler to remove
+     */
+    unregisterSpaceKeyHandler(handler: SpaceKeyEventHandler): void {
+        const index = this.spaceKeyHandlers.indexOf(handler);
+        if (index !== -1) {
+            this.spaceKeyHandlers.splice(index, 1);
+        }
+    }
+
     update(settings: Partial<{ plainTextByDefault: boolean }>): void {
         if (settings.plainTextByDefault !== undefined) this.plainTextByDefault = settings.plainTextByDefault;
     }
@@ -106,5 +155,6 @@ export class KeyboardHandler {
         document.removeEventListener(KEY_EVENTS.KEYDOWN, this.handleKeyEvent, true);
         document.removeEventListener(KEY_EVENTS.KEYUP, this.handleKeyEvent, true);
         this.keyStateChangeListeners = [];
+        this.spaceKeyHandlers = [];
     }
 }
