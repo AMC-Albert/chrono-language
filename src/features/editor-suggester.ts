@@ -4,10 +4,6 @@ import { SuggestionProvider } from './suggestion-provider';
 import { KeyboardHandler } from '../utils/keyboard-handler';
 import { KEYS, MODIFIER_COMBOS, getInstructionDefinitions } from '../definitions/constants';
 
-//
-// TODO very easy to accidentally activate
-//
-
 /**
  * A suggester for the editor that provides date parsing suggestions
  */
@@ -90,33 +86,64 @@ export class EditorSuggester extends EditorSuggest<string> {
             return null;
         }
         
-        // Check for triggering conditions
         const triggerHappy = this.plugin.settings.triggerHappy;
         const posAfterTrigger = lastTriggerIndex + triggerPhrase.length;
         const query = cursorSubstring.slice(posAfterTrigger);
 
-        // Early exit conditions
-        if (query.startsWith(' ') || query.startsWith('\t')) {
+        // If suggester is not already open, query cannot start with a space/tab.
+        // If suggester is open, query can contain/start with space/tab (e.g. "@today at 3 pm")
+        if (!this.isOpen && (query.startsWith(' ') || query.startsWith('\t'))) {
             return null;
         }
         
-        // When not in trigger-happy mode, check surrounding characters
-        if (!triggerHappy) {
-            // Check character before trigger
-            if (lastTriggerIndex > 0) {
-                const charBefore = cursorSubstring.charAt(lastTriggerIndex - 1);
-                if (charBefore !== ' ' && charBefore !== '\t') {
-                    return null;
+        // Boundary checks for initial triggering (i.e., when suggester is not already open).
+        // If suggester is already open, these checks are bypassed to allow fluid query typing.
+        if (!this.isOpen) {
+            if (!triggerHappy) {
+                // Standard behavior for !triggerHappy: requires whitespace boundaries.
+                // Check character before trigger.
+                if (lastTriggerIndex > 0) {
+                    const charBefore = cursorSubstring.charAt(lastTriggerIndex - 1);
+                    if (charBefore !== ' ' && charBefore !== '\t') {
+                        return null;
+                    }
                 }
-            }
-            
-            // Check character after trigger if query is empty
-            if (query.length === 0) {
-                const charAfterInFullLine = posAfterTrigger < line.length ? 
-                    line.charAt(posAfterTrigger) : ' ';
-                if (charAfterInFullLine !== ' ' && charAfterInFullLine !== '\t') {
-                    return null;
+                
+                // Check character after trigger if query is empty.
+                if (query.length === 0) {
+                    const charAfterInFullLine = posAfterTrigger < line.length ? 
+                        line.charAt(posAfterTrigger) : ' '; // Check against the full line content
+                    if (charAfterInFullLine !== ' ' && charAfterInFullLine !== '\t') {
+                        return null;
+                    }
                 }
+            } else {
+                // triggerHappy is true and suggester is not yet open.
+                // We want to activate for fresh "happy" triggers (e.g., "word@", "word@t", " @t").
+                // We want to AVOID activating for "stale" triggers, where the trigger phrase
+                // is part of existing text and the user is typing further down the line.
+                // A trigger is considered stale if:
+                // 1. There is a non-whitespace character in the line immediately following the trigger phrase.
+                // 2. The current query's length is greater than 1. This implies the user is typing *after*
+                //    an already existing "@word" or "word@word" pattern, rather than initiating a new one.
+
+                if (query.length > 1) {
+                    // Check the character in the line that is immediately after the trigger phrase.
+                    // This character would be the first character of a "fresh" single-character query.
+                    if (posAfterTrigger < line.length) {
+                        const charImmediatelyAfterTriggerInLine = line.charAt(posAfterTrigger);
+                        if (charImmediatelyAfterTriggerInLine !== ' ' && charImmediatelyAfterTriggerInLine !== '\t') {
+                            // Found a pattern like "...@word..." or "word@word...".
+                            // Since query.length > 1, the cursor is past the first char of that "word".
+                            // This indicates a stale trigger.
+                            return null;
+                        }
+                    }
+                }
+                // Otherwise (query is empty, or query is a single character, or char after trigger is space/EOL):
+                // Allow activation for triggerHappy cases.
+                // E.g.: "word@", " @", "word@t", " @t", "word@ t", " @ t"
+                // (The initial `!this.isOpen && query.startsWith(' ')` check handles "word@ t" and " @ t" correctly.)
             }
         }
 
