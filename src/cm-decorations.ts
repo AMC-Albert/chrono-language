@@ -20,8 +20,9 @@ class SpacerWidget extends WidgetType {
     return false; // Always re-render for simplicity, or implement proper check
   }
 
+  // Allow all events (including backspace) to pass through to the editor
   ignoreEvent() {
-    return false;
+    return true;
   }
 }
 
@@ -62,8 +63,6 @@ export const triggerDecorationStateField = StateField.define<DecorationSet>({
         const triggerDeco = Decoration.mark({
           class: 'chrono-active-trigger',
           attributes: { 'data-chrono-trigger': 'true', 'spellcheck': 'false' },
-          inclusiveStart: false, 
-          inclusiveEnd: false
         }).range(newTriggerDecoInfo.from, newTriggerDecoInfo.to);
         decoArray.push(triggerDeco);
       }

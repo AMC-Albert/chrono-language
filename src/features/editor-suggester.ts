@@ -21,6 +21,7 @@ export class EditorSuggester extends EditorSuggest<string> {
 
     private decoratedEditorView: EditorView | null = null; // To track editor view with active decorations
     private firstSpaceBlocked = false; // Track if we've already blocked the first space
+    private shouldInsertSpaceOnOpen: boolean = false; // Flag to insert space when suggester opens
 
     constructor(plugin: ChronoLanguage) {
         super(plugin.app);
@@ -36,6 +37,7 @@ export class EditorSuggester extends EditorSuggest<string> {
         // Register keyboard handlers and update instructions
         this.registerKeyboardHandlers();
         this.updateInstructions();
+        this.keyboardHandler.registerBackspaceKeyHandler(this.handleBackspaceKey);
     }
 
     private registerKeyboardHandlers() {
@@ -90,36 +92,54 @@ export class EditorSuggester extends EditorSuggest<string> {
         const posAfterTrigger = lastTriggerIndex + triggerPhrase.length;
         const query = cursorSubstring.slice(posAfterTrigger);
         
-        // Check if we're at the beginning of query (right after trigger phrase)
+        // Check if we're at the beginning of query (right after trigger phrase or auto-inserted space)
         if (cursor.ch === posAfterTrigger || query.trim() === '') {
             if (!this.firstSpaceBlocked) {
-                // This is the first space - block it
+                // This is the first space - block it by preventing default editor action.
                 this.firstSpaceBlocked = true;
-                return true; // Prevent the space
+                event.preventDefault(); 
+                event.stopImmediatePropagation();
+                return true; // Signal that the event was handled (and default prevented)
             } else {
-                // This is the second space - insert space and dismiss suggester
+                // This is the second space - allow it and dismiss suggester.
+                this.firstSpaceBlocked = false; // Reset flag
                 
-                // Reset flag before we do anything else
-                this.firstSpaceBlocked = false;
-                
-                // Set flags to prevent immediate re-trigger
+                // Set state to prevent immediate re-trigger if user types near same spot.
                 this.lastReplacedTriggerStart = { line: cursor.line, ch: lastTriggerIndex };
-                this.lastInsertionEnd = { line: cursor.line, ch: cursor.ch + 1 };
+                this.lastInsertionEnd = { line: cursor.line, ch: cursor.ch + 1 }; // Account for the space being inserted
                 
-                // Let the default space pass through by returning false
-                // This will insert the space naturally
-                
-                // Close the suggester after the space has been added
+                // Close the suggester. The space character will be inserted by default editor action.
                 setTimeout(() => {
                     this.close();
                 }, 0);
                 
-                // Do NOT prevent default! Let the space through
-                return false;
+                return false; // Do NOT prevent default; let the space be inserted.
             }
         }
         
-        return false; // Not at beginning of query, don't intercept
+        return false; // Not at the beginning of the query, don't intercept.
+    };
+
+    /**
+     * Handles backspace key events to remove auto-inserted space
+     * Returns true if the event was handled (should be prevented)
+     */
+    private handleBackspaceKey = (event: KeyboardEvent): boolean => {
+        if (!this.isOpen || !this.context) return false;
+        const editorView = this.context.editor.cm;
+        if (!editorView) return false;
+        const query = this.context.query;
+        if (query === '') {
+            const { line, ch } = this.context.end;
+            const off = this.context.editor.posToOffset({ line, ch });
+            // Remove the inserted space before context.end
+            editorView.dispatch({ changes: { from: off - 1, to: off, insert: '' } });
+            // Clear decorations and close
+            this.clearDecorations();
+            this.close();
+            return true;
+        }
+        return false;
     };
 
     /**
@@ -154,6 +174,26 @@ export class EditorSuggester extends EditorSuggest<string> {
     // Track when the suggester is opened
     open(): void {
         super.open();
+
+        // Auto-insert space to separate trigger phrase and query
+        if (this.shouldInsertSpaceOnOpen && this.context) {
+            const editor = this.context.editor;
+            const insertCh = this.context.start.ch + this.plugin.settings.triggerPhrase.length;
+            const pos = editor.posToOffset({ line: this.context.start.line, ch: insertCh });
+            if (editor.cm) {
+                editor.cm.dispatch({
+                    changes: { from: pos, to: pos, insert: ' ' },
+                    selection: { anchor: pos + 1 }
+                });
+            } else {
+                editor.replaceRange(' ', { line: this.context.start.line, ch: insertCh });
+                editor.setCursor({ line: this.context.start.line, ch: insertCh + 1 });
+            }
+            // update context end
+            this.context.end = { line: this.context.start.line, ch: insertCh + 1 };
+            this.shouldInsertSpaceOnOpen = false;
+        }
+
         // Apply decorations only when the suggester is actually open
         this.applyTriggerDecorations();
     }
@@ -185,9 +225,12 @@ export class EditorSuggester extends EditorSuggest<string> {
         const triggerEndOffset = triggerStartOffset + triggerPhrase.length;
         const effects: StateEffect<any>[] = [addTriggerDecorationEffect.of({ from: triggerStartOffset, to: triggerEndOffset })];
         
-        // Add spacer widget if query is empty
         const query = this.context.query;
-        if (query === '') effects.push(addSpacerWidgetEffect.of(triggerEndOffset));
+
+        // Always add spacer widget when there's no query to maintain separation
+        if (query === '') {
+            effects.push(addSpacerWidgetEffect.of(triggerEndOffset));
+        }
         
         try {
             if (editor.cm.dom.isConnected) {
@@ -202,77 +245,95 @@ export class EditorSuggester extends EditorSuggest<string> {
     }
     
     onTrigger(cursor: EditorPosition, editor: Editor): EditorSuggestContext | null {
-        // Store and immediately clear the post-selection state flags
         const localLastReplacedTriggerStart = this.lastReplacedTriggerStart;
         const localLastInsertionEnd = this.lastInsertionEnd;
         this.lastReplacedTriggerStart = null;
         this.lastInsertionEnd = null;
 
         const triggerPhrase = this.plugin.settings.triggerPhrase;
-        if (!triggerPhrase) return null;
-
-        // Get the current line and find the last trigger phrase
-        const line = editor.getLine(cursor.line);
-        const cursorSubstring = line.slice(0, cursor.ch);
-        const lastTriggerIndex = cursorSubstring.lastIndexOf(triggerPhrase);
-
-        // If trigger phrase not found or cursor is before the end of trigger phrase
-        if (lastTriggerIndex === -1 || cursor.ch < lastTriggerIndex + triggerPhrase.length) {
+        if (!triggerPhrase) {
             this.firstSpaceBlocked = false;
             return null;
         }
 
-        const posAfterTrigger = lastTriggerIndex + triggerPhrase.length;
-        let query = cursorSubstring.slice(posAfterTrigger);
+        const originalLine = editor.getLine(cursor.line);
+        const prefixBeforeCursor = originalLine.slice(0, cursor.ch);
+        const lastTriggerIndexInPrefix = prefixBeforeCursor.lastIndexOf(triggerPhrase);
 
-        // Check for spacey trigger scenario - this is when a trigger phrase is followed by spaces
-        // If the query is just spaces or starts with a space, we should not re-trigger
-        if (query.trim() === '' || query.startsWith(' ')) {
-            // If we previously closed the suggester (via second space), don't re-trigger
-            if (localLastReplacedTriggerStart && localLastInsertionEnd) {
-                if (cursor.line === localLastInsertionEnd.line) {
-                    // Prevent re-triggering when we're on the same line as a previous space dismissal
-                    return null;
-                }
-            }
+        if (lastTriggerIndexInPrefix === -1) {
+            this.firstSpaceBlocked = false;
+            return null;
+        }
+
+        const posImmediatelyAfterTrigger = lastTriggerIndexInPrefix + triggerPhrase.length;
+
+        if (cursor.ch < posImmediatelyAfterTrigger) { // Cursor inside trigger
+            this.firstSpaceBlocked = false;
+            return null;
+        }
+
+        // Editing existing text check (suggester closed)
+        if (!this.isOpen &&
+            (cursor.ch > posImmediatelyAfterTrigger || originalLine.slice(cursor.ch).trim() !== '')) {
+            this.firstSpaceBlocked = false;
+            return null;
+        }
+
+        let queryForSuggestions: string;
+        let finalEndPosForContext: EditorPosition = cursor; // Default to current cursor
+
+        if (cursor.ch === posImmediatelyAfterTrigger &&
+            (originalLine.length === posImmediatelyAfterTrigger || originalLine[posImmediatelyAfterTrigger] !== ' ')) {
+            // Condition to insert space is met.
+            this.shouldInsertSpaceOnOpen = true;
             
-            // If we just opened and immediately see spaces, don't continue
-            if (!this.isOpen && query.startsWith(' ')) {
+            // Context end will be at the trigger phrase end. Space insertion handled in open().
+            finalEndPosForContext = { line: cursor.line, ch: posImmediatelyAfterTrigger }; 
+            queryForSuggestions = '';
+            this.firstSpaceBlocked = false; 
+        } else {
+            this.shouldInsertSpaceOnOpen = false; // Ensure flag is false if condition not met
+            const textAfterTrigger = originalLine.slice(posImmediatelyAfterTrigger, cursor.ch);
+            if (textAfterTrigger.startsWith(' ')) {
+                queryForSuggestions = textAfterTrigger.slice(1);
+            } else {
+                queryForSuggestions = textAfterTrigger;
+            }
+            // finalEndPosForContext remains as current cursor, set by default
+
+            if (queryForSuggestions.trim() !== '') {
+                this.firstSpaceBlocked = false;
+            }
+        }
+
+        // Post-selection re-trigger check
+        if (localLastReplacedTriggerStart && localLastInsertionEnd) {
+            if (cursor.line === localLastInsertionEnd.line && cursor.ch === localLastInsertionEnd.ch &&
+                lastTriggerIndexInPrefix <= localLastReplacedTriggerStart.ch) {
+                this.firstSpaceBlocked = false;
                 return null;
             }
         }
 
-        // Handle normal trigger prevention logic
-        if (localLastReplacedTriggerStart && localLastInsertionEnd) {
-            if (cursor.line === localLastInsertionEnd.line && cursor.ch === localLastInsertionEnd.ch) {
-                // We're at the insertion point of a previous selection
-                if (lastTriggerIndex <= localLastReplacedTriggerStart.ch) {
-                    // The trigger is at or before the previous trigger
-                    this.firstSpaceBlocked = false;
-                    return null;
-                }
-            }
+        // Spacey trigger check: if suggester is closed, user types "trigger ", and no auto-insert this call.
+        // Use finalEndPosForContext for the end boundary of the slice from originalLine.
+        const rawTextAfterTriggerForSpaceyCheck = originalLine.slice(posImmediatelyAfterTrigger, finalEndPosForContext.ch);
+        if (!this.isOpen && 
+            rawTextAfterTriggerForSpaceyCheck.startsWith(' ') && rawTextAfterTriggerForSpaceyCheck.trim() === '') {
+            this.firstSpaceBlocked = false;
+            return null;
         }
-
-        // Trim leading space for processing
-        if (query.startsWith(' ')) {
-            query = query.slice(1);
-        }
-
+        
         const activeFile = this.app.workspace.getActiveFile();
         if (!activeFile) {
             this.firstSpaceBlocked = false;
             return null;
         }
 
-        // All checks passed. Create context without decorations.
-        const contextStartPos = { line: cursor.line, ch: lastTriggerIndex };
-
-        // Return context without applying decorations
         return {
-            start: contextStartPos,
-            end: cursor,
-            query: query,
+            start: { line: cursor.line, ch: lastTriggerIndexInPrefix },
+            end: finalEndPosForContext,
+            query: queryForSuggestions,
             editor,
             file: activeFile
         };
@@ -292,10 +353,10 @@ export class EditorSuggester extends EditorSuggest<string> {
     selectSuggestion(item: string, event: KeyboardEvent | MouseEvent): void {
         if (!this.context || !this.suggester) return;
 
-        const { editor, start, end, file } = this.context;
-        const { insertMode, contentFormat } = this.keyboardHandler.getEffectiveInsertModeAndFormat(event as KeyboardEvent);
+        const { editor, start, end, file } = this.context; // 'start' is trigger start, 'end' is query end
 
-        // Use the new method in SuggestionProvider to get the final text
+        // Calculate finalText first, as its generation is independent of the removal timing
+        const { insertMode, contentFormat } = this.keyboardHandler.getEffectiveInsertModeAndFormat(event as KeyboardEvent);
         const finalText = this.suggester.getFinalInsertText(
             item,
             insertMode,
@@ -305,13 +366,27 @@ export class EditorSuggester extends EditorSuggest<string> {
             this.app // Pass the App instance
         );
 
-        // Store state *before* editor.replaceRange, as this.context might be cleared by close()
-        // which can be called before onTrigger if events are synchronous.
-        // Storing start.line as well for robustness.
-        this.lastReplacedTriggerStart = { line: start.line, ch: start.ch };
-        this.lastInsertionEnd = { line: start.line, ch: start.ch + finalText.length };
+        // Store the original start position of the trigger phrase. This is where the new text will be inserted.
+        const originalTriggerStartPos = { line: start.line, ch: start.ch };
 
-        editor.replaceRange(finalText, start, end);
+        // Step 1: Remove the trigger phrase and any query text.
+        // The range (start, end) from the context covers the trigger phrase and the query.
+        editor.replaceRange('', start, end);
+
+        // Step 2: Insert the final text at the original start position of the trigger phrase.
+        // After the first editor.replaceRange, the cursor is effectively at originalTriggerStartPos.
+        // We insert the finalText there, so the range for this replacement is (originalTriggerStartPos, originalTriggerStartPos).
+        editor.replaceRange(finalText, originalTriggerStartPos, originalTriggerStartPos);
+
+        // Update state for preventing re-trigger. This should be based on the original trigger start
+        // and the length of the newly inserted text.
+        this.lastReplacedTriggerStart = { line: originalTriggerStartPos.line, ch: originalTriggerStartPos.ch };
+        this.lastInsertionEnd = { line: originalTriggerStartPos.line, ch: originalTriggerStartPos.ch + finalText.length };
+        
+        // Explicitly set the cursor to the end of the inserted text
+        editor.setCursor(this.lastInsertionEnd);
+        
+        // The EditorSuggest base class typically handles closing the suggester after this method completes.
     }
 
     /**

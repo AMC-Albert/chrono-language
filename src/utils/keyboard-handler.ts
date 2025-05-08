@@ -29,6 +29,7 @@ export class KeyboardHandler {
     private keyState: Record<string, boolean> = { Control: false, Shift: false, Alt: false };
     private keyStateChangeListeners: KeyStateChangeCallback[] = [];
     private spaceKeyHandlers: SpaceKeyEventHandler[] = [];
+    private backspaceKeyHandlers: ((event: KeyboardEvent) => boolean)[] = [];
 
     constructor(scope?: Scope, plainTextByDefault: boolean = false) {
         this.scope = scope || null;
@@ -55,10 +56,19 @@ export class KeyboardHandler {
         const isKeyDown = event.type === KEY_EVENTS.KEYDOWN;
         
         // Handle space key intercept if this is a keydown event
-        if (isKeyDown && key === ' ' && this.handleSpaceKeyEvent(event)) {
-            event.preventDefault();
-            event.stopPropagation();
-            return;
+        // The actual space insertion will NOT be prevented here.
+        // Registered spaceKeyHandlers will be notified and can perform actions (like state changes or closing suggesters),
+        // but they will no longer block the space character itself via a return value here.
+        if (isKeyDown && key === ' ') {
+            this.handleSpaceKeyEvent(event);
+            // NOTE: event.preventDefault() and event.stopPropagation() are removed here.
+        }
+
+        if (isKeyDown && key === 'Backspace') {
+            if (this.handleBackspaceKeyEvent(event)) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+            }
         }
         
         if (key === KEYS.CONTROL || key === KEYS.SHIFT || key === KEYS.ALT) {
@@ -82,6 +92,15 @@ export class KeyboardHandler {
         }
         return false; // No handler prevented the event
     }
+
+    private handleBackspaceKeyEvent(event: KeyboardEvent): boolean {
+        for (const handler of this.backspaceKeyHandlers) {
+            if (handler(event)) {
+                return true;
+            }
+        }
+        return false;
+    }
     
     /**
      * Registers a handler for space key events
@@ -92,6 +111,13 @@ export class KeyboardHandler {
     }
     
     /**
+     * Registers a handler for backspace key events
+     */
+    registerBackspaceKeyHandler(handler: (event: KeyboardEvent) => boolean): void {
+        this.backspaceKeyHandlers.push(handler);
+    }
+    
+    /**
      * Unregisters a space key event handler
      * @param handler The handler to remove
      */
@@ -99,6 +125,16 @@ export class KeyboardHandler {
         const index = this.spaceKeyHandlers.indexOf(handler);
         if (index !== -1) {
             this.spaceKeyHandlers.splice(index, 1);
+        }
+    }
+    
+    /**
+     * Unregisters a backspace key event handler
+     */
+    unregisterBackspaceKeyHandler(handler: (event: KeyboardEvent) => boolean): void {
+        const index = this.backspaceKeyHandlers.indexOf(handler);
+        if (index !== -1) {
+            this.backspaceKeyHandlers.splice(index, 1);
         }
     }
 
@@ -156,5 +192,6 @@ export class KeyboardHandler {
         document.removeEventListener(KEY_EVENTS.KEYUP, this.handleKeyEvent, true);
         this.keyStateChangeListeners = [];
         this.spaceKeyHandlers = [];
+        this.backspaceKeyHandlers = [];
     }
 }

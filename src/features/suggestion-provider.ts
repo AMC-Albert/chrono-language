@@ -81,7 +81,7 @@ export class SuggestionProvider {
         e.preventDefault();
         e.stopImmediatePropagation();
 
-        this.cleanupTriggerPhrase(context);
+        this.cleanupTriggerPhrase(context); // context is EditorSuggestContext from EditorSuggester
         const momentDate = this.getSelectedDate();
         if (!momentDate) return;
 
@@ -93,20 +93,12 @@ export class SuggestionProvider {
         this.closeSuggester();
     }
     
-    private cleanupTriggerPhrase(context?: any): void {
-        if (!context?.editor) return;
-        
-        const editor = context.editor;
-        const cursor = editor.getCursor();
-        const line = editor.getLine(cursor.line);
-        const triggerPhrase = this.plugin.settings.triggerPhrase;
-        const beforeCursor = line.slice(0, cursor.ch);
-        const lastTriggerIdx = beforeCursor.lastIndexOf(triggerPhrase);
-        
-        if (lastTriggerIdx !== -1) {
-            const start = { line: cursor.line, ch: lastTriggerIdx };
-            const end = { line: cursor.line, ch: cursor.ch };
-            editor.replaceRange('', start, end);
+    private cleanupTriggerPhrase(context?: any): void { // context is EditorSuggestContext from EditorSuggester
+        if (context?.editor && context.start && context.end) {
+            const editor = context.editor;
+            // Replace the original trigger phrase and query using context.start and context.end
+            // This range covers the trigger and the query text.
+            editor.replaceRange('', context.start, context.end);
         }
     }
     
@@ -411,7 +403,14 @@ export class SuggestionProvider {
         linkEl.addEventListener('click', async (event) => {
             event.preventDefault();
             event.stopPropagation();
-            this.closeSuggester();
+            
+            // Explicitly cleanup the trigger phrase using the current context from EditorSuggester
+            if (this.contextProvider) { // this.contextProvider is the EditorSuggester instance
+                // Accessing .context on EditorSuggester. It holds the EditorSuggestContext.
+                this.cleanupTriggerPhrase((this.contextProvider as any).context);
+            }
+
+            this.closeSuggester(); // Now primarily closes the UI
             const file = await getOrCreateDailyNote(this.app, momentDate, true);
             if (file) await this.app.workspace.getLeaf(event.ctrlKey).openFile(file);
         });
@@ -432,37 +431,15 @@ export class SuggestionProvider {
         }
     }
 
-    // Helper method to close the suggester
+    // Helper method to close the suggester UI
     private closeSuggester() {
         this.isSuggesterOpen = false;
         
-        const ctx = this.contextProvider;
+        const suggesterInstance = this.contextProvider as any; // this.contextProvider is the EditorSuggester instance
         
-        // Safely replace the trigger text if possible
-        if (ctx?.context?.editor) {
-            try {
-                const editor = ctx.context.editor;
-                const cursor = editor.getCursor();
-                
-                const triggerPhrase = this.plugin.settings.triggerPhrase;
-                const line = editor.getLine(cursor.line);
-                const beforeCursor = line.slice(0, cursor.ch);
-                const lastTriggerIdx = beforeCursor.lastIndexOf(triggerPhrase);
-                
-                if (lastTriggerIdx >= 0) {
-                    const start = { line: cursor.line, ch: lastTriggerIdx };
-                    const end = { line: cursor.line, ch: cursor.ch };
-                    
-                    if (start.ch < end.ch) {
-                        editor.replaceRange('', start, end);
-                    }
-                }
-            } catch (e) {
-                console.debug("Error closing suggester (safe to ignore):", e);
-            }
-        }
-        
-        ctx?.close?.() ?? ctx?.suggestions?.close?.();
+        // Call the close method on the EditorSuggester instance.
+        // This will trigger EditorSuggester.close(), which handles UI and internal state.
+        suggesterInstance?.close?.(); 
     }
     
     getKeyboardHandler(): KeyboardHandler {
