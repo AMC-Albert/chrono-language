@@ -143,13 +143,16 @@ export class EditorSuggester extends EditorSuggest<string> {
 
         const triggerHappy = this.plugin.settings.triggerHappy;
         const posAfterTrigger = lastTriggerIndex + triggerPhrase.length; // Based on current lastTriggerIndex
-        const query = cursorSubstring.slice(posAfterTrigger); // Based on current lastTriggerIndex
+        let query = cursorSubstring.slice(posAfterTrigger);
+        // Handle leading spaces: dismiss on double space, trim single leading space
+        if (query.startsWith('  ')) return null;
+        if (query.startsWith(' ')) query = query.slice(1);
 
         // Stash previous context if suggester was open, to detect if lastTriggerIndex shifted backwards
         const prevContext = (this.isOpen && this.context) ? { line: this.context.start.line, ch: this.context.start.ch } : null;
 
-        // Universal Check 1: Early escape if query starts with space/tab.
-        if (query.startsWith(' ') || query.startsWith('\t')) {
+        // Early escape if query starts with tab
+        if (query.startsWith('\t')) {
             return null;
         }
 
