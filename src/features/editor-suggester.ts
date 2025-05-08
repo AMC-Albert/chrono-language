@@ -267,6 +267,26 @@ export class EditorSuggester extends EditorSuggest<string> {
 
         const posImmediatelyAfterTrigger = lastTriggerIndexInPrefix + triggerPhrase.length;
 
+        // if triggerHappy is false, require whitespace or start/end around the trigger phrase
+        if (!this.plugin.settings.triggerHappy) {
+            // check character before trigger
+            if (lastTriggerIndexInPrefix > 0) {
+                const beforeChar = originalLine[lastTriggerIndexInPrefix - 1];
+                if (!/\s/.test(beforeChar)) {
+                    this.firstSpaceBlocked = false;
+                    return null;
+                }
+            }
+            // check character after trigger
+            if (posImmediatelyAfterTrigger < originalLine.length) {
+                const afterChar = originalLine[posImmediatelyAfterTrigger];
+                if (!/\s/.test(afterChar)) {
+                    this.firstSpaceBlocked = false;
+                    return null;
+                }
+            }
+        }
+
         if (cursor.ch < posImmediatelyAfterTrigger) { // Cursor inside trigger
             this.firstSpaceBlocked = false;
             return null;
