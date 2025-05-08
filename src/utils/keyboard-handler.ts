@@ -72,6 +72,7 @@ export class KeyboardHandler {
         // ...other dynamic key registrations if needed...
     }
     registerTabKeyHandlers(callback: (event: KeyboardEvent) => boolean): void {
+        if (!this.scope) return; // Added safety check for scope
         this.registerAllKeyHandlers({ openDailyNote: callback, openDailyNoteNewTab: callback });
     }
     getEffectiveInsertModeAndFormat(event?: KeyboardEvent): { insertMode: InsertMode, contentFormat: ContentFormat } {

@@ -1,5 +1,10 @@
 .chrono-active-trigger {
-  color: green;
+  padding: var(--size-2-3);
+  border: 1px solid var(--background-modifier-border-hover);
+  background-color: var(--background-secondary);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-s);
+  margin-right: 0.5em; /* Re-added for visual spacing */
 }
 
 .chrono-suggestion-container {

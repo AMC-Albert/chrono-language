@@ -6,11 +6,19 @@ import { StateField, StateEffect } from '@codemirror/state';
 import { EditorView, Decoration, DecorationSet } from '@codemirror/view';
 
 // Effects for adding/clearing trigger phrase decorations
-export const addTriggerDecorationEffect = StateEffect.define<{ from: number, to: number }>();
+export const addTriggerDecorationEffect = StateEffect.define<{ 
+    triggerFrom: number, 
+    triggerTo: number, 
+    queryFrom: number, // Start of the processed query text for styling
+    queryTo: number,   // End of the processed query text for styling
+    replaceLeadingSpace: boolean 
+}>();
 export const clearTriggerDecorationsEffect = StateEffect.define<null>();
 
-// The actual decoration to apply
-const triggerPhraseDecoration = Decoration.mark({ class: "chrono-active-trigger" });
+// The actual decorations to apply
+const triggerPhraseDecoration = Decoration.mark({ class: "chrono-active-trigger" }); // Will have margin-right via CSS
+const queryTextDecoration = Decoration.mark({ class: "chrono-active-query" }); 
+const zeroWidthWidget = Decoration.replace({}); // Widget to visually collapse a character
 
 // StateField to manage the decorations
 export const triggerDecorationStateField = StateField.define<DecorationSet>({
@@ -23,12 +31,24 @@ export const triggerDecorationStateField = StateField.define<DecorationSet>({
 
         for (let effect of tr.effects) {
             if (effect.is(addTriggerDecorationEffect)) {
-                // Add new decoration
-                // Clear any existing decorations first to prevent duplicates if effects are rapid
-                decorations = Decoration.none; 
-                decorations = decorations.update({
-                    add: [triggerPhraseDecoration.range(effect.value.from, effect.value.to)]
-                });
+                const { triggerFrom, triggerTo, queryFrom, queryTo, replaceLeadingSpace } = effect.value;
+                const newDecorations = [
+                    triggerPhraseDecoration.range(triggerFrom, triggerTo)
+                ];
+
+                // If user typed a space immediately after the trigger, collapse it.
+                // The visual gap when no space is typed will come from margin-right on triggerPhraseDecoration.
+                if (replaceLeadingSpace) {
+                    if (queryFrom > triggerTo) { // Ensure there's a character (the typed space) to collapse
+                        newDecorations.push(zeroWidthWidget.range(triggerTo, queryFrom));
+                    }
+                }
+                
+                // Add query decoration only if there is text for the processed query
+                if (queryTo > queryFrom) { 
+                    newDecorations.push(queryTextDecoration.range(queryFrom, queryTo));
+                }
+                decorations = Decoration.set(newDecorations);
             } else if (effect.is(clearTriggerDecorationsEffect)) {
                 // Clear all decorations managed by this field
                 decorations = Decoration.none;
