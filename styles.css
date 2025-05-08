@@ -40,7 +40,12 @@
 }
 
 .chrono-error-text {
-  font-style: italic;
+
+}
+
+.chrono-error-icon {
+  color: var(--text-error);
+  font-weight: bold;
 }
 
 .multiple-text-component {

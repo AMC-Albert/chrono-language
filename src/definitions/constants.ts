@@ -165,6 +165,7 @@ export const CLASSES = {
     unresolvedLink: 'chrono-is-unresolved-link',
     unresolvedText: 'chrono-is-unresolved-text',
     errorText: 'chrono-error-text',
+    errorIcon: 'chrono-error-icon',
     timeRelevantSuggestion: 'chrono-time-relevant-suggestion',
 };
 

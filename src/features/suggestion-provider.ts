@@ -321,7 +321,8 @@ export class SuggestionProvider {
         const previewContainer = container.createEl('span', { cls: [CLASSES.suggestionPreview] });
         
         if (!rawParsedDate) { // Check if the original item string failed to parse
-            previewContainer.createEl('span', { text: '↳ Unable to parse date', cls: [CLASSES.errorText] });
+            previewContainer.createEl('span', {text: '⨉ ', cls: [CLASSES.errorIcon]})
+            previewContainer.createEl('span', { text: 'Unable to parse date', cls: [CLASSES.errorText] });
             return;
         }
 
