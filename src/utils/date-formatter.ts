@@ -15,33 +15,8 @@ export class DateFormatter {
         return (
             settings.timeOnly &&
             !!settings.timeFormat && settings.timeFormat.trim() !== "" &&
-            this.isTimeRelevantSuggestion(item) &&
+            EnhancedDateParser.inputHasTimeComponent(item) &&
             momentDate.isSame(moment(), 'day')
-        );
-    }
-
-    /**
-     * Determines if a suggestion contains specific time components
-     */
-    public static isTimeRelevantSuggestion(item: string): boolean {
-        // Special case for "now"
-        if (item.toLowerCase() === "now") return true;
-        
-        // Skip holidays
-        const isHoliday = EnhancedDateParser.getHolidayNames().some(
-            h => h.toLowerCase() === item.trim().toLowerCase()
-        );
-        if (isHoliday) return false;
-        
-        // Check if the date has specific time components
-        const parsedDate = EnhancedDateParser.parseDate(item);
-        if (!parsedDate) return false;
-        
-        const now = new Date();
-        return (
-            parsedDate.getHours() !== now.getHours() ||
-            parsedDate.getMinutes() !== now.getMinutes() ||
-            parsedDate.getSeconds() !== now.getSeconds()
         );
     }
 
@@ -79,7 +54,7 @@ export class DateFormatter {
         }
         
         let formattedDate = momentDate.format(baseFormatString);
-        const isItemTimeRelevant = DateFormatter.isTimeRelevantSuggestion(itemText);
+        const isItemTimeRelevant = EnhancedDateParser.inputHasTimeComponent(itemText);
     
         // Apply time formatting if applicable
         if (settings.timeFormat && settings.timeFormat.trim() !== "" && isItemTimeRelevant) {
@@ -92,7 +67,8 @@ export class DateFormatter {
                 // Avoid appending time if the base format string already likely includes it (heuristic)
                 const baseIncludesTime = /[HhmsSaAZ]/.test(baseFormatString);
                 if (!baseIncludesTime) {
-                    return `${formattedDate} ${timeString}`; // Append time to baseText
+                    // Insert custom separator between date and time
+                    return `${formattedDate}${settings.timeSeparator}${timeString}`;
                 }
             }
         }

@@ -229,11 +229,6 @@ export class SuggestionProvider {
         return finalSuggestions.slice(0, 15); // Limit total suggestions
     }
 
-    // Check if a suggestion is time-relevant (has specific time components)
-    private isTimeRelevantSuggestion(item: string): boolean {
-        return DateFormatter.isTimeRelevantSuggestion(item);
-    }
-
     renderSuggestionContent(item: string, el: HTMLElement, context?: any) {
         this.isSuggesterOpen = true;
         this.keyboardHandler.resetModifierKeys();
@@ -245,7 +240,7 @@ export class SuggestionProvider {
         });
 
         // Mark time-relevant suggestions
-        if (this.isTimeRelevantSuggestion(item)) {
+        if (EnhancedDateParser.inputHasTimeComponent(item)) {
             container.addClass(CLASSES.timeRelevantSuggestion);
         }
         
@@ -454,8 +449,7 @@ export class SuggestionProvider {
         activeFile: TFile,
         app: App
     ): string {
-        const parsedDate = EnhancedDateParser.parseDate(itemText);
-        const isItemTimeRelevant = DateFormatter.isTimeRelevantSuggestion(itemText); 
+        const parsedDate = EnhancedDateParser.parseDate(itemText);; 
 
         if (!parsedDate) { // itemText is not a parsable date string
             if (insertMode === InsertMode.PLAINTEXT) {

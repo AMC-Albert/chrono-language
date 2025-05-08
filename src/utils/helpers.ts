@@ -139,9 +139,6 @@ export function createDailyNoteLink(
     
     // Get the path to the daily note
     const targetPath = getDailyNotePath(app, settings, momentDate);
-    
-    // Determine if the original input text was time-relevant
-    const isInputTimeRelevant = DateFormatter.isTimeRelevantSuggestion(dateText);
 
     // Get the appropriate alias for the link
     const alias = determineDailyNoteAlias(

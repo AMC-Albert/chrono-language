@@ -90,13 +90,39 @@ export class EnhancedDateParser {
         },
         // Day of week prefixes
         {
-            pattern: /^(mon|tu|tue|wed|thu|thurs|fri|sat|su|sun)/i,
+            pattern: (input: string) => {
+                const lower = input.trim().toLowerCase();
+                return lower.length > 0 && DAYS_OF_THE_WEEK.some(d => d.toLowerCase().startsWith(lower));
+            },
             generate: (input: string) => {
-                const lowerInput = input.toLowerCase();
-                return DAYS_OF_THE_WEEK.filter(day => day.toLowerCase().startsWith(lowerInput));
-                           // No need to capitalize, as they are already capitalized in the constant array
+                const lower = input.trim().toLowerCase();
+                return DAYS_OF_THE_WEEK.filter(d => d.toLowerCase().startsWith(lower));
             },
             priority: 85
+        },
+        // Weekday with week qualifier (e.g., 'Monday next week')
+        {
+            pattern: (input: string) => {
+                const parts = input.trim().toLowerCase().split(/\s+/);
+                return parts.length >= 2
+                    && DAYS_OF_THE_WEEK.some(d => d.toLowerCase().startsWith(parts[0]))
+                    && ['this','next','last'].some(q => q.startsWith(parts[1]));
+            },
+            generate: (input: string) => {
+                const parts = input.trim().toLowerCase().split(/\s+/);
+                const cap = EnhancedDateParser.capitalizeFirstLetter;
+                const suggestions: string[] = [];
+                DAYS_OF_THE_WEEK.forEach(day => {
+                    if (!day.toLowerCase().startsWith(parts[0])) return;
+                    ['this','next','last'].forEach(q => {
+                        if (!q.startsWith(parts[1])) return;
+                        const phrase = `${day} ${q} week`;
+                        if (phrase.toLowerCase().startsWith(input.trim().toLowerCase())) suggestions.push(phrase);
+                    });
+                });
+                return suggestions;
+            },
+            priority: 82
         },
         // Month prefixes
         {
@@ -119,6 +145,22 @@ export class EnhancedDateParser {
             },
             priority: 70
         },
+        // Partial relative-day + time-of-day combos (e.g., 'tomorrow mo')
+        {
+            pattern: (input: string) => {
+                const parts = input.trim().toLowerCase().split(/\s+/);
+                return parts.length === 2 && ['today', 'tomorrow', 'yesterday'].includes(parts[0]) && parts[1].length > 0;
+            },
+            generate: (input: string) => {
+                const parts = input.trim().split(/\s+/);
+                const day = parts[0];
+                const after = parts[1].toLowerCase();
+                const cap = EnhancedDateParser.capitalizeFirstLetter;
+                return TIME_OF_DAY_PHRASES.filter(p => p.toLowerCase().startsWith(after))
+                    .map(p => `${cap(day)} ${p.toLowerCase()}`);
+            },
+            priority: 65
+        },
         // Time-of-day phrases (e.g., Noon, Midday, etc.)
         {
             pattern: (input: string) => {
@@ -131,6 +173,47 @@ export class EnhancedDateParser {
                 return TIME_OF_DAY_PHRASES.filter(phrase => phrase.toLowerCase().startsWith(lower));
             },
             priority: 60
+        },
+        // Weekend suggestions with partial matching
+        {
+            pattern: (input: string) => {
+                const trimmed = input.trim().toLowerCase();
+                const parts = trimmed.split(/\s+/);
+                if (parts.length === 1) return 'weekend'.startsWith(parts[0]) && parts[0].length > 0;
+                if (parts.length === 2 && ['this', 'next'].includes(parts[0]) ) return 'weekend'.startsWith(parts[1]);
+                return false;
+            },
+            generate: (input: string) => {
+                const parts = input.trim().toLowerCase().split(/\s+/);
+                const cap = EnhancedDateParser.capitalizeFirstLetter;
+                if (parts.length === 2 && ['this', 'next'].includes(parts[0])) {
+                    return [`${cap(parts[0])} weekend`];
+                }
+                return ['This weekend', 'Next weekend'];
+            },
+            priority: 55
+        },
+        // Start/end of period suggestions with partial matching
+        {
+            pattern: (input: string) => {
+                const trimmed = input.trim().toLowerCase();
+                return trimmed.startsWith('st') || trimmed.startsWith('end') || trimmed.startsWith('start o');
+            },
+            generate: (input: string) => {
+                const trimmed = input.trim().toLowerCase();
+                const cap = EnhancedDateParser.capitalizeFirstLetter;
+                const suggestions: string[] = [];
+                ['start', 'end'].forEach(boundary => {
+                    ['this', 'next'].forEach(selector => {
+                        ['week', 'month', 'quarter', 'year'].forEach(unit => {
+                            const phrase = `${cap(boundary)} of ${selector} ${unit}`;
+                            if (phrase.toLowerCase().startsWith(trimmed)) suggestions.push(phrase);
+                        });
+                    });
+                });
+                return suggestions;
+            },
+            priority: 50
         },
         // Holiday pattern (if partially matching a known holiday)
         {
@@ -314,6 +397,24 @@ export class EnhancedDateParser {
         }
         
         return modifiedText;
+    }
+
+    /**
+     * Determines if the input string contains a time component or time-related phrase.
+     * This checks for explicit times (e.g., 3pm, 14:00), time-of-day phrases, or 'now'.
+     */
+    static inputHasTimeComponent(text: string): boolean {
+        if (!text) return false;
+        const lower = text.trim().toLowerCase();
+        // Exclude 'in X days/weeks/years' (no time component)
+        if (/^in \d+\s*(days?|weeks?|years?)$/.test(lower)) return false;
+        // Check for 'now'
+        if (lower === 'now') return true;
+        // Check for time-of-day phrases
+        if (TIME_OF_DAY_PHRASES.some(phrase => lower.includes(phrase.toLowerCase()))) return true;
+        // Check for explicit time (e.g., 3pm, 14:00, 3:30 am, 23:59)
+        if (/\b(\d{1,2})(:|\.|h)?(\d{2})?\s?(am|pm)?\b/.test(lower)) return true;
+        return false;
     }
 
     /**

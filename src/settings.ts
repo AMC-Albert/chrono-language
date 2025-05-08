@@ -16,6 +16,7 @@ export interface ChronoLanguageSettings {
 	holidayLocale: string;
 	timeFormat: string;
 	timeOnly: boolean;
+	timeSeparator: string;
 }
 
 export const DEFAULT_SETTINGS: ChronoLanguageSettings = {
@@ -31,6 +32,7 @@ export const DEFAULT_SETTINGS: ChronoLanguageSettings = {
 	holidayLocale: '',
 	timeFormat: '',
 	timeOnly: false,
+	timeSeparator: ' ',
 };
 
 export class ChronoLanguageSettingTab extends PluginSettingTab {
@@ -149,7 +151,7 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Trigger phrase")
-			.setDesc("Customize the trigger phrase to activate the editor suggester. If empty, the suggester will be disabled.")
+			.setDesc("Customize the trigger phrase to activate the editor suggester. If empty, the suggester will be disabled. Can be a word or single character.")
 			.addText((text) =>
 				text
 					.setPlaceholder("@")
@@ -187,9 +189,28 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 					})
 			);
 
+		const initialEditorSuggestionsSettings = new Setting(containerEl)
+			.setName("Initial suggestions")
+			.setDesc("Enter initial suggestions for the editor suggester. Each suggestion should be on a new line.");
+			// Initial suggestions text entry box
+			const initialEditorSuggestionsBox = new MultipleTextComponent(initialEditorSuggestionsSettings.controlEl);
+			initialEditorSuggestionsBox
+				.setPlaceholder("Today\nTomorrow\nYesterday")
+				.setValue(this.plugin.settings.initialEditorSuggestions)
+				.onChange(async (value) => {
+					// Ensure we always have at least the default suggestions if the array is empty
+					const suggestions = value.filter(item => item.trim().length > 0); // Filter out empty strings
+					this.plugin.settings.initialEditorSuggestions = suggestions.length > 0
+						? [...suggestions]
+						: DEFAULT_SETTINGS.initialEditorSuggestions;
+					await this.plugin.saveSettings();
+				});
+
+		new Setting(containerEl).setName('Timestamps').setHeading().setDesc("When inserting a time/date with specified hours/minutes (e.g. 'in 3 hours'), or the special 'Now' phrase, you can append a timestamp automatically.")
+
 		new Setting(containerEl)
-		.setName("Add timestamp when relevant")
-		.setDesc("When inserting a time/date with specified hours/minutes (e.g. 'in 3 hours', or the 'Now' phrase), add a timestamp to the insertion. Specify the time format to use, or leave empty to disable this feature.")
+		.setName("Time format")
+		.setDesc("Specify the time format to use, or leave empty to disable this feature.")
 		.addText((text) =>
 			text
 				.setPlaceholder("LT")
@@ -199,10 +220,23 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				})
 		);
+		
+		new Setting(containerEl)
+			.setName("Separator character(s)")
+			.setDesc("Characters to insert between date and time when appending timestamps. Set to empty for no separator. Default is space.")
+			.addText((text) =>
+				text
+					.setPlaceholder(" ")
+					.setValue(this.plugin.settings.timeSeparator)
+					.onChange(async (value) => {
+						this.plugin.settings.timeSeparator = value;
+						await this.plugin.saveSettings();
+					})
+			);
 
 		new Setting(containerEl)
-		.setName("Insert only the timestamp when selected date is today and time is relevant")
-		.setDesc("Timestamps (specified above) will be the ONLY thing inserted if the selected date is today, and time is relevant. If disabled, the timestamp will be appended to the date.")
+		.setName("Conditional insert timestamp only")
+		.setDesc("Timestamps will be the ONLY thing inserted if selecting some time today.")
 		.addToggle((toggle) =>
 			toggle
 				.setValue(this.plugin.settings.timeOnly)
@@ -211,23 +245,6 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				})
 		);
-
-		const initialEditorSuggestionsSettings = new Setting(containerEl)
-			.setName("Initial suggestions")
-			.setDesc("Enter initial suggestions for the editor suggester. Each suggestion should be on a new line.");
-		// Initial suggestions text entry box
-		const initialEditorSuggestionsBox = new MultipleTextComponent(initialEditorSuggestionsSettings.controlEl);
-		initialEditorSuggestionsBox
-			.setPlaceholder("Today\nTomorrow\nYesterday")
-			.setValue(this.plugin.settings.initialEditorSuggestions)
-			.onChange(async (value) => {
-				// Ensure we always have at least the default suggestions if the array is empty
-				const suggestions = value.filter(item => item.trim().length > 0); // Filter out empty strings
-				this.plugin.settings.initialEditorSuggestions = suggestions.length > 0
-					? [...suggestions]
-					: DEFAULT_SETTINGS.initialEditorSuggestions;
-				await this.plugin.saveSettings();
-			});
 
 		new Setting(containerEl).setName('Open daily note modal').setHeading();
 
