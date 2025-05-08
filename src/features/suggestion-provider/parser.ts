@@ -1,14 +1,17 @@
 import * as chrono from 'chrono-node';
 import Holidays from 'date-holidays';
-import { COMMON_STRINGS, DAYS_OF_THE_WEEK, MONTHS_OF_THE_YEAR, TIME_OF_DAY_PHRASES } from '../definitions/constants';
+import { COMMON_STRINGS, DAYS_OF_THE_WEEK, MONTHS_OF_THE_YEAR, TIME_OF_DAY_PHRASES, HOLIDAY_ALIASES } from '../../constants';
 
 /**
  * Enhanced date parsing that adds additional capabilities to chrono
  * - If text starts with a number, prepends "in " to handle relative dates better
  * - If text ends with a number, appends " days" to handle relative dates better
  * - Supports holiday names across different locales
+ *
+ * NOTE: This parser is used by multiple features (suggestion-provider, open-daily-note, helpers, etc.).
+ * If you refactor or move this file, update all relevant imports.
  */
-export class EnhancedDateParser {
+export class DateParser {
     private static holidaysInstance: any = null;
     private static holidayCache: Map<string, { name: string, dates: Date[] }> = new Map();
     private static currentYear = new Date().getFullYear();
@@ -48,7 +51,7 @@ export class EnhancedDateParser {
                     `${prefix}${num} minutes`,
                     `${prefix}${num} years`
                 ];
-                return baseSuggestions.map(s => EnhancedDateParser.capitalizeFirstLetter(s));
+                return baseSuggestions.map(s => DateParser.capitalizeFirstLetter(s));
             },
             priority: 100
         },
@@ -84,7 +87,7 @@ export class EnhancedDateParser {
                     generatedSuggestions = timeUnits.map(unit => `${prefixKeyword} ${unit}`);
                 }
                 
-                return generatedSuggestions.map(s => EnhancedDateParser.capitalizeFirstLetter(s));
+                return generatedSuggestions.map(s => DateParser.capitalizeFirstLetter(s));
             },
             priority: 90
         },
@@ -110,7 +113,7 @@ export class EnhancedDateParser {
             },
             generate: (input: string) => {
                 const parts = input.trim().toLowerCase().split(/\s+/);
-                const cap = EnhancedDateParser.capitalizeFirstLetter;
+                const cap = DateParser.capitalizeFirstLetter;
                 const suggestions: string[] = [];
                 DAYS_OF_THE_WEEK.forEach(day => {
                     if (!day.toLowerCase().startsWith(parts[0])) return;
@@ -141,7 +144,7 @@ export class EnhancedDateParser {
                 const lowerInput = input.toLowerCase();
                 const options = [COMMON_STRINGS.TODAY, COMMON_STRINGS.TOMORROW, COMMON_STRINGS.YESTERDAY];
                 return options.filter(opt => opt.startsWith(lowerInput))
-                              .map(opt => EnhancedDateParser.capitalizeFirstLetter(opt));
+                              .map(opt => DateParser.capitalizeFirstLetter(opt));
             },
             priority: 70
         },
@@ -155,7 +158,7 @@ export class EnhancedDateParser {
                 const parts = input.trim().split(/\s+/);
                 const day = parts[0];
                 const after = parts[1].toLowerCase();
-                const cap = EnhancedDateParser.capitalizeFirstLetter;
+                const cap = DateParser.capitalizeFirstLetter;
                 return TIME_OF_DAY_PHRASES.filter(p => p.toLowerCase().startsWith(after))
                     .map(p => `${cap(day)} ${p.toLowerCase()}`);
             },
@@ -185,7 +188,7 @@ export class EnhancedDateParser {
             },
             generate: (input: string) => {
                 const parts = input.trim().toLowerCase().split(/\s+/);
-                const cap = EnhancedDateParser.capitalizeFirstLetter;
+                const cap = DateParser.capitalizeFirstLetter;
                 if (parts.length === 2 && ['this', 'next'].includes(parts[0])) {
                     return [`${cap(parts[0])} weekend`];
                 }
@@ -201,7 +204,7 @@ export class EnhancedDateParser {
             },
             generate: (input: string) => {
                 const trimmed = input.trim().toLowerCase();
-                const cap = EnhancedDateParser.capitalizeFirstLetter;
+                const cap = DateParser.capitalizeFirstLetter;
                 const suggestions: string[] = [];
                 ['start', 'end'].forEach(boundary => {
                     ['this', 'next'].forEach(selector => {
@@ -218,16 +221,16 @@ export class EnhancedDateParser {
         // Holiday pattern (if partially matching a known holiday)
         {
             pattern: (input: string) => { // Function pattern to check if input might be a holiday
-                if (!EnhancedDateParser.holidaysInstance) EnhancedDateParser.initHolidays();
+                if (!DateParser.holidaysInstance) DateParser.initHolidays();
                 const lower = input.trim().toLowerCase();
                 if (lower.length < 2) return false; 
-                return Array.from(EnhancedDateParser.holidayCache.keys())
+                return Array.from(DateParser.holidayCache.keys())
                     .some(name => name.includes(lower)); // Check if input is part of any holiday name
             },
             generate: (input: string) => {
-                if (!EnhancedDateParser.holidaysInstance) EnhancedDateParser.initHolidays();
+                if (!DateParser.holidaysInstance) DateParser.initHolidays();
                 const lower = input.trim().toLowerCase();
-                return Array.from(EnhancedDateParser.holidayCache.values())
+                return Array.from(DateParser.holidayCache.values())
                     .filter(holiday => holiday.name.toLowerCase().includes(lower))
                     .map(holiday => holiday.name) // Return the proper holiday name
                     .slice(0, 5); 
@@ -271,12 +274,7 @@ export class EnhancedDateParser {
         this.processHolidaysForYears([currentYear, currentYear + 1]);
         
         // Add common holiday aliases
-        this.addHolidayAliases({
-            "Xmas": 'christmas',
-            "X-mas": 'christmas',
-            "July 4th": 'independence day',
-            "4th of July": 'independence day',
-        });
+        this.addHolidayAliases();
     }
     
     /**
@@ -317,7 +315,7 @@ export class EnhancedDateParser {
     /**
      * Add aliases for holidays
      */
-    private static addHolidayAliases(aliases: Record<string, string>): void {
+    private static addHolidayAliases(aliases: Record<string, string> = HOLIDAY_ALIASES): void {
         Object.entries(aliases).forEach(([alias, official]) => {
             const lowerAlias = alias.toLowerCase();
             if (this.holidayCache.has(official)) {
@@ -482,17 +480,6 @@ export class EnhancedDateParser {
             }
         }
         return Array.from(suggestions);
-    }
-
-    /**
-     * Register a new suggestion generator (optional, for extensibility).
-     */
-    static registerSuggestionGenerator(
-        pattern: RegExp | ((input: string) => boolean),
-        generate: (input: string, match?: RegExpMatchArray) => string[],
-        priority: number = 0
-    ): void {
-        this.suggestionGenerators.push({ pattern, generate, priority });
     }
     
     /**

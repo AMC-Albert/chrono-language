@@ -1,14 +1,14 @@
-import ChronoLanguage from '../main';
+import ChronoLanguage from '../../main';
 import { App, moment, Notice, TFile } from 'obsidian';
-import { getDailyNote, getDailyNoteSettings, DEFAULT_DAILY_NOTE_FORMAT } from 'obsidian-daily-notes-interface';
-import { getOrCreateDailyNote, getAllDailyNotesSafe, createDailyNoteLink } from '../utils/helpers';
-import { EnhancedDateParser } from '../utils/parser';
-import { InsertMode, ContentFormat } from '../definitions/types';
-import { KeyboardHandler } from '../utils/keyboard-handler';
+import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
+import { getOrCreateDailyNote, DateFormatter, createDailyNoteLink } from '../../utils/helpers';
+import { DateParser } from './parser';
+import { InsertMode, ContentFormat } from '../../types';
+import { KeyboardHandler } from '../../utils/keyboard-handler';
 import { Link } from 'obsidian-dev-utils/obsidian';
-import { CLASSES } from '../definitions/constants';
-import { DateFormatter } from '../utils/date-formatter';
-import { ChronoLanguageSettings } from '../settings';
+import { ChronoLanguageSettings } from '../../settings';
+import { renderSuggestionContent, updatePreviewContent } from './render';
+
 /**
  * Shared suggester for date suggestions. Handles rendering and updating of suggestions.
  */
@@ -40,8 +40,8 @@ export class SuggestionProvider {
     private initializeHolidaySuggestions(): void {
         try {
             const locale = this.plugin.settings.holidayLocale || 'US';
-            EnhancedDateParser.setLocale(locale);
-            this.holidaySuggestions = EnhancedDateParser.getHolidayNames().sort();
+            DateParser.setLocale(locale);
+            this.holidaySuggestions = DateParser.getHolidayNames().sort();
         } catch (error) {
             console.error('Failed to initialize holiday suggestions:', error);
             this.holidaySuggestions = [];
@@ -55,12 +55,12 @@ export class SuggestionProvider {
         if (!locale) return;
         
         try {
-            EnhancedDateParser.setLocale(locale);
+            DateParser.setLocale(locale);
             this.initializeHolidaySuggestions();
         } catch (error) {
             console.error('Failed to update holiday locale:', error);
             new Notice(`Failed to set holiday locale: ${locale}. Using US locale as fallback.`, 3000);
-            EnhancedDateParser.setLocale('US');
+            DateParser.setLocale('US');
             this.initializeHolidaySuggestions();
         }
     }
@@ -93,7 +93,7 @@ export class SuggestionProvider {
         this.closeSuggester();
     }
     
-    private cleanupTriggerPhrase(context?: any): void { // context is EditorSuggestContext from EditorSuggester
+    public cleanupTriggerPhrase(context?: any): void { // context is EditorSuggestContext from EditorSuggester
         if (context?.editor && context.start && context.end) {
             const editor = context.editor;
             // Replace the original trigger phrase and query using context.start and context.end
@@ -107,7 +107,7 @@ export class SuggestionProvider {
         const raw = sel?.getAttribute('data-suggestion');
         if (!raw) return null;
 
-        const parsed = EnhancedDateParser.parseDate(raw);
+        const parsed = DateParser.parseDate(raw);
         return parsed ? moment(parsed) : null;
     }
 
@@ -176,7 +176,7 @@ export class SuggestionProvider {
         
         // 2. Add pattern-based suggestions from EnhancedDateParser if there's a query
         if (rawQuery.trim()) {
-            const patternSuggestions = EnhancedDateParser.getPatternSuggestions(rawQuery.trim());
+            const patternSuggestions = DateParser.getPatternSuggestions(rawQuery.trim());
             patternSuggestions.forEach(addSuggestionIfNotDuplicate);
         }
 
@@ -232,198 +232,11 @@ export class SuggestionProvider {
     renderSuggestionContent(item: string, el: HTMLElement, context?: any) {
         this.isSuggesterOpen = true;
         this.keyboardHandler.resetModifierKeys();
-        
-        // Create container with data attribute
-        const container = el.createEl('div', { 
-            cls: [CLASSES.suggestionContainer],
-            attr: { 'data-suggestion': item }
-        });
-
-        // Mark time-relevant suggestions
-        if (EnhancedDateParser.inputHasTimeComponent(item)) {
-            container.addClass(CLASSES.timeRelevantSuggestion);
-        }
-        
-        // Add suggestion text
-        container.createEl('span', { 
-            text: item, 
-            cls: [CLASSES.suggestionText]
-        });
-        
-        this.currentElements.set(item, container);
-        if (context) this.contextProvider = context;
-        this.updatePreviewContent(item, container);
+        renderSuggestionContent(this, item, el, context);
     }
 
     updatePreviewContent(item: string, container: HTMLElement) {
-        try {
-            if (!this.isSuggesterOpen || !container.isConnected || 
-                container.hasAttribute('data-updating')) return;
-            
-            container.setAttribute('data-updating', 'true');
-            
-            // Remove any existing preview
-            container.querySelector('.chrono-suggestion-preview')?.remove();
-            
-            const { insertMode, contentFormat } = this.keyboardHandler.getEffectiveInsertModeAndFormat();
-            const parsedDate = EnhancedDateParser.parseDate(item); // Capture raw parsing result
-            const momentDate = parsedDate ? moment(parsedDate) : moment(); // Fallback to now if parsing fails
-            
-            // Get all notes, create folder if needed (notification handled by helper)
-            getAllDailyNotesSafe(this.app, true).then(allNotes => {
-                // Pass parsedDate as the new first argument to renderPreview
-                this.renderPreview(container, item, parsedDate, momentDate, insertMode, contentFormat, allNotes);
-                container.removeAttribute('data-updating');
-            }).catch((error) => {
-                console.error("Error in getAllDailyNotesSafe chain:", error);
-                // Still render a basic preview or error state if appropriate
-                // Pass parsedDate here as well
-                this.renderPreview(container, item, parsedDate, momentDate, insertMode, contentFormat, null); // Pass null for allNotes
-                container.removeAttribute('data-updating');
-            });
-        } catch (e) {
-            console.error('Error updating preview content:', e);
-            container?.removeAttribute?.('data-updating');
-        }
-    }
-    
-    private renderPreview(
-        container: HTMLElement, 
-        item: string, // Original item text
-        rawParsedDate: Date | null, // Result of EnhancedDateParser.parseDate(item)
-        momentDate: moment.Moment, // moment(rawParsedDate) or moment() as fallback
-        insertMode: InsertMode,
-        contentFormat: ContentFormat,
-        allNotes: Record<string, TFile> | null
-    ): void {
-        let dailyNote: TFile | null = null;
-        const dailyNoteSettings = getDailyNoteSettings();
-        // dailyNoteFilenameCandidate relies on momentDate which is prepared based on rawParsedDate or fallback
-        const dailyNoteFilenameCandidate = momentDate.isValid() ? momentDate.format(dailyNoteSettings.format || DEFAULT_DAILY_NOTE_FORMAT) : item;
-        
-        if (momentDate.isValid() && allNotes && rawParsedDate) { // Ensure rawParsedDate was valid for daily note lookup
-            dailyNote = getDailyNote(momentDate, allNotes) as TFile;
-        }
-        
-        const previewContainer = container.createEl('span', { cls: [CLASSES.suggestionPreview] });
-        
-        if (!rawParsedDate) { // Check if the original item string failed to parse
-            previewContainer.createEl('span', {text: '⨉ ', cls: [CLASSES.errorIcon]})
-            previewContainer.createEl('span', { text: 'Unable to parse date', cls: [CLASSES.errorText] });
-            return;
-        }
-
-        if (insertMode === InsertMode.PLAINTEXT) {
-            previewContainer.createEl('span', { text: '↳ ' });
-            this.appendReadableDatePreview(
-                previewContainer,
-                item,
-                momentDate,
-                contentFormat,
-                dailyNote && allNotes ? [] : [CLASSES.unresolvedText]
-            );
-        } else { // InsertMode.LINK
-            this.createLinkPreview(
-                previewContainer,
-                dailyNoteFilenameCandidate, // This is the text for the link itself (filename)
-                dailyNote && allNotes ? [] : [CLASSES.unresolvedLink],
-                momentDate,
-                item, // Original item text for formatting readable part
-                contentFormat,
-                dailyNote && allNotes ? [] : [CLASSES.unresolvedText] // Class for the readable part
-            );
-        }
-
-        if (!previewContainer.hasChildNodes()) previewContainer.remove();
-    }
-    
-    private appendReadableDatePreview(
-        container: HTMLElement,
-        item: string, 
-        momentDate: moment.Moment,
-        contentFormat: ContentFormat, 
-        suggestionPreviewClass: string[]
-    ): void { // HTMLElement return type was for the created span, now appends to container
-        const dailySettings = getDailyNoteSettings();
-        const text = DateFormatter.getFormattedDateText(
-            item,
-            momentDate,
-            this.plugin.settings,
-            contentFormat,
-            dailySettings
-        );
-
-        if (contentFormat !== ContentFormat.SUGGESTION_TEXT &&
-            container.parentElement?.classList.contains(CLASSES.timeRelevantSuggestion)) {
-            container.createEl('span', { text: '◴ ', cls: ['chrono-clock-icon'] });
-        }
-        
-        container.createEl('span', { 
-            text: text,
-            cls: suggestionPreviewClass 
-        });
-    }
-    
-    private createLinkPreview(
-        container: HTMLElement,
-        linkText: string, // This is the daily note filename candidate
-        dailyNoteClass: string[],
-        momentDate: moment.Moment, // This should be valid if rawParsedDate was valid
-        item: string, // Original item text for formatting readable part
-        contentFormat: ContentFormat,
-        suggestionPreviewClass: string[]
-    ): void {
-        container.createEl('span', { text: '↳ ' });
-        
-        const dailySettings = getDailyNoteSettings();
-        const readableText = DateFormatter.getFormattedDateText(
-            item,
-            momentDate,
-            this.plugin.settings,
-            contentFormat,
-            dailySettings
-        );
-        
-        const linkEl = container.createEl('a', {
-            text: linkText, // Use the passed linkText (filename candidate)
-            cls: dailyNoteClass, 
-            attr: { 
-                'data-href': '#', 
-                target: '_self', 
-                rel: 'noopener nofollow' 
-            }
-        });
-        
-        // Add click handler to link
-        linkEl.addEventListener('click', async (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            
-            // Explicitly cleanup the trigger phrase using the current context from EditorSuggester
-            if (this.contextProvider) { // this.contextProvider is the EditorSuggester instance
-                // Accessing .context on EditorSuggester. It holds the EditorSuggestContext.
-                this.cleanupTriggerPhrase((this.contextProvider as any).context);
-            }
-
-            this.closeSuggester(); // Now primarily closes the UI
-            const file = await getOrCreateDailyNote(this.app, momentDate, true);
-            if (file) await this.app.workspace.getLeaf(event.ctrlKey).openFile(file);
-        });
-        
-        if (linkText !== readableText) {
-            container.createEl('span', { text: ' ⭢ ' });
-            
-            let textForDisplay = readableText;
-            if (contentFormat !== ContentFormat.SUGGESTION_TEXT &&
-                container.parentElement?.classList.contains(CLASSES.timeRelevantSuggestion)) {
-                textForDisplay = '◴ ' + readableText;
-            }
-            
-            container.createEl('span', { 
-                text: textForDisplay,
-                cls: suggestionPreviewClass 
-            });
-        }
+        updatePreviewContent(this, item, container);
     }
 
     // Helper method to close the suggester UI
@@ -449,7 +262,7 @@ export class SuggestionProvider {
         activeFile: TFile,
         app: App
     ): string {
-        const parsedDate = EnhancedDateParser.parseDate(itemText);; 
+        const parsedDate = DateParser.parseDate(itemText);; 
 
         if (!parsedDate) { // itemText is not a parsable date string
             if (insertMode === InsertMode.PLAINTEXT) {

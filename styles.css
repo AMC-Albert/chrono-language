@@ -24,6 +24,10 @@
   
 }
 
+.chrono-suggestion-text b {
+  font-weight: bold;
+}
+
 .chrono-is-unresolved-link {
   text-decoration-line: var(--link-decoration);
   text-decoration-style: var(--link-unresolved-decoration-style);

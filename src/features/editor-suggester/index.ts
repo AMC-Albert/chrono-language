@@ -1,11 +1,12 @@
 import { Editor, EditorPosition, EditorSuggest, EditorSuggestContext } from 'obsidian';
 import { EditorView } from '@codemirror/view';
 import { StateEffect } from '@codemirror/state'; 
-import ChronoLanguage from '../main';
-import { addTriggerDecorationEffect, addSpacerWidgetEffect, safelyClearDecorations } from '../cm-decorations';
-import { SuggestionProvider } from './suggestion-provider';
-import { KeyboardHandler } from '../utils/keyboard-handler';
-import { KEYS, MODIFIER_COMBOS, getInstructionDefinitions } from '../definitions/constants';
+import ChronoLanguage from '../../main';
+import { addTriggerDecorationEffect, addSpacerWidgetEffect, safelyClearDecorations } from './decorations';
+import { SuggestionProvider } from '../suggestion-provider';
+import { KeyboardHandler } from '../../utils/keyboard-handler';
+import { KEYS, MODIFIER_COMBOS, getInstructionDefinitions } from '../../constants';
+import { parseTriggerContext } from './trigger-parser';
 
 /**
  * A suggester for the editor that provides date parsing suggestions
@@ -33,29 +34,12 @@ export class EditorSuggester extends EditorSuggest<string> {
         // Initialize keyboard handler and suggester
         this.keyboardHandler = new KeyboardHandler(this.scope, this.plugin.settings.plainTextByDefault);
         this.suggester = new SuggestionProvider(this.app, this.plugin);
-
-        // Register keyboard handlers and update instructions
-        this.registerKeyboardHandlers();
-        this.updateInstructions();
-        this.keyboardHandler.registerBackspaceKeyHandler(this.handleBackspaceKey);
-    }
-
-    private registerKeyboardHandlers() {
-        // Register Enter key for selection (with various modifier combinations)
-        this.registerEnterKeyHandlers();
-
-        // Register Tab key handlers for daily note actions
+        // Register keyboard handlers using KeyboardHandler API
         this.keyboardHandler.registerTabKeyHandlers(this.handleSelectionKey);
-        
-        // Register space key handler to intercept spaces at beginning of query
         this.keyboardHandler.registerSpaceKeyHandler(this.handleSpaceKey);
-    }
-
-    private registerEnterKeyHandlers() {
-        // Register Enter key with all possible modifier combinations
-        MODIFIER_COMBOS.forEach(mods => {
-            this.scope.register(mods, KEYS.ENTER, this.handleSelectionKey);
-        });
+        this.keyboardHandler.registerBackspaceKeyHandler(this.handleBackspaceKey);
+        this.keyboardHandler.addKeyStateChangeListener(() => this.updateInstructions());
+        this.updateInstructions();
     }
 
     private handleSelectionKey = (event: KeyboardEvent): boolean => {
@@ -245,115 +229,37 @@ export class EditorSuggester extends EditorSuggest<string> {
     }
     
     onTrigger(cursor: EditorPosition, editor: Editor): EditorSuggestContext | null {
-        const localLastReplacedTriggerStart = this.lastReplacedTriggerStart;
-        const localLastInsertionEnd = this.lastInsertionEnd;
-        this.lastReplacedTriggerStart = null;
-        this.lastInsertionEnd = null;
-
         const triggerPhrase = this.plugin.settings.triggerPhrase;
         if (!triggerPhrase) {
             this.firstSpaceBlocked = false;
             return null;
         }
-
-        const originalLine = editor.getLine(cursor.line);
-        const prefixBeforeCursor = originalLine.slice(0, cursor.ch);
-        const lastTriggerIndexInPrefix = prefixBeforeCursor.lastIndexOf(triggerPhrase);
-
-        if (lastTriggerIndexInPrefix === -1) {
+        const result = parseTriggerContext(
+            cursor,
+            editor,
+            triggerPhrase,
+            this.plugin.settings.triggerHappy,
+            this.lastReplacedTriggerStart,
+            this.lastInsertionEnd,
+            this.isOpen
+        );
+        this.lastReplacedTriggerStart = null;
+        this.lastInsertionEnd = null;
+        if (!result) {
             this.firstSpaceBlocked = false;
             return null;
         }
-
-        const posImmediatelyAfterTrigger = lastTriggerIndexInPrefix + triggerPhrase.length;
-
-        // if triggerHappy is false, require whitespace or start/end around the trigger phrase
-        if (!this.plugin.settings.triggerHappy) {
-            // check character before trigger
-            if (lastTriggerIndexInPrefix > 0) {
-                const beforeChar = originalLine[lastTriggerIndexInPrefix - 1];
-                if (!/\s/.test(beforeChar)) {
-                    this.firstSpaceBlocked = false;
-                    return null;
-                }
-            }
-            // check character after trigger
-            if (posImmediatelyAfterTrigger < originalLine.length) {
-                const afterChar = originalLine[posImmediatelyAfterTrigger];
-                if (!/\s/.test(afterChar)) {
-                    this.firstSpaceBlocked = false;
-                    return null;
-                }
-            }
-        }
-
-        if (cursor.ch < posImmediatelyAfterTrigger) { // Cursor inside trigger
-            this.firstSpaceBlocked = false;
-            return null;
-        }
-
-        // Editing existing text check (suggester closed)
-        if (!this.isOpen &&
-            (cursor.ch > posImmediatelyAfterTrigger || originalLine.slice(cursor.ch).trim() !== '')) {
-            this.firstSpaceBlocked = false;
-            return null;
-        }
-
-        let queryForSuggestions: string;
-        let finalEndPosForContext: EditorPosition = cursor; // Default to current cursor
-
-        if (cursor.ch === posImmediatelyAfterTrigger &&
-            (originalLine.length === posImmediatelyAfterTrigger || originalLine[posImmediatelyAfterTrigger] !== ' ')) {
-            // Condition to insert space is met.
-            this.shouldInsertSpaceOnOpen = true;
-            
-            // Context end will be at the trigger phrase end. Space insertion handled in open().
-            finalEndPosForContext = { line: cursor.line, ch: posImmediatelyAfterTrigger }; 
-            queryForSuggestions = '';
-            this.firstSpaceBlocked = false; 
-        } else {
-            this.shouldInsertSpaceOnOpen = false; // Ensure flag is false if condition not met
-            const textAfterTrigger = originalLine.slice(posImmediatelyAfterTrigger, cursor.ch);
-            if (textAfterTrigger.startsWith(' ')) {
-                queryForSuggestions = textAfterTrigger.slice(1);
-            } else {
-                queryForSuggestions = textAfterTrigger;
-            }
-            // finalEndPosForContext remains as current cursor, set by default
-
-            if (queryForSuggestions.trim() !== '') {
-                this.firstSpaceBlocked = false;
-            }
-        }
-
-        // Post-selection re-trigger check
-        if (localLastReplacedTriggerStart && localLastInsertionEnd) {
-            if (cursor.line === localLastInsertionEnd.line && cursor.ch === localLastInsertionEnd.ch &&
-                lastTriggerIndexInPrefix <= localLastReplacedTriggerStart.ch) {
-                this.firstSpaceBlocked = false;
-                return null;
-            }
-        }
-
-        // Spacey trigger check: if suggester is closed, user types "trigger ", and no auto-insert this call.
-        // Use finalEndPosForContext for the end boundary of the slice from originalLine.
-        const rawTextAfterTriggerForSpaceyCheck = originalLine.slice(posImmediatelyAfterTrigger, finalEndPosForContext.ch);
-        if (!this.isOpen && 
-            rawTextAfterTriggerForSpaceyCheck.startsWith(' ') && rawTextAfterTriggerForSpaceyCheck.trim() === '') {
-            this.firstSpaceBlocked = false;
-            return null;
-        }
-        
+        this.shouldInsertSpaceOnOpen = result.shouldInsertSpaceOnOpen;
+        this.firstSpaceBlocked = result.firstSpaceBlocked;
         const activeFile = this.app.workspace.getActiveFile();
         if (!activeFile) {
             this.firstSpaceBlocked = false;
             return null;
         }
-
         return {
-            start: { line: cursor.line, ch: lastTriggerIndexInPrefix },
-            end: finalEndPosForContext,
-            query: queryForSuggestions,
+            start: result.start,
+            end: result.end,
+            query: result.query,
             editor,
             file: activeFile
         };

@@ -1,5 +1,6 @@
 import { StateField, StateEffect, Range, Transaction } from '@codemirror/state';
 import { EditorView, Decoration, WidgetType, DecorationSet } from '@codemirror/view';
+import { CLASSES } from '../../constants';
 
 // Effects for adding/clearing trigger phrase decorations
 export const addTriggerDecorationEffect = StateEffect.define<{ from: number, to: number }>();
@@ -61,7 +62,7 @@ export const triggerDecorationStateField = StateField.define<DecorationSet>({
       
       if (newTriggerDecoInfo) {
         const triggerDeco = Decoration.mark({
-          class: 'chrono-active-trigger',
+          class: CLASSES.activeTrigger,
           attributes: { 'data-chrono-trigger': 'true', 'spellcheck': 'false' },
         }).range(newTriggerDecoInfo.from, newTriggerDecoInfo.to);
         decoArray.push(triggerDeco);

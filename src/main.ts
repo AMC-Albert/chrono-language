@@ -2,7 +2,7 @@ import { Plugin } from 'obsidian';
 import { ChronoLanguageSettings, ChronoLanguageSettingTab, DEFAULT_SETTINGS } from './settings';
 import { EditorSuggester } from './features/editor-suggester';
 import { OpenDailyNoteModal } from './features/open-daily-note';
-import { triggerDecorationStateField } from './cm-decorations';
+import { triggerDecorationStateField } from './features/editor-suggester/decorations';
 
 export default class ChronoLanguage extends Plugin {
 	settings: ChronoLanguageSettings;

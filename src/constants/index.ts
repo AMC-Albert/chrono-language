@@ -33,24 +33,20 @@ export const MODIFIER_KEY = {
 export function getInstructionDefinitions(plainTextByDefault: boolean) {
     // Main insert/format instructions
     const instructions = [
-/*         {
-            command: 'None',
-            purpose: plainTextByDefault ? 'Plain text' : 'Link'
-        }, */
         {
-            command: 'Ctrl',
+            command: 'ctrl ↵',
             purpose: plainTextByDefault ? 'Link' : 'Plain text'
         },
-        { command: 'Alt', purpose: 'Alternate date format' },
-        { command: 'Shift', purpose: 'Suggestion text' },
-        { command: 'Shift+Alt', purpose: 'Daily note format' }
+        { command: 'alt ↵', purpose: 'Alternate date format' },
+        { command: 'shift ↵', purpose: 'Suggestion text' },
+        { command: 'shift alt ↵', purpose: 'Daily note format' }
     ];
     // Always include Tab actions
     instructions.push(
-        { command: 'Tab', purpose: 'Open' },
-        { command: 'Shift+Tab', purpose: 'New tab' }
+        { command: 'tab', purpose: 'Autocomplete (keep open)' },
+        { command: 'shift tab', purpose: 'Previous suggestion' }
     );
-    return instructions;
+    return instructions
 }
 
 /**
@@ -167,6 +163,7 @@ export const CLASSES = {
     errorText: 'chrono-error-text',
     errorIcon: 'chrono-error-icon',
     timeRelevantSuggestion: 'chrono-time-relevant-suggestion',
+    activeTrigger: 'chrono-active-trigger',
 };
 
 /**
@@ -263,3 +260,13 @@ export const TIME_OF_DAY_PHRASES = [
     'Evening',
     'Night'
 ] as const;
+
+/**
+ * Holiday aliases for parser
+ */
+export const HOLIDAY_ALIASES: Record<string, string> = {
+    "Xmas": 'christmas',
+    "X-mas": 'christmas',
+    "July 4th": 'independence day',
+    "4th of July": 'independence day',
+};

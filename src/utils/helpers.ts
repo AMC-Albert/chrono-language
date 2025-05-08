@@ -2,10 +2,83 @@ import { App, normalizePath, Notice, TFile, moment } from 'obsidian';
 import { Link, ObsidianSettings, FileSystem } from 'obsidian-dev-utils/obsidian';
 import { getDailyNoteSettings, getDailyNote, getAllDailyNotes, createDailyNote, DEFAULT_DAILY_NOTE_FORMAT } from 'obsidian-daily-notes-interface';
 import { ChronoLanguageSettings } from '../settings';
-import { EnhancedDateParser } from './parser';
-import { ERRORS } from '../definitions/constants';
-import { DateFormatter } from './date-formatter';
-import { ContentFormat } from '../definitions/types'; // Added import
+import { DateParser } from '../features/suggestion-provider/parser';
+import { ERRORS } from '../constants';
+import { ContentFormat } from '../types';
+import { DEFAULT_SETTINGS } from '../settings';
+
+/**
+ * Centralized date formatting utility for consistent date handling across components
+ */
+export class DateFormatter {
+    /**
+     * Determine if only time should be rendered based on settings and date
+     */
+    public static shouldRenderTimeOnly(item: string, settings: ChronoLanguageSettings, momentDate: moment.Moment): boolean {
+        return (
+            settings.timeOnly &&
+            !!settings.timeFormat && settings.timeFormat.trim() !== "" &&
+            DateParser.inputHasTimeComponent(item) &&
+            momentDate.isSame(moment(), 'day')
+        );
+    }
+
+    /**
+     * Gets formatted text for a date suggestion based on content format,
+     * incorporating time formatting logic (timeOnly, append time).
+     */
+    public static getFormattedDateText(
+        itemText: string, // Original suggestion text for time relevance and SUGGESTION_TEXT format
+        momentDate: moment.Moment, // Parsed date
+        settings: ChronoLanguageSettings, // For formats, timeFormat, timeOnly
+        contentFormat: ContentFormat,
+        dailyNoteSettings: ReturnType<typeof getDailyNoteSettings> // Explicit type for daily note settings
+    ): string {
+        if (!momentDate || !momentDate.isValid()) {
+            return itemText; // Fallback for invalid dates
+        }
+
+        if (contentFormat === ContentFormat.SUGGESTION_TEXT) {
+            return itemText; // SUGGESTION_TEXT format should return the item text as is.
+        }
+    
+        let baseFormatString: string;
+        switch (contentFormat) {
+            case ContentFormat.DAILY_NOTE:
+                baseFormatString = dailyNoteSettings.format || DEFAULT_DAILY_NOTE_FORMAT;
+                break;
+            case ContentFormat.ALTERNATE:
+                baseFormatString = settings.alternateFormat || DEFAULT_SETTINGS.alternateFormat;
+                break;
+            case ContentFormat.PRIMARY:
+            default:
+                baseFormatString = settings.primaryFormat || dailyNoteSettings.format || DEFAULT_DAILY_NOTE_FORMAT;
+                break;
+        }
+        
+        let formattedDate = momentDate.format(baseFormatString);
+        const isItemTimeRelevant = DateParser.inputHasTimeComponent(itemText);
+    
+        // Apply time formatting if applicable
+        if (settings.timeFormat && settings.timeFormat.trim() !== "" && isItemTimeRelevant) {
+            const timeString = momentDate.format(settings.timeFormat);
+            const isToday = momentDate.isSame(moment(), 'day');
+    
+            if (settings.timeOnly && isToday) {
+                return timeString; // Override baseText with time only
+            } else {
+                // Avoid appending time if the base format string already likely includes it (heuristic)
+                const baseIncludesTime = /[HhmsSaAZ]/.test(baseFormatString);
+                if (!baseIncludesTime) {
+                    // Insert custom separator between date and time
+                    return `${formattedDate}${settings.timeSeparator}${timeString}`;
+                }
+            }
+        }
+    
+        return formattedDate; // Return baseText if no time formatting is applied or base included time
+    }
+}
 
 /**
  * Returns a human readable preview of the parsed date
@@ -27,7 +100,7 @@ export function getDatePreview(
     
     if (!dateText) return '';
     
-    const parsedDate = EnhancedDateParser.parseDate(dateText);
+    const parsedDate = DateParser.parseDate(dateText);
     if (!parsedDate) return '';
     
     // Determine which format to use
@@ -56,7 +129,7 @@ export function getDailyNotePreview(dateText: string): string {
 
     if (!dateText) return '';
     
-    const parsedDate = EnhancedDateParser.parseDate(dateText);
+    const parsedDate = DateParser.parseDate(dateText);
     if (!parsedDate) return '';
     
     const format = dailyNoteSettings.format || DEFAULT_DAILY_NOTE_FORMAT;
@@ -124,7 +197,7 @@ export function createDailyNoteLink(
     // Use Chrono to parse the date from text, or use current date if no text provided
     let parsedDate;
     if (dateText && dateText.trim().length > 0) {
-        parsedDate = EnhancedDateParser.parseDate(dateText);
+        parsedDate = DateParser.parseDate(dateText);
         // If parsing failed, default to today
         if (!parsedDate) {
             parsedDate = new Date();

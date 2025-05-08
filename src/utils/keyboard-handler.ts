@@ -3,14 +3,14 @@ import {
     InsertMode,
     ContentFormat,
     createModifierString,
-} from '../definitions/types';
+} from '../types';
 import { 
     KEY_EVENTS, 
     KEYS, 
     MODIFIER_BEHAVIOR,
     MODIFIER_KEY
-} from '../definitions/constants';
-import { getInstructionDefinitions } from '../definitions/constants';
+} from '../constants';
+import { getInstructionDefinitions } from '../constants';
 
 /**
  * Callback function type for key state change events

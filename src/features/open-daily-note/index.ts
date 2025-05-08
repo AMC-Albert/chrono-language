@@ -1,9 +1,9 @@
 import { Notice, FuzzySuggestModal, App, FuzzyMatch, moment } from "obsidian";
-import ChronoLanguage from "../main";
-import { SuggestionProvider } from "./suggestion-provider";
-import { EnhancedDateParser } from "../utils/parser";
-import { getOrCreateDailyNote } from "../utils/helpers";
-import { ERRORS } from "../definitions/constants";
+import ChronoLanguage from "../../main";
+import { SuggestionProvider,  } from "../suggestion-provider";
+import { DateParser } from "../suggestion-provider/parser";
+import { getOrCreateDailyNote } from "../../utils/helpers";
+import { ERRORS } from "../../constants";
 
 /**
  * Modal for quickly opening daily notes via date parsing
@@ -37,7 +37,7 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
 
   async onChooseItem(item: string): Promise<void> {
     try {
-      const parsed = EnhancedDateParser.parseDate(item);
+      const parsed = DateParser.parseDate(item);
       if (!parsed) {
         new Notice(ERRORS.UNABLE_PARSE_DATE);
         return;
