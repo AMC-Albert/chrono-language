@@ -11,6 +11,10 @@ export class EditorSuggester extends EditorSuggest<string> {
     plugin: ChronoLanguage;
     private suggester: SuggestionProvider | null = null;
     private keyboardHandler: KeyboardHandler;
+
+    // For tracking state after a suggestion is selected to prevent immediate re-trigger on an earlier phrase
+    private lastReplacedTriggerStart: { line: number, ch: number } | null = null;
+    private lastInsertionEnd: { line: number, ch: number } | null = null;
     
     constructor(plugin: ChronoLanguage) {
         super(plugin.app);
@@ -74,6 +78,13 @@ export class EditorSuggester extends EditorSuggest<string> {
     }
     
     onTrigger(cursor: EditorPosition, editor: Editor): EditorSuggestContext | null {
+        // Store and immediately clear the post-selection state flags
+        // This ensures they are used only for the first onTrigger call after a selection.
+        const localLastReplacedTriggerStart = this.lastReplacedTriggerStart;
+        const localLastInsertionEnd = this.lastInsertionEnd;
+        this.lastReplacedTriggerStart = null;
+        this.lastInsertionEnd = null;
+
         const triggerPhrase = this.plugin.settings.triggerPhrase;
         if (!triggerPhrase) return null;
 
@@ -85,66 +96,82 @@ export class EditorSuggester extends EditorSuggest<string> {
         if (lastTriggerIndex === -1 || cursor.ch < lastTriggerIndex + triggerPhrase.length) {
             return null;
         }
+
+        // Post-selection re-trigger prevention logic (for selection/replacement)
+        if (localLastReplacedTriggerStart && localLastInsertionEnd) {
+            if (cursor.line === localLastInsertionEnd.line && cursor.ch === localLastInsertionEnd.ch) {
+                if (lastTriggerIndex < localLastReplacedTriggerStart.ch && cursor.line === localLastReplacedTriggerStart.line) {
+                    // The found trigger is on the same line but *before* the trigger that was just replaced.
+                    // Prevent re-triggering on this earlier, stale trigger.
+                    return null;
+                }
+            }
+        }
         
         const triggerHappy = this.plugin.settings.triggerHappy;
-        const posAfterTrigger = lastTriggerIndex + triggerPhrase.length;
-        const query = cursorSubstring.slice(posAfterTrigger);
+        const posAfterTrigger = lastTriggerIndex + triggerPhrase.length; // Based on current lastTriggerIndex
+        const query = cursorSubstring.slice(posAfterTrigger); // Based on current lastTriggerIndex
 
-        // If suggester is not already open, query cannot start with a space/tab.
-        // If suggester is open, query can contain/start with space/tab (e.g. "@today at 3 pm")
-        if (!this.isOpen && (query.startsWith(' ') || query.startsWith('\t'))) {
+        // Stash previous context if suggester was open, to detect if lastTriggerIndex shifted backwards
+        const prevContext = (this.isOpen && this.context) ? { line: this.context.start.line, ch: this.context.start.ch } : null;
+
+        // Universal Check 1: Early escape if query starts with space/tab.
+        // This handles closing the suggester if user types space as first char of query,
+        // or if backspacing to an earlier trigger results in a query starting with a space.
+        if (query.startsWith(' ') || query.startsWith('\t')) {
             return null;
         }
         
-        // Boundary checks for initial triggering (i.e., when suggester is not already open).
-        // If suggester is already open, these checks are bypassed to allow fluid query typing.
-        if (!this.isOpen) {
-            if (!triggerHappy) {
-                // Standard behavior for !triggerHappy: requires whitespace boundaries.
-                // Check character before trigger.
-                if (lastTriggerIndex > 0) {
-                    const charBefore = cursorSubstring.charAt(lastTriggerIndex - 1);
-                    if (charBefore !== ' ' && charBefore !== '\t') {
-                        return null;
-                    }
-                }
-                
-                // Check character after trigger if query is empty.
-                if (query.length === 0) {
-                    const charAfterInFullLine = posAfterTrigger < line.length ? 
-                        line.charAt(posAfterTrigger) : ' '; // Check against the full line content
-                    if (charAfterInFullLine !== ' ' && charAfterInFullLine !== '\t') {
-                        return null;
-                    }
-                }
-            } else {
-                // triggerHappy is true and suggester is not yet open.
-                // We want to activate for fresh "happy" triggers (e.g., "word@", "word@t", " @t").
-                // We want to AVOID activating for "stale" triggers, where the trigger phrase
-                // is part of existing text and the user is typing further down the line.
-                // A trigger is considered stale if:
-                // 1. There is a non-whitespace character in the line immediately following the trigger phrase.
-                // 2. The current query's length is greater than 1. This implies the user is typing *after*
-                //    an already existing "@word" or "word@word" pattern, rather than initiating a new one.
+        // Universal Check 2: Boundary conditions.
+        // These apply when initiating the suggester OR if the active trigger point shifts backwards due to e.g. backspacing.
+        let blockActivation = false;
 
-                if (query.length > 1) {
-                    // Check the character in the line that is immediately after the trigger phrase.
-                    // This character would be the first character of a "fresh" single-character query.
-                    if (posAfterTrigger < line.length) {
-                        const charImmediatelyAfterTriggerInLine = line.charAt(posAfterTrigger);
-                        if (charImmediatelyAfterTriggerInLine !== ' ' && charImmediatelyAfterTriggerInLine !== '\t') {
-                            // Found a pattern like "...@word..." or "word@word...".
-                            // Since query.length > 1, the cursor is past the first char of that "word".
-                            // This indicates a stale trigger.
-                            return null;
-                        }
+        if (prevContext && cursor.line === prevContext.line && lastTriggerIndex < prevContext.ch) {
+            // Suggester was open, but current evaluation points to an *earlier* trigger on the same line
+            // (e.g., user backspaced over the original trigger that kept the suggester open).
+            // We must re-apply the strict "initiation" boundary checks for this *newly found, earlier* trigger.
+            
+            // Check A: Character on the line immediately after this earlier trigger.
+            const charAfterEarlierTrigger = posAfterTrigger < line.length ? line.charAt(posAfterTrigger) : ' ';
+            if (charAfterEarlierTrigger !== ' ' && charAfterEarlierTrigger !== '\t') {
+                blockActivation = true;
+            }
+
+            // Check B: If not triggerHappy, character before this earlier trigger.
+            if (!blockActivation && !triggerHappy) {
+                if (lastTriggerIndex > 0) {
+                    const charBeforeEarlierTrigger = cursorSubstring.charAt(lastTriggerIndex - 1);
+                    if (charBeforeEarlierTrigger !== ' ' && charBeforeEarlierTrigger !== '\t') {
+                        blockActivation = true;
                     }
                 }
-                // Otherwise (query is empty, or query is a single character, or char after trigger is space/EOL):
-                // Allow activation for triggerHappy cases.
-                // E.g.: "word@", " @", "word@t", " @t", "word@ t", " @ t"
-                // (The initial `!this.isOpen && query.startsWith(' ')` check handles "word@ t" and " @ t" correctly.)
             }
+        } else if (!this.isOpen) {
+            // Suggester is not currently open, so these are standard "initiation" checks.
+
+            // Check A: Character on the line immediately after the trigger phrase.
+            const charAfterTrigger = posAfterTrigger < line.length ? line.charAt(posAfterTrigger) : ' '; 
+            if (charAfterTrigger !== ' ' && charAfterTrigger !== '\t') {
+                blockActivation = true;
+            }
+
+            // Check B: If not triggerHappy, character before the trigger.
+            if (!blockActivation && !triggerHappy) {
+                if (lastTriggerIndex > 0) {
+                    const charBeforeTrigger = cursorSubstring.charAt(lastTriggerIndex - 1);
+                    if (charBeforeTrigger !== ' ' && charBeforeTrigger !== '\t') {
+                        blockActivation = true; 
+                    }
+                }
+            }
+        }
+        // If this.isOpen is true AND the trigger point hasn't shifted backwards 
+        // (i.e., lastTriggerIndex >= prevContext.ch or different line, or prevContext was null),
+        // then the above conditional blocks for boundary checks are skipped.
+        // The suggester continues with the current query (which we know doesn't start with a space).
+
+        if (blockActivation) {
+            return null;
         }
 
         const activeFile = this.app.workspace.getActiveFile();
@@ -185,6 +212,12 @@ export class EditorSuggester extends EditorSuggest<string> {
             file, // Pass the active TFile
             this.app // Pass the App instance
         );
+
+        // Store state *before* editor.replaceRange, as this.context might be cleared by close()
+        // which can be called before onTrigger if events are synchronous.
+        // Storing start.line as well for robustness.
+        this.lastReplacedTriggerStart = { line: start.line, ch: start.ch };
+        this.lastInsertionEnd = { line: start.line, ch: start.ch + finalText.length };
 
         editor.replaceRange(finalText, start, end);
     }
