@@ -5,7 +5,7 @@ import ChronoLanguage from '../../main';
 import { addTriggerDecorationEffect, addSpacerWidgetEffect, safelyClearDecorations } from './decorations';
 import { SuggestionProvider } from '../suggestion-provider';
 import { KeyboardHandler } from '../../utils/keyboard-handler';
-import { KEYS, MODIFIER_COMBOS, getInstructionDefinitions } from '../../constants';
+import { KEYS, getInstructionDefinitions } from '../../constants';
 import { parseTriggerContext } from './trigger-parser';
 
 /**
@@ -36,21 +36,40 @@ export class EditorSuggester extends EditorSuggest<string> {
         this.suggester = new SuggestionProvider(this.app, this.plugin);
         // Register keyboard handlers using KeyboardHandler API
         this.keyboardHandler.registerEnterKeyHandlers(this.handleSelectionKey);
-        this.keyboardHandler.registerTabKeyHandlers(this.handleSelectionKey);
+        this.keyboardHandler.registerDailyNoteKeyHandlers(this.handleDailyNoteKey, this.handleDailyNoteNewTabKey);
         this.keyboardHandler.registerSpaceKeyHandler(this.handleSpaceKey);
         this.keyboardHandler.registerBackspaceKeyHandler(this.handleBackspaceKey);
+        this.keyboardHandler.registerTabKeyHandler(this.handleTabKey); // Add Tab key handler
         this.keyboardHandler.addKeyStateChangeListener(() => this.updateInstructions());
         this.updateInstructions();
     }
 
-    private handleSelectionKey = (event: KeyboardEvent): boolean => {
+    /**
+     * Handles Shift+Space key for opening the daily note
+     */
+    private handleDailyNoteKey = (event: KeyboardEvent): boolean => {
         if (!this.isOpen || !this.suggester || !this.context) return false;
-        if (event.key === KEYS.TAB) {
-            // Handle Tab key action (open daily note)
-            const openInNewTab = event.shiftKey;
-            this.suggester.handleDailyNoteAction(event, openInNewTab, this.context);
+        if (event.shiftKey && event.key === KEYS.SPACE) {
+            this.suggester.handleDailyNoteAction(event, false, this.context);
             return true;
         }
+        return false;
+    };
+
+    /**
+     * Handles Ctrl+Shift+Space key for opening the daily note in a new tab
+     */
+    private handleDailyNoteNewTabKey = (event: KeyboardEvent): boolean => {
+        if (!this.isOpen || !this.suggester || !this.context) return false;
+        if (event.ctrlKey && event.shiftKey && event.key === KEYS.SPACE) {
+            this.suggester.handleDailyNoteAction(event, true, this.context);
+            return true;
+        }
+        return false;
+    };
+
+    private handleSelectionKey = (event: KeyboardEvent): boolean => {
+        if (!this.isOpen || !this.suggester || !this.context) return false;
 
         // For Enter key and other selection actions
         return this.suggestions.useSelectedItem(event);
@@ -125,6 +144,65 @@ export class EditorSuggester extends EditorSuggest<string> {
             return true;
         }
         return false;
+    };
+
+    /**
+     * Handles Tab key events to auto-complete the selected suggestion
+     * Returns true if the event was handled (should be prevented)
+     */    private handleTabKey = (event: KeyboardEvent): boolean => {
+        if (!this.isOpen || !this.context || !this.suggester) return false;
+        
+        // Get the currently selected suggestion
+        const selectedItem = this.suggestions.values[this.suggestions.selectedItem];
+        if (!selectedItem) return false;
+        
+        // Extract just the query part and replace it with the suggestion text
+        const editor = this.context.editor;
+        const { start, end, query } = this.context;
+        
+        // Check if there's already a space after the trigger phrase
+        const line = editor.getLine(start.line);
+        const triggerEndCh = start.ch + this.plugin.settings.triggerPhrase.length;
+        const hasSpaceAfterTrigger = triggerEndCh < line.length && line[triggerEndCh] === ' ';
+        
+        // Calculate the starting position of just the query (after trigger phrase and space if present)
+        const queryStart = {
+            line: start.line,
+            ch: start.ch + this.plugin.settings.triggerPhrase.length + (hasSpaceAfterTrigger ? 1 : 0)
+        };
+        
+        // For initial suggestions with no space yet, we need to insert a space
+        if (query === '' && !hasSpaceAfterTrigger) {
+            // Insert a space first
+            editor.replaceRange(' ', queryStart, queryStart);
+            
+            // Adjust the queryStart to be after the space
+            queryStart.ch += 1;
+            
+            // Also adjust the end position
+            end.ch += 1;
+        }
+          // Don't close suggester, just replace the query text with the selected suggestion text
+        editor.replaceRange(selectedItem.toString(), queryStart, end);
+        
+        // Update context to reflect new query text
+        this.context.query = selectedItem.toString();
+        this.context.end = {
+            line: queryStart.line,
+            ch: queryStart.ch + selectedItem.toString().length
+        };
+        
+        // Set cursor position to the end of the inserted text
+        editor.setCursor({
+            line: queryStart.line,
+            ch: queryStart.ch + selectedItem.toString().length
+        });
+        
+        // Reapply trigger decorations
+        this.applyTriggerDecorations();
+        
+        // Prevent the Tab key being inserted
+        return true;
     };
 
     /**

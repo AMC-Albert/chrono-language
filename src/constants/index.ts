@@ -33,13 +33,16 @@ export const MODIFIER_KEY = {
 export function getInstructionDefinitions(plainTextByDefault: boolean) {
     // Main insert/format instructions
     const instructions = [
+        { command: '↑↓', purpose: 'to navigate' },
         {
             command: 'ctrl ↵',
-            purpose: plainTextByDefault ? 'to insert link' : 'to insert plain'
+            purpose: plainTextByDefault ? 'to insert link' : 'to insert plain text'
         },
         { command: 'alt ↵', purpose: 'to use alt format' },
         { command: 'shift ↵', purpose: 'to use suggested text' },
         { command: 'shift alt ↵', purpose: 'to force no alias' },
+        { command: 'shift ␣', purpose: 'to open note' },
+        { command: 'ctrl shift ␣', purpose: 'to open in new tab' },
         { command: 'esc', purpose: 'to dismiss' }
     ];
     return instructions;
@@ -111,6 +114,7 @@ export const KEYS = {
     CONTROL: 'Control',
     ALT: 'Alt',
     SHIFT: 'Shift',
+    SPACE: ' ', // Add SPACE for clarity
     TAB: 'Tab'
 } as const;
 

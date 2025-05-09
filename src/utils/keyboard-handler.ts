@@ -31,6 +31,7 @@ export class KeyboardHandler {
     private keyStateChangeListeners: KeyStateChangeCallback[] = [];
     private spaceKeyHandlers: SpaceKeyEventHandler[] = [];
     private backspaceKeyHandlers: ((event: KeyboardEvent) => boolean)[] = [];
+    private tabKeyHandlers: ((event: KeyboardEvent) => boolean)[] = [];
 
     constructor(scope?: Scope, plainTextByDefault: boolean = false) {
         this.scope = scope || null;
@@ -57,12 +58,16 @@ export class KeyboardHandler {
         const isKeyDown = event.type === KEY_EVENTS.KEYDOWN;
         
         // Handle space key intercept if this is a keydown event
-        // The actual space insertion will NOT be prevented here.
-        // Registered spaceKeyHandlers will be notified and can perform actions (like state changes or closing suggesters),
-        // but they will no longer block the space character itself via a return value here.
         if (isKeyDown && key === ' ') {
             this.handleSpaceKeyEvent(event);
-            // NOTE: event.preventDefault() and event.stopPropagation() are removed here.
+        }
+
+        // Handle Tab key for auto-completion
+        if (isKeyDown && key === KEYS.TAB) {
+            if (this.handleTabKeyEvent(event)) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+            }
         }
 
         if (isKeyDown && key === 'Backspace') {
@@ -87,6 +92,20 @@ export class KeyboardHandler {
      */
     private handleSpaceKeyEvent(event: KeyboardEvent): boolean {
         for (const handler of this.spaceKeyHandlers) {
+            if (handler(event)) {
+                return true; // Event was handled
+            }
+        }
+        return false; // No handler prevented the event
+    }
+
+    /**
+     * Handles tab key events by passing them to registered handlers
+     * @param event The keyboard event
+     * @returns true if the event was handled and should be prevented
+     */
+    private handleTabKeyEvent(event: KeyboardEvent): boolean {
+        for (const handler of this.tabKeyHandlers) {
             if (handler(event)) {
                 return true; // Event was handled
             }
@@ -139,6 +158,24 @@ export class KeyboardHandler {
         }
     }
 
+    /**
+     * Registers a handler for tab key events
+     * @param handler Function that returns true if the tab key was handled
+     */
+    registerTabKeyHandler(handler: (event: KeyboardEvent) => boolean): void {
+        this.tabKeyHandlers.push(handler);
+    }
+    
+    /**
+     * Unregisters a tab key event handler
+     */
+    unregisterTabKeyHandler(handler: (event: KeyboardEvent) => boolean): void {
+        const index = this.tabKeyHandlers.indexOf(handler);
+        if (index !== -1) {
+            this.tabKeyHandlers.splice(index, 1);
+        }
+    }
+
     update(settings: Partial<{ plainTextByDefault: boolean }>): void {
         if (settings.plainTextByDefault !== undefined) this.plainTextByDefault = settings.plainTextByDefault;
     }
@@ -148,17 +185,11 @@ export class KeyboardHandler {
     }
     registerAllKeyHandlers(callbacks: Record<string, (event: KeyboardEvent) => boolean | void>): void {
         if (!this.scope) return;
-        // Register Tab and Shift+Tab explicitly for openDailyNote actions
-        this.scope.register([], KEYS.TAB, (event: KeyboardEvent) => {
+        // Register Shift+Space explicitly for openDailyNote actions
+        this.scope.register([MODIFIER_KEY.SHIFT], KEYS.SPACE, (event: KeyboardEvent) => {
             if (callbacks.openDailyNote) return callbacks.openDailyNote(event);
         });
-        this.scope.register([MODIFIER_KEY.SHIFT], KEYS.TAB, (event: KeyboardEvent) => {
-            if (callbacks.openDailyNoteNewTab) return callbacks.openDailyNoteNewTab(event);
-        });
         // ...other dynamic key registrations if needed...
-    }
-    registerTabKeyHandlers(callback: (event: KeyboardEvent) => boolean): void {
-        this.registerAllKeyHandlers({ openDailyNote: callback, openDailyNoteNewTab: callback });
     }
     /**
      * Registers Enter key handlers for all modifier combinations
@@ -168,6 +199,14 @@ export class KeyboardHandler {
         MODIFIER_COMBOS.forEach(mods => {
             this.scope!.register(mods, KEYS.ENTER, callback);
         });
+    }
+    /**
+     * Registers handlers for Shift+Space and Ctrl+Shift+Space for daily note actions
+     */
+    registerDailyNoteKeyHandlers(shiftSpaceHandler: (event: KeyboardEvent) => boolean, ctrlShiftSpaceHandler: (event: KeyboardEvent) => boolean): void {
+        if (!this.scope) return;
+        this.scope.register([MODIFIER_KEY.SHIFT], KEYS.SPACE, shiftSpaceHandler);
+        this.scope.register([MODIFIER_KEY.CTRL, MODIFIER_KEY.SHIFT], KEYS.SPACE, ctrlShiftSpaceHandler);
     }
     getEffectiveInsertModeAndFormat(event?: KeyboardEvent): { insertMode: InsertMode, contentFormat: ContentFormat } {
         const ctrl = event ? event.ctrlKey : this.keyState[KEYS.CONTROL];
