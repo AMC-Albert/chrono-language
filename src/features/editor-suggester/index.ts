@@ -114,6 +114,13 @@ export class EditorSuggester extends EditorSuggest<string> {
                 
                 // Close the suggester. The space character will be inserted by default editor action.
                 setTimeout(() => {
+                    // Remove the extra space if there are two spaces after the trigger
+                    const updatedLine = editor.getLine(cursor.line);
+                    const afterTrigger = updatedLine.slice(posAfterTrigger, posAfterTrigger + 2);
+                    if (afterTrigger === '  ') {
+                        // Remove one of the spaces
+                        editor.replaceRange('', { line: cursor.line, ch: posAfterTrigger }, { line: cursor.line, ch: posAfterTrigger + 1 });
+                    }
                     this.close();
                 }, 0);
                 

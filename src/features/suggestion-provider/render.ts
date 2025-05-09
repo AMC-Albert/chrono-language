@@ -29,8 +29,12 @@ export function renderSuggestionContent(
     } else if (contextProvider && contextProvider.query) {
         query = contextProvider.query;
     }
-    if (query && query.length > 0) {
-        const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    const trimmedQuery = query.trim(); // Trim the query
+
+    if (trimmedQuery.length > 0) { // Check the length of the trimmed query
+        // Escape regex special chars in trimmed query
+        const escaped = trimmedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const regex = new RegExp(escaped, 'gi');
         suggestionText = item.replace(regex, match => `<b>${match}</b>`);
     }
@@ -52,7 +56,10 @@ export function updatePreviewContent(
         if (!provider.isSuggesterOpen || !container.isConnected || 
             container.hasAttribute('data-updating')) return;
         container.setAttribute('data-updating', 'true');
-        container.querySelector('.chrono-suggestion-preview')?.remove();
+        // Remove all existing preview elements
+        const existingPreviews = container.querySelectorAll('.' + CLASSES.suggestionPreview);
+        existingPreviews.forEach(previewNode => previewNode.remove());
+
         const { insertMode, contentFormat } = provider.keyboardHandler.getEffectiveInsertModeAndFormat();
         const parsedDate = DateParser.parseDate(item);
         const momentDate = parsedDate ? moment(parsedDate) : moment();
@@ -141,9 +148,12 @@ function appendReadableDatePreview(
     } else if (context && context.query) {
         query = context.query;
     }
-    if (query && query.length > 0) {
-        // Escape regex special chars in query
-        const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    const trimmedQuery = query.trim(); // Trim the query
+
+    if (trimmedQuery.length > 0) { // Check the length of the trimmed query
+        // Escape regex special chars in trimmed query
+        const escaped = trimmedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         // Create a regex to match all occurrences, case-insensitive
         const regex = new RegExp(escaped, 'gi');
         text = text.replace(regex, match => `<b>${match}</b>`);
