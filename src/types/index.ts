@@ -6,8 +6,7 @@ import {
     DESCRIPTIONS,
     MODIFIER_BEHAVIOR,
     MODIFIER_KEY,
-    HIDDEN_ACTIONS
-} from './constants';
+} from '../constants';
 
 /**
  * Types for Insert Modes
