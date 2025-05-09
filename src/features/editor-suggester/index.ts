@@ -39,7 +39,7 @@ export class EditorSuggester extends EditorSuggest<string> {
         this.keyboardHandler.registerDailyNoteKeyHandlers(this.handleDailyNoteKey, this.handleDailyNoteNewTabKey);
         this.keyboardHandler.registerSpaceKeyHandler(this.handleSpaceKey);
         this.keyboardHandler.registerBackspaceKeyHandler(this.handleBackspaceKey);
-        this.keyboardHandler.registerTabKeyHandler(this.handleTabKey); // Add Tab key handler
+        this.keyboardHandler.registerTabKeyHandler(this.handleTabKey);
         this.keyboardHandler.addKeyStateChangeListener(() => this.updateInstructions());
         this.updateInstructions();
     }

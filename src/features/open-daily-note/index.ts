@@ -19,6 +19,26 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
     this.setPlaceholder("Enter a date or relative time...");
   }
 
+  onOpen(): void {
+    console.log('[OpenDailyNoteModal] onOpen');
+    super.onOpen();
+    const input = this.modalEl.querySelector('.prompt-input') as HTMLInputElement;
+    if (input) input.addEventListener('keydown', this.handleTabKey, true);
+  }
+
+  private handleTabKey = (event: KeyboardEvent): void => {
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      event.stopPropagation();
+      const items = this.getItems();
+      if (!items.length) return;
+      const selected = items[0];
+      const input = this.modalEl.querySelector('.prompt-input') as HTMLInputElement;
+      input.value = selected;
+      input.dispatchEvent(new Event('input'));
+    }
+  }
+
   getItems(): string[] {
     const query = (this.modalEl.querySelector(".prompt-input") as HTMLInputElement)?.value || "";
     this.suggester.contextProvider = { context: { query } };
