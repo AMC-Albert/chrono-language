@@ -54,7 +54,6 @@ export interface KeyCombo {
     key: string;
     insertMode: InsertModeUnion;
     contentFormat: ContentFormatUnion;
-    showInInstructions?: boolean;
     description?: string; // Human-readable description
 }
 
@@ -157,15 +156,6 @@ function generateDescription(insertMode: InsertModeUnion, contentFormat: Content
 }
 
 /**
- * Determine if a key combo should be shown in instructions
- */
-function shouldShowInInstructions(combo: KeyCombo): boolean {
-    return !HIDDEN_ACTIONS.some(
-        h => h.insertMode === combo.insertMode && h.contentFormat === combo.contentFormat
-    );
-}
-
-/**
  * Dynamically generate key map entries based on modifier combinations
  */
 function generateKeyMap(): Record<string, KeyMapEntry> {
@@ -190,8 +180,7 @@ function generateKeyMap(): Record<string, KeyMapEntry> {
                     key: KEYS.ENTER,
                     insertMode,
                     contentFormat,
-                    description,
-                    showInInstructions: shouldShowInInstructions({ shift, ctrl, alt, key: KEYS.ENTER, insertMode, contentFormat })
+                    description
                 };
 
                 keyMap[modString] = { combo, modString };

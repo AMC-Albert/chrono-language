@@ -8,7 +8,8 @@ import {
     KEY_EVENTS, 
     KEYS, 
     MODIFIER_BEHAVIOR,
-    MODIFIER_KEY
+    MODIFIER_KEY,
+    MODIFIER_COMBOS
 } from '../constants';
 import { getInstructionDefinitions } from '../constants';
 
@@ -158,6 +159,15 @@ export class KeyboardHandler {
     }
     registerTabKeyHandlers(callback: (event: KeyboardEvent) => boolean): void {
         this.registerAllKeyHandlers({ openDailyNote: callback, openDailyNoteNewTab: callback });
+    }
+    /**
+     * Registers Enter key handlers for all modifier combinations
+     */
+    registerEnterKeyHandlers(callback: (event: KeyboardEvent) => boolean): void {
+        if (!this.scope) return;
+        MODIFIER_COMBOS.forEach(mods => {
+            this.scope!.register(mods, KEYS.ENTER, callback);
+        });
     }
     getEffectiveInsertModeAndFormat(event?: KeyboardEvent): { insertMode: InsertMode, contentFormat: ContentFormat } {
         const ctrl = event ? event.ctrlKey : this.keyState[KEYS.CONTROL];

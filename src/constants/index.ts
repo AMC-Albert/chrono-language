@@ -35,18 +35,14 @@ export function getInstructionDefinitions(plainTextByDefault: boolean) {
     const instructions = [
         {
             command: 'ctrl ↵',
-            purpose: plainTextByDefault ? 'Link' : 'Plain text'
+            purpose: plainTextByDefault ? 'to insert link' : 'to insert plain'
         },
-        { command: 'alt ↵', purpose: 'Alternate date format' },
-        { command: 'shift ↵', purpose: 'Suggestion text' },
-        { command: 'shift alt ↵', purpose: 'Daily note format' }
+        { command: 'alt ↵', purpose: 'to use alt format' },
+        { command: 'shift ↵', purpose: 'to use suggested text' },
+        { command: 'shift alt ↵', purpose: 'to force no alias' },
+        { command: 'esc', purpose: 'to dismiss' }
     ];
-    // Always include Tab actions
-    instructions.push(
-        { command: 'tab', purpose: 'Autocomplete (keep open)' },
-        { command: 'shift tab', purpose: 'Previous suggestion' }
-    );
-    return instructions
+    return instructions;
 }
 
 /**

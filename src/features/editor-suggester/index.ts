@@ -35,6 +35,7 @@ export class EditorSuggester extends EditorSuggest<string> {
         this.keyboardHandler = new KeyboardHandler(this.scope, this.plugin.settings.plainTextByDefault);
         this.suggester = new SuggestionProvider(this.app, this.plugin);
         // Register keyboard handlers using KeyboardHandler API
+        this.keyboardHandler.registerEnterKeyHandlers(this.handleSelectionKey);
         this.keyboardHandler.registerTabKeyHandlers(this.handleSelectionKey);
         this.keyboardHandler.registerSpaceKeyHandler(this.handleSpaceKey);
         this.keyboardHandler.registerBackspaceKeyHandler(this.handleBackspaceKey);
