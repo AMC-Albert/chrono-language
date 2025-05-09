@@ -47,6 +47,10 @@ export class TextSearcher {
                 if (/\S/.test(beforeChar) || /\S/.test(afterChar)) continue;
                 // Only trigger when cursor is on/after the actual date phrase
                 if (ch < from || ch > to) continue;
+                // Allow pure 4-digit year as valid date
+                if (/^\d{4}$/.test(phrase)) {
+                    return { word: phrase, from, to };
+                }
                 // Skip pure numeric windows to avoid unrelated number combos
                 if (/^[\d\s]+$/.test(phrase)) continue;
                 // Manual detection for "Month Day Year" (e.g., "Mar 30 2026")
@@ -105,6 +109,10 @@ export class TextSearcher {
                 const phrase = sliceTokens.map(t => t.text).join(" ");
                 const from = sliceTokens[0].start;
                 const to = sliceTokens[sliceTokens.length - 1].end;
+                // Allow pure 4-digit year as valid date
+                if (/^\d{4}$/.test(phrase)) {
+                    return { word: phrase, from, to };
+                }
                 // Ensure cursor is over or immediately after phrase
                 if (ch < from || ch > to) continue;
                 // Manual fallback for "Month Day Year" formats
