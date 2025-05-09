@@ -1,4 +1,4 @@
-.chrono-active-trigger {
+.qd-active-trigger {
   -webkit-app-region: no-drag;
   padding: 2px 6px;
   background-color: var(--background-secondary);
@@ -10,25 +10,25 @@
   font-family: var(--font-monospace);
 }
 
-.chrono-active-trigger::after {
+.qd-active-trigger::after {
   content: " ⭢";
 }
 
-.chrono-suggestion-container {
+.qd-suggestion-container {
   display: flex;
   flex-direction: column;
   position: relative;
 }
 
-.chrono-suggestion-text {
+.qd-suggestion-text {
   
 }
 
-.chrono-suggestion-text b {
+.qd-suggestion-text b {
   font-weight: bold;
 }
 
-.chrono-is-unresolved-link {
+.qd-is-unresolved-link {
   text-decoration-line: var(--link-decoration);
   text-decoration-style: var(--link-unresolved-decoration-style);
   text-decoration-color: var(--link-unresolved-decoration-color);
@@ -37,11 +37,11 @@
   filter: var(--link-unresolved-filter);
 }
 
-.chrono-is-unresolved-text {
+.qd-is-unresolved-text {
   opacity: var(--link-unresolved-opacity);
 }
 
-.chrono-suggestion-preview {
+.qd-suggestion-preview {
   color: var(--text-muted);
   font-size: 0.9em;
   display: flex;
@@ -49,21 +49,21 @@
   gap: 0.25em;
 }
 
-.chrono-clock-icon {
+.qd-clock-icon {
   margin-right: 2px;
   display: inline;
 }
 
-.chrono-suggestion-preview > * {
+.qd-suggestion-preview > * {
   display: inline;
   white-space: nowrap;
 }
 
-.chrono-error-text {
+.qd-error-text {
 
 }
 
-.chrono-error-icon {
+.qd-error-icon {
   color: var(--text-error);
   font-weight: bold;
 }

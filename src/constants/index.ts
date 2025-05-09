@@ -155,15 +155,15 @@ export const DESCRIPTIONS = {
  * CSS class names
  */
 export const CLASSES = {
-    suggestionContainer: 'chrono-suggestion-container',
-    suggestionText: 'chrono-suggestion-text',
-    suggestionPreview: 'chrono-suggestion-preview',
-    unresolvedLink: 'chrono-is-unresolved-link',
-    unresolvedText: 'chrono-is-unresolved-text',
-    errorText: 'chrono-error-text',
-    errorIcon: 'chrono-error-icon',
-    timeRelevantSuggestion: 'chrono-time-relevant-suggestion',
-    activeTrigger: 'chrono-active-trigger',
+    suggestionContainer: 'qd-suggestion-container',
+    suggestionText: 'qd-suggestion-text',
+    suggestionPreview: 'qd-suggestion-preview',
+    unresolvedLink: 'qd-is-unresolved-link',
+    unresolvedText: 'qd-is-unresolved-text',
+    errorText: 'qd-error-text',
+    errorIcon: 'qd-error-icon',
+    timeRelevantSuggestion: 'qd-time-relevant-suggestion',
+    activeTrigger: 'qd-active-trigger',
 };
 
 /**
@@ -249,7 +249,7 @@ export const MONTHS_OF_THE_YEAR = [
 ] as const;
 
 /**
- * Common time-of-day phrases (capitalized for display, chrono can parse these)
+ * Common time-of-day phrases (capitalized for display, qd can parse these)
  */
 export const TIME_OF_DAY_PHRASES = [
     'Noon',
