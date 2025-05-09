@@ -30,19 +30,16 @@ export const MODIFIER_KEY = {
  * Centralized instruction definitions for key combos and their purposes
  * Now a function to support swappable Ctrl/no-modifier behavior
  */
-export function getInstructionDefinitions(plainTextByDefault: boolean) {
+export function getInstructionDefinitions(plainTextByDefault: boolean, swapOpenNoteKeybinds: boolean) {
     // Main insert/format instructions
     const instructions = [
         { command: '↑↓', purpose: 'to navigate' },
-        {
-            command: 'ctrl ↵',
-            purpose: plainTextByDefault ? 'to insert link' : 'to insert plain text'
-        },
+        { command: 'ctrl ↵', purpose: plainTextByDefault ? 'to insert link' : 'to insert plain text' },
         { command: 'alt ↵', purpose: 'to use alt format' },
         { command: 'shift ↵', purpose: 'to use suggested text' },
         { command: 'shift alt ↵', purpose: 'to force no alias' },
-        { command: 'shift ␣', purpose: 'to open note' },
-        { command: 'ctrl shift ␣', purpose: 'to open in new tab' },
+        { command: 'shift ␣', purpose: swapOpenNoteKeybinds ? 'to open note' : 'to open in new tab' },
+        { command: 'ctrl shift ␣', purpose: swapOpenNoteKeybinds ? 'to open in new tab' : 'to open note' },
         { command: 'esc', purpose: 'to dismiss' }
     ];
     return instructions;

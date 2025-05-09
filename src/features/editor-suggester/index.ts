@@ -36,7 +36,14 @@ export class EditorSuggester extends EditorSuggest<string> {
         this.suggester = new SuggestionProvider(this.app, this.plugin);
         // Register keyboard handlers using KeyboardHandler API
         this.keyboardHandler.registerEnterKeyHandlers(this.handleSelectionKey);
-        this.keyboardHandler.registerDailyNoteKeyHandlers(this.handleDailyNoteKey, this.handleDailyNoteNewTabKey);
+        // Determine handlers for daily note actions, swapping if requested
+        const openDaily = this.handleDailyNoteKey;
+        const openDailyNewTab = this.handleDailyNoteNewTabKey;
+        if (this.plugin.settings.swapOpenNoteKeybinds) {
+            this.keyboardHandler.registerDailyNoteKeyHandlers(openDailyNewTab, openDaily);
+        } else {
+            this.keyboardHandler.registerDailyNoteKeyHandlers(openDaily, openDailyNewTab);
+        }
         this.keyboardHandler.registerSpaceKeyHandler(this.handleSpaceKey);
         this.keyboardHandler.registerBackspaceKeyHandler(this.handleBackspaceKey);
         this.keyboardHandler.registerTabKeyHandler(this.handleTabKey);
@@ -217,7 +224,10 @@ export class EditorSuggester extends EditorSuggest<string> {
      */
     updateInstructions() {
         // Use dynamic instruction definitions
-        this.setInstructions(getInstructionDefinitions(this.plugin.settings.plainTextByDefault));
+        this.setInstructions(getInstructionDefinitions(
+            this.plugin.settings.plainTextByDefault,
+            this.plugin.settings.swapOpenNoteKeybinds
+        ));
         this.suggester?.updateSettings({
             plainTextByDefault: this.plugin.settings.plainTextByDefault,
             holidayLocale: this.plugin.settings.holidayLocale,

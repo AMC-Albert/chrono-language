@@ -17,6 +17,7 @@ export interface ChronoLanguageSettings {
 	timeFormat: string;
 	timeOnly: boolean;
 	timeSeparator: string;
+	swapOpenNoteKeybinds: boolean;
 }
 
 export const DEFAULT_SETTINGS: ChronoLanguageSettings = {
@@ -24,7 +25,7 @@ export const DEFAULT_SETTINGS: ChronoLanguageSettings = {
 	alternateFormat: 'dddd, MMMM Do YYYY',
 	includeFolderInLinks: true,
 	HideFolders: true,
-	triggerPhrase: '@',
+	triggerPhrase: 'qd',
 	triggerHappy: false,
 	plainTextByDefault: false,
 	initialEditorSuggestions: ['Today', 'Tomorrow', 'Yesterday'],
@@ -33,6 +34,7 @@ export const DEFAULT_SETTINGS: ChronoLanguageSettings = {
 	timeFormat: '',
 	timeOnly: false,
 	timeSeparator: ' ',
+	swapOpenNoteKeybinds: false,
 };
 
 export class ChronoLanguageSettingTab extends PluginSettingTab {
@@ -120,7 +122,7 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl).setName('Link Format').setHeading();
 
-		const includeFoldersSetting = new Setting(containerEl)
+		new Setting(containerEl)
 			.setName("Include folders in links")
 			.setDesc("Include the daily note folder path in generated links. \
 				This is preferable if you create files using unresolved links to daily notes and have a set folder for them.")
@@ -133,7 +135,7 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 					})
 			);
 
-		const hideFoldersSetting = new Setting(containerEl)
+		new Setting(containerEl)
 			.setName("Hide folders in links using aliases")
 			.setDesc("If including folders in links, and no unique alias is being used, use an alias anyway (the note name) to hide the folder path.")
 			.addToggle((toggle) =>
@@ -145,8 +147,6 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 					})
 			);
 
-		this.hideFoldersSetting = hideFoldersSetting.settingEl;
-
 		new Setting(containerEl).setName('Editor suggester').setHeading()
 
 		new Setting(containerEl)
@@ -154,7 +154,7 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 			.setDesc("Customize the trigger phrase to activate the editor suggester. If empty, the suggester will be disabled. Can be a word or single character.")
 			.addText((text) =>
 				text
-					.setPlaceholder("@")
+					.setPlaceholder("td")
 					.setValue(this.plugin.settings.triggerPhrase)
 					.onChange(async (value) => {
 						this.plugin.settings.triggerPhrase = value;
@@ -263,5 +263,17 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 					: DEFAULT_SETTINGS.initialOpenDailyNoteSuggestions;
 				await this.plugin.saveSettings();
 			});
+
+		new Setting(containerEl)
+			.setName("Swap 'Open note' keybinds")
+			.setDesc("Swap Shift+Space (default: Open suggested note) and Ctrl+Shift+Space (default: Open suggested note in new tab).")
+			.addToggle(toggle =>
+				toggle
+					.setValue(this.plugin.settings.swapOpenNoteKeybinds)
+					.onChange(async (value) => {
+						this.plugin.settings.swapOpenNoteKeybinds = value;
+						await this.plugin.saveSettings();
+					})
+			);
 	}
 }

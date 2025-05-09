@@ -20,7 +20,6 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
   }
 
   onOpen(): void {
-    console.log('[OpenDailyNoteModal] onOpen');
     super.onOpen();
     const input = this.modalEl.querySelector('.prompt-input') as HTMLInputElement;
     if (input) input.addEventListener('keydown', this.handleTabKey, true);
@@ -69,7 +68,6 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
       const file = await getOrCreateDailyNote(this.app, moment(parsed), true);
       if (file) await this.app.workspace.getLeaf().openFile(file);
     } catch (error) {
-      console.error("Error opening daily note:", error);
       new Notice(ERRORS.FAILED_HANDLE_NOTE);
     }
   }
