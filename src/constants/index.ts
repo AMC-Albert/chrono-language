@@ -258,7 +258,8 @@ export const TIME_OF_DAY_PHRASES = [
     'Morning',
     'Afternoon',
     'Evening',
-    'Night'
+    'Night',
+    'Now'
 ] as const;
 
 /**

@@ -34,6 +34,9 @@ export class DateParser {
         {
             pattern: /^(?:in\s*)?(\d+)/i, 
             generate: (fullInput: string, matchDetails?: RegExpMatchArray) => {
+                const trimmed = fullInput.trim();
+                // Skip auto-expansion for 4-digit years
+                if (/^\d{4}$/.test(trimmed)) return [];
                 if (!matchDetails) return [];
                 const num = matchDetails[1]; // The captured number
                 const matchedString = matchDetails[0]; // The part of fullInput that matched (e.g., "in 3", "in3" or "3")
@@ -381,6 +384,10 @@ export class DateParser {
         if (!text) return text;
         
         const trimmedText = text.trim();
+        // If input is exactly 4 digits, assume it's a year and skip enhancement
+        if (/^\d{4}$/.test(trimmedText)) {
+            return trimmedText;
+        }
         let modifiedText = trimmedText;
         
         // If text starts with a number, prepend "in " for better relative date parsing
@@ -403,15 +410,35 @@ export class DateParser {
      */
     static inputHasTimeComponent(text: string): boolean {
         if (!text) return false;
-        const lower = text.trim().toLowerCase();
-        // Exclude 'in X days/weeks/years' (no time component)
-        if (/^in \d+\s*(days?|weeks?|years?)$/.test(lower)) return false;
-        // Check for 'now'
-        if (lower === 'now') return true;
-        // Check for time-of-day phrases
-        if (TIME_OF_DAY_PHRASES.some(phrase => lower.includes(phrase.toLowerCase()))) return true;
-        // Check for explicit time (e.g., 3pm, 14:00, 3:30 am, 23:59)
-        if (/\b(\d{1,2})(:|\.|h)?(\d{2})?\s?(am|pm)?\b/.test(lower)) return true;
+        const lowerTrimmed = text.trim().toLowerCase();
+
+        // Check against TIME_OF_DAY_PHRASES first
+        if (TIME_OF_DAY_PHRASES.some(phrase => lowerTrimmed === phrase.toLowerCase())) {
+            return true;
+        }
+
+        const dateOnlyExactMatches = ['today', 'tomorrow', 'yesterday'];
+        if (dateOnlyExactMatches.includes(lowerTrimmed)) return false;
+
+        // Regex for phrases that are definitely date-only relative terms
+        const dateOnlyPatterns = [
+            /^in \d+\s+(days?|weeks?|years?)$/i, // e.g., "in 3 days", "in 2 weeks"
+            /^(next|last|this)\s+(day|week|month|year)$/i, // e.g., "next week", "this month"
+            // Add more patterns here if other specific date-only phrases are commonly misidentified
+        ];
+        for (const pattern of dateOnlyPatterns) {
+            if (pattern.test(lowerTrimmed)) return false;
+        }
+
+        const results = chrono.parse(lowerTrimmed);
+        if (results && results.length > 0) {
+            const comp = results[0].start;
+            // If hour or minute is known/certain from Chrono's parsing, it has a time component.
+            if (comp && (comp.isCertain('hour') || comp.isCertain('minute'))) {
+                return true;
+            }
+        }
+
         return false;
     }
 
@@ -437,6 +464,11 @@ export class DateParser {
      * Parse a date string with enhanced capabilities
      */
     static parseDate(text: string): Date | null {
+        const trimmed = text.trim();
+        // Year-only input should map to January 1st of that year
+        if (/^\d{4}$/.test(trimmed)) {
+            return new Date(Number(trimmed), 0, 1);
+        }
         const { holidayDate, modifiedText } = this.handleParsing(text);
         return holidayDate || chrono.parseDate(modifiedText);
     }
