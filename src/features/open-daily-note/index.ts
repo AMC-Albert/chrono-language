@@ -21,9 +21,10 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
 
   getItems(): string[] {
     const query = (this.modalEl.querySelector(".prompt-input") as HTMLInputElement)?.value || "";
+    this.suggester.contextProvider = { context: { query } };
     return this.suggester.getDateSuggestions(
       { query },
-      this.plugin.settings.initialOpenDailyNoteSuggestions // Pass specific initial suggestions
+      this.plugin.settings.initialOpenDailyNoteSuggestions
     );
   }
 
@@ -32,7 +33,8 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
   }
 
   renderSuggestion(item: FuzzyMatch<string>, el: HTMLElement) {
-    this.suggester.renderSuggestionContent(item.item, el, this);
+    const query = (this.modalEl.querySelector(".prompt-input") as HTMLInputElement)?.value || "";
+    this.suggester.renderSuggestionContent(item.item, el, { context: { query } });
   }
 
   async onChooseItem(item: string): Promise<void> {
