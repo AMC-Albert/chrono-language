@@ -34,6 +34,9 @@ export class DateParser {
         {
             pattern: /^(?:in\s*)?(\d+)/i, 
             generate: (fullInput: string, matchDetails?: RegExpMatchArray) => {
+                const trimmed = fullInput.trim();
+                // Skip auto-expansion for 4-digit years
+                if (/^\d{4}$/.test(trimmed)) return [];
                 if (!matchDetails) return [];
                 const num = matchDetails[1]; // The captured number
                 const matchedString = matchDetails[0]; // The part of fullInput that matched (e.g., "in 3", "in3" or "3")
@@ -381,6 +384,10 @@ export class DateParser {
         if (!text) return text;
         
         const trimmedText = text.trim();
+        // If input is exactly 4 digits, assume it's a year and skip enhancement
+        if (/^\d{4}$/.test(trimmedText)) {
+            return trimmedText;
+        }
         let modifiedText = trimmedText;
         
         // If text starts with a number, prepend "in " for better relative date parsing
@@ -437,8 +444,27 @@ export class DateParser {
      * Parse a date string with enhanced capabilities
      */
     static parseDate(text: string): Date | null {
+        const trimmed = text.trim();
+        // Year-only input should map to January 1st of that year
+        if (/^\d{4}$/.test(trimmed)) {
+            return new Date(Number(trimmed), 0, 1);
+        }
         const { holidayDate, modifiedText } = this.handleParsing(text);
         return holidayDate || chrono.parseDate(modifiedText);
+    }
+
+    /**
+     * Parse a date string without enhancements (no auto "in X days").
+     * Used by editor commands and text-searcher to avoid auto-expansion.
+     */
+    static parseDateRaw(text: string): Date | null {
+        const trimmed = text.trim();
+        // Year-only input should map to January 1st of that year
+        if (/^\d{4}$/.test(trimmed)) {
+            return new Date(Number(trimmed), 0, 1);
+        }
+        const holidayDate = this.checkForHoliday(text);
+        return holidayDate || chrono.parseDate(text);
     }
 
     /**

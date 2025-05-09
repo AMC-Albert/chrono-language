@@ -51,26 +51,30 @@ export class DateCommands {
         
         // If no text is selected, try to get the word at cursor
         if (!textToProcess) {
-            const wordAtCursor = this.getWordAtCursor(editor);
+            // Try forward token-based detection
+            let wordAtCursor = this.getWordAtCursor(editor);
+            // Fallback to backward scan if no forward match
+            if (!wordAtCursor) {
+                const cursor = editor.getCursor();
+                wordAtCursor = this.scanBackwardsForDateExpression(editor, cursor);
+            }
             if (wordAtCursor) {
                 textToProcess = wordAtCursor.word;
-                
                 // Try to parse it as a date first
-                const potentialDate = DateParser.parseDate(textToProcess);
-                if (!potentialDate) {
+                const potentialRawDate = DateParser.parseDateRaw(textToProcess);
+                if (!potentialRawDate) {
                     new Notice(`Text at cursor position "${textToProcess}" doesn't appear to be a date`);
                     return;
                 }
-                
                 from = wordAtCursor.from;
                 to = wordAtCursor.to;
             } else {
-                new Notice('No text selected and no text found at cursor position');
+                new Notice('No text selected and no date detected at cursor position');
                 return;
             }
         }
 
-        const parsedDate = DateParser.parseDate(textToProcess);
+        const parsedDate = DateParser.parseDateRaw(textToProcess);
         if (!parsedDate) {
             new Notice(`Could not parse "${textToProcess}" as a date`);
             return;
@@ -89,9 +93,14 @@ export class DateCommands {
         );
 
         if (from !== null && to !== null) {
-            // Replace the word at cursor with the link
+            // Replace the word at cursor with the link, and reposition cursor if originally inside
             const cursor = editor.getCursor();
+            const wasInside = cursor.ch > from && cursor.ch < to;
             editor.replaceRange(link, { line: cursor.line, ch: from }, { line: cursor.line, ch: to });
+            if (wasInside) {
+                // Move cursor to end of inserted link
+                editor.setCursor({ line: cursor.line, ch: from + link.length });
+            }
         } else {
             // Replace the selection with the link
             editor.replaceSelection(link);
@@ -108,33 +117,37 @@ export class DateCommands {
         
         // If no text is selected, try to get the word at cursor
         if (!textToProcess) {
-            const wordAtCursor = this.getWordAtCursor(editor);
+            // Try forward token-based detection
+            let wordAtCursor = this.getWordAtCursor(editor);
+            // Fallback to backward scan if no forward match
+            if (!wordAtCursor) {
+                const cursor = editor.getCursor();
+                wordAtCursor = this.scanBackwardsForDateExpression(editor, cursor);
+            }
             if (wordAtCursor) {
                 textToProcess = wordAtCursor.word;
-                
                 // Try to parse it as a date first
                 const potentialDate = DateParser.parseDate(textToProcess);
                 if (!potentialDate) {
                     new Notice(`Text at cursor position "${textToProcess}" doesn't appear to be a date`);
                     return;
                 }
-                
                 from = wordAtCursor.from;
                 to = wordAtCursor.to;
             } else {
-                new Notice('No text selected and no text found at cursor position');
+                new Notice('No text selected and no date detected at cursor position');
                 return;
             }
         }
 
-        const parsedDate = DateParser.parseDate(textToProcess);
-        if (!parsedDate) {
+        const potentialRawDateText = DateParser.parseDateRaw(textToProcess);
+        if (!potentialRawDateText) {
             new Notice(`Could not parse "${textToProcess}" as a date`);
             return;
         }
 
         const dailyNoteSettings = getDailyNoteSettings();
-        const momentDate = moment(parsedDate);
+        const momentDate = moment(potentialRawDateText);
         
         // Check if we should render time only (respecting timeOnly setting and if date is today)
         const shouldRenderTimeOnly = DateFormatter.shouldRenderTimeOnly(
@@ -153,9 +166,14 @@ export class DateCommands {
         );
 
         if (from !== null && to !== null) {
-            // Replace the word at cursor with the formatted date
-            const cursor = editor.getCursor();
-            editor.replaceRange(formattedDate, { line: cursor.line, ch: from }, { line: cursor.line, ch: to });
+            // Replace the word at cursor with the formatted date, and reposition cursor if originally inside
+            const initialCursor = editor.getCursor();
+            const wasInsideText = initialCursor.ch > from && initialCursor.ch < to;
+            editor.replaceRange(formattedDate, { line: initialCursor.line, ch: from }, { line: initialCursor.line, ch: to });
+            if (wasInsideText) {
+                // Move cursor to end of inserted text
+                editor.setCursor({ line: initialCursor.line, ch: from + formattedDate.length });
+            }
         } else {
             // Replace the selection with the formatted date
             editor.replaceSelection(formattedDate);
