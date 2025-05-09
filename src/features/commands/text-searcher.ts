@@ -1,5 +1,6 @@
 import { Editor } from 'obsidian';
 import { DateParser } from '../suggestion-provider/parser';
+import * as chrono from 'chrono-node';
 
 export interface WordAtCursorResult {
     word: string;
@@ -8,53 +9,90 @@ export interface WordAtCursorResult {
 }
 
 export class TextSearcher {
+    private static readonly MAX_PHRASE_WORDS = 7; // Maximum number of words to consider in a potential date phrase
+
     /**
-     * Gets the potential date expression at or around cursor position
-     * Enhanced: If a month is detected, checks the next word for a number to form e.g. "May 9"
+     * Gets the potential date expression at or around the cursor position.
+     * This method tokenizes the line, identifies the word under (or nearest to) the cursor,
+     * and then expands outwards to find the longest sequence of words that forms a
+     * valid date/time expression parsable by `DateParser.parseDate`.
      */
     static getWordAtCursor(editor: Editor): WordAtCursorResult | null {
         const cursor = editor.getCursor();
         const line = editor.getLine(cursor.line);
 
-        let wordStart = cursor.ch;
-        let wordEnd = cursor.ch;
-        // Exclude spaces to isolate single word under cursor; spaces handled in month expansion
-        const dateCharsRegex = /[\w\/\-\.,:]/;
-        while (wordStart > 0 && dateCharsRegex.test(line.charAt(wordStart - 1))) {
-            wordStart--;
+        // 1. Tokenize the line into words with their start/end positions
+        interface LineWord { text: string; start: number; end: number; }
+        const words: LineWord[] = [];
+        const regex = /\S+/g; // Matches sequences of non-whitespace characters
+        let match;
+        while ((match = regex.exec(line)) !== null) {
+            words.push({ text: match[0], start: match.index, end: match.index + match[0].length });
         }
-        while (wordEnd < line.length && dateCharsRegex.test(line.charAt(wordEnd))) {
-            wordEnd++;
+
+        if (words.length === 0) {
+            return null; // No words on the line
         }
-        let word = line.substring(wordStart, wordEnd);
-        // Remove leading/trailing spaces only for the word, not for indices
-        const wordTrimmed = word.trim();
-        if (wordTrimmed) {
-            const leadingSpaces = word.match(/^\s+/) || [""];
-            const trailingSpacesMatch = word.match(/\s+$/);
-            let from = wordStart + leadingSpaces[0].length;
-            let to = wordEnd;
-            if (trailingSpacesMatch) {
-                to -= trailingSpacesMatch[0].length;
-            }
-            // Enhanced: try to expand if word is a month, but only if cursor is within the expanded range
-            const expanded = this.expandIfMonth(line, from, to);
-            if (expanded && DateParser.parseDate(expanded.word)) {
-                if (cursor.ch >= expanded.from && cursor.ch <= expanded.to) {
-                    return expanded;
-                }
-            }
-            // Only return if the word under the cursor is a date and the cursor is within the range
-            if (DateParser.parseDate(line.substring(from, to))) {
-                if (cursor.ch >= from && cursor.ch <= to) {
-                    return { word: line.substring(from, to), from, to };
-                }
-            }
-            // If not a date, do NOT scan the line for a date expression
+
+        // 2. Find the anchor word index.
+        // A word is considered under the cursor if cursor.ch is within [word.start, word.end].
+        // This includes being at the very start or very end of the word.
+        const anchorWordIndex = words.findIndex(w => cursor.ch >= w.start && cursor.ch <= w.end);
+
+        if (anchorWordIndex === -1) {
+            // If cursor is not directly on a word (e.g., in whitespace between words,
+            // or leading/trailing whitespace), return null as per "place the cursor on one of the words".
             return null;
         }
-        // If there is no word under the cursor, do NOT scan the line for a date expression
-        return null;
+        const anchorWord = words[anchorWordIndex];
+
+        // 3. Iterate through possible phrase lengths and starting positions relative to the anchor word
+        let bestResult: WordAtCursorResult | null = null;
+
+        for (let len = 1; len <= TextSearcher.MAX_PHRASE_WORDS; len++) {
+            // 'k' is the 0-indexed position of the anchor word within the current phrase.
+            // k ranges from 0 (anchor is the first word) to len-1 (anchor is the last word).
+            for (let k = 0; k < len; k++) {
+                const phraseStartIndexInWords = anchorWordIndex - k;
+                const phraseEndIndexInWords = phraseStartIndexInWords + len - 1;
+
+                // Ensure the calculated phrase indices are within the bounds of the 'words' array
+                if (phraseStartIndexInWords < 0 || phraseEndIndexInWords >= words.length) {
+                    continue;
+                }
+
+                const currentPhraseWords = words.slice(phraseStartIndexInWords, phraseEndIndexInWords + 1);
+                
+                const phraseText = currentPhraseWords.map(w => w.text).join(" ");
+                const phraseFrom = currentPhraseWords[0].start;
+
+                const chronoParseResults = chrono.parse(phraseText);
+                let currentPhraseBestMatch: WordAtCursorResult | null = null;
+
+                for (const result of chronoParseResults) {
+                    const matchedTextByChrono = result.text;
+                    const matchStartIndexInPhrase = result.index;
+                
+                    const absoluteMatchFrom = phraseFrom + matchStartIndexInPhrase;
+                    const absoluteMatchTo = absoluteMatchFrom + matchedTextByChrono.length;
+                
+                    // Check if the anchor word is contained within this specific Chrono match
+                    if (anchorWord.start >= absoluteMatchFrom && anchorWord.end <= absoluteMatchTo) {
+                        // The anchor word is fully within this Chrono match.
+                        if (!currentPhraseBestMatch || matchedTextByChrono.length > currentPhraseBestMatch.word.length) {
+                            currentPhraseBestMatch = { word: matchedTextByChrono, from: absoluteMatchFrom, to: absoluteMatchTo };
+                        }
+                    }
+                }
+                
+                if (currentPhraseBestMatch) {
+                    if (!bestResult || currentPhraseBestMatch.word.length > bestResult.word.length) {
+                        bestResult = currentPhraseBestMatch;
+                    }
+                }
+            }
+        }
+        return bestResult;
     }
 
     /**

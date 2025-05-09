@@ -31,15 +31,6 @@ export class DateCommands {
     private getWordAtCursor(editor: Editor): { word: string, from: number, to: number } | null {
         return TextSearcher.getWordAtCursor(editor);
     }
-    
-    /**
-     * Scans backwards for a date expression
-     * Delegates to TextSearcher for consistency
-     */
-    private scanBackwardsForDateExpression(editor: Editor, cursor: { line: number, ch: number }): { word: string, from: number, to: number } | null {
-        // This method is now handled by TextSearcher, keep for backward compatibility if needed
-        return TextSearcher.scanBackwardsForDateExpression(editor, cursor);
-    }
 
     /**
      * Parses selected text and replaces it with a date link
