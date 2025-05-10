@@ -5,6 +5,7 @@ import { ContentFormat } from '../../types';
 import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
 import { QuickDatesSettings } from '../../settings';
 import { TextSearcher } from './text-searcher';
+import * as chrono from 'chrono-node';
 
 // Define helper types for the parse info result
 interface DateCommandParseSuccess {
@@ -17,6 +18,26 @@ interface DateCommandParseSuccess {
 interface DateCommandParseError {
     errorNotice: string;
     textToProcessContext?: string; // Optional: for providing context in the error message
+}
+
+// Add helper to strip Markdown syntax
+function stripMarkdown(text: string): string {
+    // Remove bold, italics, underline, strikethrough, and inline code markers
+    const result = text.replace(/(\*{1,2}|_{1,2}|~{2}|`)/g, '');
+    return result.trim();
+}
+
+// Add helper to strip formatting and preserve index map
+function stripFormattingWithMap(line: string): { text: string; map: number[] } {
+    const map: number[] = [];
+    let text = '';
+    for (let i = 0; i < line.length; i++) {
+        if (!/[*_~`]/.test(line[i])) {
+            map.push(i);
+            text += line[i];
+        }
+    }
+    return { text, map };
 }
 
 /**
@@ -53,7 +74,8 @@ export class DateCommands {
         if (!textToProcess) { // No selection, try word at cursor
             const wordAtCursor = this.getWordAtCursor(editor);
             if (wordAtCursor) {
-                textToProcess = wordAtCursor.word;
+                // Strip markdown from the word under cursor
+                textToProcess = stripMarkdown(wordAtCursor.word);
                 const parsedDate = DateParser.parseDate(textToProcess);
                 if (!parsedDate) {
                     return { errorNotice: `Text at cursor ("${textToProcess}") doesn't seem to be a date for ${commandContext}.`, textToProcessContext: textToProcess };
@@ -64,7 +86,9 @@ export class DateCommands {
             } else { // No word at cursor, no selection
                 return { errorNotice: `No text selected and no date-like text found at cursor for ${commandContext}.` };
             }
-        } else { // Text was selected
+        } else {
+            // Strip markdown from the selected text
+            textToProcess = stripMarkdown(textToProcess);
             const parsedDate = DateParser.parseDate(textToProcess);
             if (!parsedDate) {
                 return { errorNotice: `Could not parse "${textToProcess}" as a date for ${commandContext}.`, textToProcessContext: textToProcess };
@@ -154,94 +178,35 @@ export class DateCommands {
     private async parseAllDatesInNoteInternal(editor: Editor, view: MarkdownView, asLink: boolean, forceTextAsAliasForLink: boolean = false): Promise<void> {
         const originalCursor = editor.getCursor();
         const lastLine = editor.lastLine();
-        const allChanges: { from: {line: number, ch: number}, to: {line: number, ch: number}, text: string }[] = [];
-        let replacementsMade = 0;
+        const changes: { from: { line: number, ch: number }, to: { line: number, ch: number }, text: string }[] = [];
+        let count = 0;
 
         for (let lineNum = 0; lineNum <= lastLine; lineNum++) {
-            const currentLineContent = editor.getLine(lineNum);
-            let searchCh = 0;
-
-            while (searchCh < currentLineContent.length) {
-                let effectiveCh = searchCh;
-                while (effectiveCh < currentLineContent.length && /\s/.test(currentLineContent[effectiveCh])) {
-                    effectiveCh++;
-                }
-
-                if (effectiveCh >= currentLineContent.length) {
-                    break;
-                }
-
-                editor.setCursor({ line: lineNum, ch: effectiveCh });
-                const wordAtCursorResult = TextSearcher.getWordAtCursor(editor);
-
-                if (wordAtCursorResult) {
-                    const textToProcess = wordAtCursorResult.word;
-                    const fromCh = wordAtCursorResult.from;
-                    const toCh = wordAtCursorResult.to;
-
-                    if (fromCh < searchCh) {
-                        let nextSearchChAfterEffective = effectiveCh + 1;
-                        const wordAfterEffectiveCh = currentLineContent.substring(effectiveCh).match(/^\S+/);
-                        if (wordAfterEffectiveCh) {
-                            nextSearchChAfterEffective = effectiveCh + wordAfterEffectiveCh[0].length;
-                        }
-                        searchCh = Math.max(searchCh + 1, nextSearchChAfterEffective);
-                        continue;
-                    }
-
-                    const parsedDate = DateParser.parseDate(textToProcess);
-
-                    if (parsedDate) {
-                        let replacementText: string;
-                        if (asLink) {
-                            if (!view.file) {
-                                new Notice('Cannot create link: Current view is not a markdown editor.');
-                                searchCh = toCh;
-                                continue;
-                            }
-                            replacementText = createDailyNoteLink(
-                                this.app,
-                                this.settings,
-                                view.file,
-                                textToProcess,
-                                forceTextAsAliasForLink
-                            );
-                        } else {
-                            const momentDate = moment(parsedDate);
-                            const dailyNoteSettings = getDailyNoteSettings();
-                            replacementText = DateFormatter.getFormattedDateText(
-                                textToProcess,
-                                momentDate,
-                                this.settings,
-                                ContentFormat.PRIMARY,
-                                dailyNoteSettings
-                            );
-                        }
-
-                        allChanges.push({
-                            from: { line: lineNum, ch: fromCh },
-                            to: { line: lineNum, ch: toCh },
-                            text: replacementText
-                        });
-                        replacementsMade++;
-                        searchCh = toCh;
-                    } else {
-                        searchCh = toCh;
-                    }
+            const rawLine = editor.getLine(lineNum);
+            const { text: stripped, map } = stripFormattingWithMap(rawLine);
+            const results = chrono.parse(stripped);
+            for (const r of results) {
+                const phrase = r.text;
+                const startIx = r.index;
+                const endIx = startIx + phrase.length;
+                const fromCh = map[startIx];
+                const toCh = map[endIx - 1] + 1;
+                let replacement: string;
+                if (asLink) {
+                    if (!view.file) continue;
+                    replacement = createDailyNoteLink(this.app, this.settings, view.file, phrase, forceTextAsAliasForLink);
                 } else {
-                    let nextSearchCh = effectiveCh + 1;
-                    const wordMatch = currentLineContent.substring(effectiveCh).match(/^\S+/);
-                    if (wordMatch) {
-                        nextSearchCh = effectiveCh + wordMatch[0].length;
-                    }
-                    searchCh = Math.max(searchCh + 1, nextSearchCh);
+                    const m = moment(r.start.date());
+                    replacement = DateFormatter.getFormattedDateText(phrase, m, this.settings, ContentFormat.PRIMARY, getDailyNoteSettings());
                 }
+                changes.push({ from: { line: lineNum, ch: fromCh }, to: { line: lineNum, ch: toCh }, text: replacement });
+                count++;
             }
         }
 
-        if (allChanges.length > 0) {
-            editor.transaction({ changes: allChanges });
-            new Notice(`Replaced ${replacementsMade} date/time phrase(s) in the note.`);
+        if (changes.length > 0) {
+            editor.transaction({ changes });
+            new Notice(`Replaced ${count} date/time phrase(s) in the note.`);
         } else {
             new Notice('No date/time phrases found to replace in the note.');
         }

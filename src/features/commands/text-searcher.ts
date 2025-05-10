@@ -12,6 +12,18 @@ export class TextSearcher {
     private static readonly MAX_PHRASE_WORDS = 7; // Maximum number of words to consider in a potential date phrase
 
     /**
+     * Remove formatting markers from a token and compute prefix and suffix lengths
+     */
+    private static stripFormatting(raw: string): { text: string; prefixLen: number; suffixLen: number } {
+        const prefixMatch = raw.match(/^(?:\*+|_{1,2}|~+|`+)+/);
+        const suffixMatch = raw.match(/(?:\*+|_{1,2}|~+|`+)+(?=\W*$)/);
+        const prefixLen = prefixMatch ? prefixMatch[0].length : 0;
+        const suffixLen = suffixMatch ? suffixMatch[0].length : 0;
+        const text = raw.slice(prefixLen, raw.length - suffixLen);
+        return { text, prefixLen, suffixLen };
+    }
+
+    /**
      * Gets the potential date expression at or around the cursor position.
      * This method tokenizes the line, identifies the word under (or nearest to) the cursor,
      * and then expands outwards to find the longest sequence of words that forms a
@@ -27,7 +39,12 @@ export class TextSearcher {
         const regex = /\S+/g; // Matches sequences of non-whitespace characters
         let match;
         while ((match = regex.exec(line)) !== null) {
-            words.push({ text: match[0], start: match.index, end: match.index + match[0].length });
+            const raw = match[0];
+            const { text: stripped, prefixLen, suffixLen } = TextSearcher.stripFormatting(raw);
+            if (!stripped) continue;
+            const start = match.index + prefixLen;
+            const end = match.index + raw.length - suffixLen;
+            words.push({ text: stripped, start, end });
         }
 
         if (words.length === 0) {
