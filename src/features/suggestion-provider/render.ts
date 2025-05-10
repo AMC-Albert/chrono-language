@@ -1,8 +1,7 @@
 import { getDailyNote, getDailyNoteSettings, DEFAULT_DAILY_NOTE_FORMAT } from 'obsidian-daily-notes-interface';
 import { DateParser } from './date-parser';
-import { DateFormatter } from '../../utils/helpers';
+import { DateFormatter, getOrCreateDailyNote, getAllDailyNotesSafe } from '../../utils/helpers';
 import { CLASSES } from '../../constants';
-import { getOrCreateDailyNote } from '../../utils/helpers';
 import { InsertMode, ContentFormat } from '../../types';
 import { TFile, moment, Platform } from 'obsidian';
 import { SuggestionProvider } from './index';
@@ -159,6 +158,7 @@ function appendReadableDatePreview(
         contentFormat,
         dailySettings
     );
+
     // Highlight matching characters in bold
     const context = provider.contextProvider;
     let query = '';
@@ -168,9 +168,9 @@ function appendReadableDatePreview(
         query = context.query;
     }
 
-    const trimmedQuery = query.trim(); // Trim the query
+    const trimmedQuery = query.trim();
 
-    // create span and append matches without innerHTML
+    // create span and append matches
     const span = document.createElement('span');
     span.className = suggestionPreviewClass.join(' ');
     if (trimmedQuery.length > 0) {
@@ -239,10 +239,4 @@ function createLinkPreview(
             cls: suggestionPreviewClass 
         });
     }
-}
-
-// Helper to get all daily notes safely
-async function getAllDailyNotesSafe(app: any, createIfNeeded: boolean) {
-    const { getAllDailyNotesSafe } = await import('../../utils/helpers');
-    return getAllDailyNotesSafe(app, createIfNeeded);
 }

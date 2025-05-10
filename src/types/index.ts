@@ -3,9 +3,8 @@ import {
     CONTENT_FORMAT, 
     MODIFIERS, 
     KEYS, 
-    DESCRIPTIONS,
-    MODIFIER_BEHAVIOR,
-    MODIFIER_KEY,
+    MODIFIER_BEHAVIOR, 
+    MODIFIER_KEY, 
 } from '../constants';
 
 /**

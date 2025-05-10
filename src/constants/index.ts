@@ -122,36 +122,11 @@ export const KEYS = {
 } as const;
 
 /**
- * Navigation keys that should be prevented from propagating to Obsidian
- * when modifier keys are pressed
- */
-export const NAVIGATION_KEYS = [
-    'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
-    'PageUp', 'PageDown', 'Home', 'End'
-] as const;
-
-/**
  * Constants for key event types
  */
 export const KEY_EVENTS = {
     KEYDOWN: 'keydown',
     KEYUP: 'keyup'
-} as const;
-
-/**
- * Constants for descriptions
- */
-export const DESCRIPTIONS = {
-    LINK_PRIMARY: 'Insert as link',
-    LINK_SUGGESTION_TEXT: 'Use suggestion text',
-    LINK_ALTERNATE: 'Alternate format',
-    LINK_DAILY_NOTE: 'Force no alias',
-    PLAINTEXT_PRIMARY: 'Insert as plain text',
-    PLAINTEXT_SUGGESTION_TEXT: 'Use suggestion text',
-    PLAINTEXT_ALTERNATE: 'Alternate format',
-    PLAINTEXT_DAILY_NOTE: 'Force no alias',
-    OPEN_DAILY_NOTE: 'Open daily note',
-    OPEN_DAILY_NOTE_NEW_TAB: 'Open daily note in new tab',
 } as const;
 
 /**
