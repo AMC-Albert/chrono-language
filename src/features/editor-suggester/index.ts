@@ -85,8 +85,7 @@ export class EditorSuggester extends EditorSuggest<string> {
 
     private handleSelectionKey = (event: KeyboardEvent): boolean => {
         if (!this.isOpen || !this.suggester || !this.context) return false;
-
-        // For Enter key and other selection actions
+        if (event.shiftKey) event.preventDefault();
         return this.suggestions.useSelectedItem(event);
     };
 
