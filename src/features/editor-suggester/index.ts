@@ -37,8 +37,8 @@ export class EditorSuggester extends EditorSuggest<string> {
         // Register keyboard handlers using KeyboardHandler API
         this.keyboardHandler.registerEnterKeyHandlers(this.handleSelectionKey);
         // Determine handlers for daily note actions, swapping if requested
-        const openDaily = this.handleDailyNoteKey;
-        const openDailyNewTab = this.handleDailyNoteNewTabKey;
+        const openDaily = this.handleDailyNoteKey.bind(this);
+        const openDailyNewTab = this.handleDailyNoteNewTabKey.bind(this);
         if (this.plugin.settings.swapOpenNoteKeybinds) {
             this.keyboardHandler.registerDailyNoteKeyHandlers(openDailyNewTab, openDaily);
         } else {
@@ -55,13 +55,10 @@ export class EditorSuggester extends EditorSuggest<string> {
      * Handles Shift+Space key for opening the daily note
      */
     private handleDailyNoteKey = (event: KeyboardEvent): boolean => {
-        // Ensure suggester is open with context before handling
-        if (!this.isOpen || !this.suggester || !this.context) {
-            return false;
-        }
-        // Handle Shift+Space for opening daily note
+        if (!this.isOpen || !this.suggester || !this.context) return false;
         if (event.shiftKey && event.key === KEYS.SPACE) {
-            this.suggester.handleDailyNoteAction(event, false, this.context);
+            const newTab = this.plugin.settings.swapOpenNoteKeybinds;
+            this.suggester.handleDailyNoteAction(event, newTab, this.context);
             return true;
         }
         return false;
@@ -71,13 +68,10 @@ export class EditorSuggester extends EditorSuggest<string> {
      * Handles Ctrl+Shift+Space key for opening the daily note in a new tab
      */
     private handleDailyNoteNewTabKey = (event: KeyboardEvent): boolean => {
-        // Ensure suggester is open with context before handling
-        if (!this.isOpen || !this.suggester || !this.context) {
-            return false;
-        }
-        // Handle Ctrl+Shift+Space for opening daily note in a new tab
+        if (!this.isOpen || !this.suggester || !this.context) return false;
         if (event.ctrlKey && event.shiftKey && event.key === KEYS.SPACE) {
-            this.suggester.handleDailyNoteAction(event, true, this.context);
+            const openTab = !this.plugin.settings.swapOpenNoteKeybinds;
+            this.suggester.handleDailyNoteAction(event, openTab, this.context);
             return true;
         }
         return false;
@@ -229,11 +223,11 @@ export class EditorSuggester extends EditorSuggest<string> {
     /**
      * Updates the instructions display based on keyboard handler settings
      */
-    updateInstructions() {
+    updateInstructions(swapOpenNoteKeybindsOverride?: boolean) {
         // Use dynamic instruction definitions
         this.setInstructions(getInstructionDefinitions(
             this.plugin.settings.plainTextByDefault,
-            this.plugin.settings.swapOpenNoteKeybinds
+            swapOpenNoteKeybindsOverride ?? this.plugin.settings.swapOpenNoteKeybinds
         ));
         this.suggester?.updateSettings({
             plainTextByDefault: this.plugin.settings.plainTextByDefault,
@@ -421,9 +415,17 @@ export class EditorSuggester extends EditorSuggest<string> {
     /**
      * Update settings and trigger UI refresh
      */
-    updateSettings(settings: { keyBindings?: Record<string, string>; plainTextByDefault?: boolean; holidayLocale?: string }): void {
+    updateSettings(settings: { keyBindings?: Record<string, string>; plainTextByDefault?: boolean; holidayLocale?: string; swapOpenNoteKeybinds?: boolean }): void {
         this.keyboardHandler.update(settings);
-        this.updateInstructions();
+        // Re-register daily note key handlers when swapOpenNoteKeybinds setting changes
+        const openDaily = this.handleDailyNoteKey.bind(this);
+        const openDailyNewTab = this.handleDailyNoteNewTabKey.bind(this);
+        if (settings.swapOpenNoteKeybinds) {
+            this.keyboardHandler.registerDailyNoteKeyHandlers(openDailyNewTab, openDaily);
+        } else {
+            this.keyboardHandler.registerDailyNoteKeyHandlers(openDaily, openDailyNewTab);
+        }
+        this.updateInstructions(settings.swapOpenNoteKeybinds);
         this.suggester?.updateSettings({
             plainTextByDefault: settings.plainTextByDefault ?? this.plugin.settings.plainTextByDefault,
             holidayLocale: settings.holidayLocale ?? this.plugin.settings.holidayLocale,

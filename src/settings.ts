@@ -189,6 +189,18 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 					})
 			);
 
+		new Setting(containerEl)
+			.setName("Swap 'Open note' keybinds")
+			.setDesc("Swap Shift+Space (default: Open suggested note) and Ctrl+Shift+Space (default: Open suggested note in new tab).")
+			.addToggle(toggle =>
+				toggle
+					.setValue(this.plugin.settings.swapOpenNoteKeybinds)
+					.onChange(async (value) => {
+						this.plugin.settings.swapOpenNoteKeybinds = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
 		const initialEditorSuggestionsSettings = new Setting(containerEl)
 			.setName("Initial suggestions")
 			.setDesc("Enter initial suggestions for the editor suggester. Each suggestion should be on a new line.");
@@ -263,17 +275,5 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 					: DEFAULT_SETTINGS.initialOpenDailyNoteSuggestions;
 				await this.plugin.saveSettings();
 			});
-
-		new Setting(containerEl)
-			.setName("Swap 'Open note' keybinds")
-			.setDesc("Swap Shift+Space (default: Open suggested note) and Ctrl+Shift+Space (default: Open suggested note in new tab).")
-			.addToggle(toggle =>
-				toggle
-					.setValue(this.plugin.settings.swapOpenNoteKeybinds)
-					.onChange(async (value) => {
-						this.plugin.settings.swapOpenNoteKeybinds = value;
-						await this.plugin.saveSettings();
-					})
-			);
 	}
 }

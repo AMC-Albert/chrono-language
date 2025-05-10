@@ -80,7 +80,8 @@ export default class ChronoLanguage extends Plugin {
 		this.registerEditorSuggest(this.editorSuggester);
 		this.editorSuggester.updateSettings({ 
 			plainTextByDefault: this.settings.plainTextByDefault,
-			holidayLocale: this.settings.holidayLocale 
+			holidayLocale: this.settings.holidayLocale,
+			swapOpenNoteKeybinds: this.settings.swapOpenNoteKeybinds
 		});
 		
 		// Update settings in date commands
@@ -103,6 +104,7 @@ export default class ChronoLanguage extends Plugin {
 		this.editorSuggester?.updateSettings({ 
 			plainTextByDefault: this.settings.plainTextByDefault,
 			holidayLocale: this.settings.holidayLocale,
+			swapOpenNoteKeybinds: this.settings.swapOpenNoteKeybinds
 		});
 	}
 }
