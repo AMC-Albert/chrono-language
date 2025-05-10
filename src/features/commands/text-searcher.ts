@@ -76,9 +76,15 @@ export class TextSearcher {
                     const absoluteMatchFrom = phraseFrom + matchStartIndexInPhrase;
                     const absoluteMatchTo = absoluteMatchFrom + matchedTextByChrono.length;
                 
-                    // Check if the anchor word is contained within this specific Chrono match
-                    if (anchorWord.start >= absoluteMatchFrom && anchorWord.end <= absoluteMatchTo) {
-                        // The anchor word is fully within this Chrono match.
+                    // Calculate the end of the anchor word's core text (stripping one trailing punctuation char like ',', '.', ':', ';')
+                    // This ensures that if the tokenized anchorWord is e.g., "2025,", its core "2025" is used for matching against Chrono's result.
+                    const coreAnchorText = anchorWord.text.replace(/[,.:;]$/, "");
+                    const coreAnchorEnd = anchorWord.start + coreAnchorText.length;
+
+                    // Check if the anchor word's core text (e.g., "2025" from "2025,") is fully contained within this specific Chrono match span.
+                    // This is key to ensuring the Chrono match is relevant to the word at the cursor.
+                    if (anchorWord.start >= absoluteMatchFrom && coreAnchorEnd <= absoluteMatchTo) {
+                        // The anchor word's core is within this Chrono match.
                         if (!currentPhraseBestMatch || matchedTextByChrono.length > currentPhraseBestMatch.word.length) {
                             currentPhraseBestMatch = { word: matchedTextByChrono, from: absoluteMatchFrom, to: absoluteMatchTo };
                         }

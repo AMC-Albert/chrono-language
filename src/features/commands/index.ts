@@ -100,9 +100,14 @@ export class DateCommands {
         );
 
         if (from !== null && to !== null) { // from and to are number | null here
-            const cursor = editor.getCursor();
+            const cursor = editor.getCursor(); // Original cursor position
             // Inside this block, from and to are narrowed to number
             editor.replaceRange(link, { line: cursor.line, ch: from }, { line: cursor.line, ch: to });
+            if (cursor.ch === from) { // If original cursor was at the start of the replaced text
+                editor.setCursor({ line: cursor.line, ch: from }); // Set to start of new text
+            } else {
+                editor.setCursor({ line: cursor.line, ch: from + link.length }); // Set to end of new text
+            }
         } else {
             editor.replaceSelection(link);
         }
@@ -132,8 +137,13 @@ export class DateCommands {
         );
 
         if (from !== null && to !== null) {
-            const cursor = editor.getCursor();
+            const cursor = editor.getCursor(); // Original cursor position
             editor.replaceRange(formattedDate, { line: cursor.line, ch: from }, { line: cursor.line, ch: to });
+            if (cursor.ch === from) { // If original cursor was at the start of the replaced text
+                editor.setCursor({ line: cursor.line, ch: from }); // Set to start of new text
+            } else {
+                editor.setCursor({ line: cursor.line, ch: from + formattedDate.length }); // Set to end of new text
+            }
         } else {
             editor.replaceSelection(formattedDate);
         }
@@ -282,8 +292,13 @@ export class DateCommands {
         );
 
         if (from !== null && to !== null) {
-            const cursor = editor.getCursor();
+            const cursor = editor.getCursor(); // Original cursor position
             editor.replaceRange(link, { line: cursor.line, ch: from }, { line: cursor.line, ch: to });
+            if (cursor.ch === from) { // If original cursor was at the start of the replaced text
+                editor.setCursor({ line: cursor.line, ch: from }); // Set to start of new text
+            } else {
+                editor.setCursor({ line: cursor.line, ch: from + link.length }); // Set to end of new text
+            }
         } else {
             editor.replaceSelection(link);
         }
