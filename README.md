@@ -18,7 +18,7 @@ Type `qd` (customizable in settings) to get started:
 
 ![Convert Individual](assets/convert-individual-demo.gif)
 
-⭐ Scan and convert entire markdown documents with different date formats, relative time phrases, etc.
+⭐ Scan and convert entire notes with different date formats, relative time phrases, etc.
 
 ![Convert All](assets/convert-all-demo.gif)
 

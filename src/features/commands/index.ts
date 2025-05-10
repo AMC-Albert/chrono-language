@@ -149,9 +149,9 @@ export class DateCommands {
         }
     }
 
-    // New methods for processing all dates in the document
+    // New methods for processing all dates in the note
 
-    private async parseAllDatesInDocumentInternal(editor: Editor, view: MarkdownView, asLink: boolean, forceTextAsAliasForLink: boolean = false): Promise<void> {
+    private async parseAllDatesInNoteInternal(editor: Editor, view: MarkdownView, asLink: boolean, forceTextAsAliasForLink: boolean = false): Promise<void> {
         const originalCursor = editor.getCursor();
         const lastLine = editor.lastLine();
         const allChanges: { from: {line: number, ch: number}, to: {line: number, ch: number}, text: string }[] = [];
@@ -241,29 +241,29 @@ export class DateCommands {
 
         if (allChanges.length > 0) {
             editor.transaction({ changes: allChanges });
-            new Notice(`Replaced ${replacementsMade} date/time phrase(s) in the document.`);
+            new Notice(`Replaced ${replacementsMade} date/time phrase(s) in the note.`);
         } else {
-            new Notice('No date/time phrases found to replace in the document.');
+            new Notice('No date/time phrases found to replace in the note.');
         }
         editor.setCursor(originalCursor);
     }
 
     /**
-     * Scans the entire document for date/time phrases and replaces them with daily note links.
+     * Scans the entire note for date/time phrases and replaces them with daily note links.
      */
     public async parseAllDatesAsLinks(editor: Editor, view: MarkdownView): Promise<void> {
         if (!view.file) {
             new Notice('Cannot process note: Current view is not a markdown editor.');
             return;
         }
-        await this.parseAllDatesInDocumentInternal(editor, view, true, false);
+        await this.parseAllDatesInNoteInternal(editor, view, true, false);
     }
 
     /**
-     * Scans the entire document for date/time phrases and replaces them with formatted plain text dates.
+     * Scans the entire note for date/time phrases and replaces them with formatted plain text dates.
      */
     public async parseAllDatesAsText(editor: Editor, view: MarkdownView): Promise<void> {
-        await this.parseAllDatesInDocumentInternal(editor, view, false);
+        await this.parseAllDatesInNoteInternal(editor, view, false);
     }
 
     /**
@@ -305,7 +305,7 @@ export class DateCommands {
     }
 
     /**
-     * Scans the entire document for date/time phrases and replaces them with daily note links,
+     * Scans the entire note for date/time phrases and replaces them with daily note links,
      * keeping original text as alias.
      */
     public async parseAllDatesAsLinksKeepOriginalTextAlias(editor: Editor, view: MarkdownView): Promise<void> {
@@ -313,6 +313,6 @@ export class DateCommands {
             new Notice('Cannot process note: Current view is not a markdown editor.');
             return;
         }
-        await this.parseAllDatesInDocumentInternal(editor, view, true, true);
+        await this.parseAllDatesInNoteInternal(editor, view, true, true);
     }
 }
