@@ -1,6 +1,6 @@
-import { Notice, FuzzySuggestModal, App, FuzzyMatch, moment } from "obsidian";
-import ChronoLanguage from "../../main";
-import { SuggestionProvider,  } from "../suggestion-provider";
+import { Notice, FuzzySuggestModal, FuzzyMatch, moment, Platform } from "obsidian";
+import QuickDates from "../../main";
+import { SuggestionProvider } from "../suggestion-provider";
 import { DateParser } from "../suggestion-provider/date-parser";
 import { getOrCreateDailyNote } from "../../utils/helpers";
 import { ERRORS } from "../../constants";
@@ -9,13 +9,13 @@ import { ERRORS } from "../../constants";
  * Modal for quickly opening daily notes via date parsing
  */
 export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
-  plugin: ChronoLanguage;
+  plugin: QuickDates;
   private suggester: SuggestionProvider;
 
-  constructor(app: App, plugin: ChronoLanguage) {
+  constructor(app: any, plugin: QuickDates) { // Changed App to any
     super(app);
     this.plugin = plugin;
-    this.suggester = new SuggestionProvider(this.app, this.plugin);
+    this.suggester = new SuggestionProvider(this.plugin.app, this.plugin);
     this.setPlaceholder("Enter a date or relative time...");
   }
 
@@ -65,8 +65,11 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
       }
       
       // Open the file in active leaf
-      const file = await getOrCreateDailyNote(this.app, moment(parsed), true);
-      if (file) await this.app.workspace.getLeaf().openFile(file);
+      const file = await getOrCreateDailyNote(this.plugin.app, moment(parsed), true);
+      if (file) {
+        const newPane = false;
+        await this.plugin.app.workspace.openLinkText(file.path, '', newPane);
+      }
     } catch (error) {
       new Notice(ERRORS.FAILED_HANDLE_NOTE);
     }

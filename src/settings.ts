@@ -1,9 +1,9 @@
-import { App, PluginSettingTab, Setting } from 'obsidian';
+import { PluginSettingTab, Setting } from 'obsidian';
 import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
 import { MultipleTextComponent } from 'obsidian-dev-utils/obsidian/Components/SettingComponents/MultipleTextComponent';
-import ChronoLanguage from './main';
+import QuickDates from './main';
 
-export interface ChronoLanguageSettings {
+export interface QuickDatesSettings {
 	primaryFormat: string;
 	alternateFormat: string;
 	holidayLocale: string;
@@ -21,7 +21,7 @@ export interface ChronoLanguageSettings {
 	initialOpenDailyNoteSuggestions: string[];
 }
 
-export const DEFAULT_SETTINGS: ChronoLanguageSettings = {
+export const DEFAULT_SETTINGS: QuickDatesSettings = {
 	primaryFormat: '',
 	alternateFormat: 'dddd, MMMM Do YYYY',
 	holidayLocale: 'US',
@@ -40,10 +40,10 @@ export const DEFAULT_SETTINGS: ChronoLanguageSettings = {
 };
 
 export class ChronoLanguageSettingTab extends PluginSettingTab {
-	plugin: ChronoLanguage;
+	plugin: QuickDates;
 	hideFoldersSetting: HTMLElement;
 
-	constructor(app: App, plugin: ChronoLanguage) {
+	constructor(app: any, plugin: QuickDates) { // Changed App to any
 		super(app, plugin);
 		this.plugin = plugin;
 	}
@@ -52,6 +52,7 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 
 		containerEl.empty();
+		// TODO: Review UI text and heading guidelines for this section
 
 		new Setting(containerEl)
 			.setName("Primary date format")
@@ -83,10 +84,16 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Alternate date format")
-			.setDesc("Specify your alternate human-readable date format. \
-				It will be used for link aliases and plain text dates \
-				(when the Alt key is held while using the editor suggester). \
-				It does not need to match your daily note format.")
+			.setDesc((() => {
+				const fragment = document.createDocumentFragment();
+				fragment.createSpan({
+					text: "Specify your alternate human-readable date format. It will be used for link aliases and plain text dates (when the "
+				});
+				const boldAlt = fragment.createEl("b");
+				boldAlt.textContent = "alt";
+				fragment.createSpan({ text: " key is held while using the editor suggester). It does not need to match your daily note format." });
+				return fragment;
+			})())
 			.addText((text) =>
 				text
 					.setPlaceholder("dddd, MMMM Do YYYY")
@@ -179,7 +186,14 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Insert plain text by default")
-			.setDesc("When enabled, insert suggestions as plain text by default, and use the Ctrl key modifier to insert as a link.")
+			.setDesc((() => {
+				const fragment = document.createDocumentFragment();
+				fragment.createSpan({ text: "When enabled, insert suggestions as plain text by default, and use the " });
+				const boldCtrl = fragment.createEl("b");
+				boldCtrl.textContent = "ctrl";
+				fragment.createSpan({ text: " key modifier to insert as a link." });
+				return fragment;
+			})())
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.plainTextByDefault)
@@ -193,7 +207,17 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Swap 'Open note' keybinds")
-			.setDesc("Swap Shift+Space (default: Open suggested note) and Ctrl+Shift+Space (default: Open suggested note in new tab).")
+			.setDesc((() => {
+				const fragment = document.createDocumentFragment();
+				fragment.createSpan({ text: "Swap " });
+				const boldShiftSpace = fragment.createEl("b");
+				boldShiftSpace.textContent = "shift+space";
+				fragment.createSpan({ text: " (default: Open suggested note) and " });
+				const boldCtrlShiftSpace = fragment.createEl("b");
+				boldCtrlShiftSpace.textContent = "ctrl+shift+space";
+				fragment.createSpan({ text: " (default: Open suggested note in new tab)." });
+				return fragment;
+			})())
 			.addToggle(toggle =>
 				toggle
 					.setValue(this.plugin.settings.swapOpenNoteKeybinds)

@@ -4,8 +4,26 @@ import { DateFormatter } from '../../utils/helpers';
 import { CLASSES } from '../../constants';
 import { getOrCreateDailyNote } from '../../utils/helpers';
 import { InsertMode, ContentFormat } from '../../types';
-import { TFile, moment } from 'obsidian';
+import { TFile, moment, Platform } from 'obsidian';
 import { SuggestionProvider } from './index';
+
+// helper to highlight matching text
+function highlightMatches(el: HTMLElement, text: string, regex: RegExp): void {
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            el.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+        }
+        const bold = document.createElement('b');
+        bold.textContent = match[0];
+        el.appendChild(bold);
+        lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < text.length) {
+        el.appendChild(document.createTextNode(text.slice(lastIndex)));
+    }
+}
 
 export function renderSuggestionContent(
     provider: SuggestionProvider,
@@ -32,15 +50,16 @@ export function renderSuggestionContent(
 
     const trimmedQuery = query.trim(); // Trim the query
 
-    if (trimmedQuery.length > 0) { // Check the length of the trimmed query
-        // Escape regex special chars in trimmed query
-        const escaped = trimmedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(escaped, 'gi');
-        suggestionText = item.replace(regex, match => `<b>${match}</b>`);
-    }
+    // create suggestion span and append nodes instead of innerHTML
     const suggestionSpan = document.createElement('span');
     suggestionSpan.className = CLASSES.suggestionText;
-    suggestionSpan.innerHTML = suggestionText;
+    if (trimmedQuery.length > 0) {
+        const escaped = trimmedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(escaped, 'gi');
+        highlightMatches(suggestionSpan, item, regex);
+    } else {
+        suggestionSpan.textContent = item;
+    }
     container.appendChild(suggestionSpan);
     provider.currentElements.set(item, container);
     if (context) provider.contextProvider = context;
@@ -151,21 +170,16 @@ function appendReadableDatePreview(
 
     const trimmedQuery = query.trim(); // Trim the query
 
-    if (trimmedQuery.length > 0) { // Check the length of the trimmed query
-        // Escape regex special chars in trimmed query
-        const escaped = trimmedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        // Create a regex to match all occurrences, case-insensitive
-        const regex = new RegExp(escaped, 'gi');
-        text = text.replace(regex, match => `<b>${match}</b>`);
-    }
-    if (contentFormat !== ContentFormat.SUGGESTION_TEXT &&
-        container.parentElement?.classList.contains(CLASSES.timeRelevantSuggestion)) {
-        container.createEl('span', { text: '◴ ', cls: ['chrono-clock-icon'] });
-    }
-    // Use innerHTML to allow bold tags
+    // create span and append matches without innerHTML
     const span = document.createElement('span');
     span.className = suggestionPreviewClass.join(' ');
-    span.innerHTML = text;
+    if (trimmedQuery.length > 0) {
+        const escaped = trimmedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(escaped, 'gi');
+        highlightMatches(span, text, regex);
+    } else {
+        span.textContent = text;
+    }
     container.appendChild(span);
 }
 
@@ -188,6 +202,7 @@ function createLinkPreview(
         contentFormat,
         dailySettings
     );
+
     const linkEl = container.createEl('a', {
         text: linkText,
         cls: dailyNoteClass, 
@@ -197,6 +212,7 @@ function createLinkPreview(
             rel: 'noopener nofollow' 
         }
     });
+    
     linkEl.addEventListener('click', async (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -205,8 +221,12 @@ function createLinkPreview(
         }
         provider['closeSuggester']();
         const file = await getOrCreateDailyNote(provider.app, momentDate, true);
-        if (file) await provider.app.workspace.getLeaf(event.ctrlKey).openFile(file);
+        if (file) {
+            const newPane = Platform.isMacOS ? event.metaKey : event.ctrlKey;
+            await provider.app.workspace.openLinkText(file.path, '', newPane);
+        }
     });
+    
     if (linkText !== readableText) {
         container.createEl('span', { text: ' ⭢ ' });
         let textForDisplay = readableText;

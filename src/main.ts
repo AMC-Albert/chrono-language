@@ -1,12 +1,12 @@
 import { Plugin, Editor, MarkdownView } from 'obsidian';
-import { ChronoLanguageSettings, ChronoLanguageSettingTab, DEFAULT_SETTINGS } from './settings';
+import { QuickDatesSettings, ChronoLanguageSettingTab, DEFAULT_SETTINGS } from './settings';
 import { EditorSuggester } from './features/editor-suggester';
 import { OpenDailyNoteModal } from './features/open-daily-note';
 import { triggerDecorationStateField } from './features/editor-suggester/decorations';
 import { DateCommands } from './features/commands';
 
-export default class ChronoLanguage extends Plugin {
-	settings: ChronoLanguageSettings;
+export default class QuickDates extends Plugin {
+	settings: QuickDatesSettings;
 	editorSuggester: EditorSuggester;
 	dateCommands: DateCommands;
 
@@ -91,8 +91,8 @@ export default class ChronoLanguage extends Plugin {
 	}
 
 	async loadSettings() {
-		const loaded = (await this.loadData()) as Partial<ChronoLanguageSettings>;
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded) as ChronoLanguageSettings;
+		const loaded = (await this.loadData()) as Partial<QuickDatesSettings>;
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded) as QuickDatesSettings;
 	}
 
 	async saveSettings() {

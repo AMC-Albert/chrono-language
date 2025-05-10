@@ -1,18 +1,18 @@
 import { Editor, EditorPosition, EditorSuggest, EditorSuggestContext } from 'obsidian';
 import { EditorView } from '@codemirror/view';
 import { StateEffect } from '@codemirror/state'; 
-import ChronoLanguage from '../../main';
+import QuickDates from '../../main';
 import { addTriggerDecorationEffect, addSpacerWidgetEffect, safelyClearDecorations } from './decorations';
 import { SuggestionProvider } from '../suggestion-provider';
 import { KeyboardHandler } from '../../utils/keyboard-handler';
-import { KEYS, getInstructionDefinitions } from '../../constants';
+import { KEYS, CLASSES, getInstructionDefinitions } from '../../constants';
 import { parseTriggerContext } from './trigger-parser';
 
 /**
  * A suggester for the editor that provides date parsing suggestions
  */
 export class EditorSuggester extends EditorSuggest<string> {
-    plugin: ChronoLanguage;
+    plugin: QuickDates;
     private suggester: SuggestionProvider | null = null;
     private keyboardHandler: KeyboardHandler;
 
@@ -27,7 +27,7 @@ export class EditorSuggester extends EditorSuggest<string> {
     private lastContext: EditorSuggestContext | null = null;
     private cleanupEnd: EditorPosition | null = null;
 
-    constructor(plugin: ChronoLanguage) {
+    constructor(plugin: QuickDates) {
         super(plugin.app);
         this.plugin = plugin;
         this.initComponents();
@@ -266,7 +266,7 @@ export class EditorSuggester extends EditorSuggest<string> {
         setTimeout(() => {
             const containers = document.body.querySelectorAll('.suggestion-container');
             const last = containers[containers.length - 1];
-            if (last) last.classList.add('qd-suggester');
+            if (last) last.classList.add(CLASSES.suggester);
         }, 0);
 
         // Auto-insert space to separate trigger phrase and query

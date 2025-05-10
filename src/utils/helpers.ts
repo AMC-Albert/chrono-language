@@ -1,7 +1,7 @@
 import { App, normalizePath, Notice, TFile, moment } from 'obsidian';
 import { Link, ObsidianSettings, FileSystem } from 'obsidian-dev-utils/obsidian';
 import { getDailyNoteSettings, getDailyNote, getAllDailyNotes, createDailyNote, DEFAULT_DAILY_NOTE_FORMAT } from 'obsidian-daily-notes-interface';
-import { ChronoLanguageSettings } from '../settings';
+import { QuickDatesSettings } from '../settings';
 import { DateParser } from '../features/suggestion-provider/date-parser';
 import { ERRORS } from '../constants';
 import { ContentFormat } from '../types';
@@ -14,7 +14,7 @@ export class DateFormatter {
     /**
      * Determine if only time should be rendered based on settings and date
      */
-    public static shouldRenderTimeOnly(item: string, settings: ChronoLanguageSettings, momentDate: moment.Moment): boolean {
+    public static shouldRenderTimeOnly(item: string, settings: QuickDatesSettings, momentDate: moment.Moment): boolean {
         return (
             settings.timeOnly &&
             !!settings.timeFormat && settings.timeFormat.trim() !== "" &&
@@ -30,7 +30,7 @@ export class DateFormatter {
     public static getFormattedDateText(
         itemText: string, // Original suggestion text for time relevance and SUGGESTION_TEXT format
         momentDate: moment.Moment, // Parsed date
-        settings: ChronoLanguageSettings, // For formats, timeFormat, timeOnly
+        settings: QuickDatesSettings, // For formats, timeFormat, timeOnly
         contentFormat: ContentFormat,
         dailyNoteSettings: ReturnType<typeof getDailyNoteSettings> // Explicit type for daily note settings
     ): string {
@@ -91,7 +91,7 @@ export class DateFormatter {
  */
 export function getDatePreview(
     dateText: string, 
-    settings: ChronoLanguageSettings, 
+    settings: QuickDatesSettings, 
     useAlternateFormat = false, 
     forceNoAlias = false, 
     forceDailyNoteFormat = false
@@ -150,7 +150,7 @@ export function getDailyNotePreview(dateText: string): string {
  */
 export function determineDailyNoteAlias(
     app: App,
-    settings: ChronoLanguageSettings,
+    settings: QuickDatesSettings,
     itemText: string, // The original suggestion text, e.g., "Next Friday at 3pm"
     forceTextAsAlias: boolean,
     useAlternateFormatForAlias: boolean,
@@ -196,7 +196,7 @@ export function determineDailyNoteAlias(
  */
 export function createDailyNoteLink(
     app: App, 
-    settings: ChronoLanguageSettings, 
+    settings: QuickDatesSettings, 
     sourceFile: TFile, 
     dateText = '', 
     forceTextAsAlias = false,
@@ -251,7 +251,7 @@ export function createDailyNoteLink(
  */
 export function getDailyNotePath(
     app: App,
-    settings: ChronoLanguageSettings,
+    settings: QuickDatesSettings,
     momentDate: moment.Moment
 ): string {
     const dailyNoteSettings = getDailyNoteSettings();

@@ -26,19 +26,26 @@ export const MODIFIER_KEY = {
     ALT: 'Alt'
 } as const;
 
+import { Platform } from 'obsidian';
+
+/**
+ * Primary modifier key label, Cmd on macOS or Ctrl elsewhere
+ */
+export const PRIMARY_MOD = Platform.isMacOS ? '⌘' : 'ctrl';
+
 /**
  * Centralized instruction definitions for key combos and their purposes
- * Now a function to support swappable Ctrl/no-modifier behavior
+ * Now a function to support swappable primary mod (cmd/ctrl) and no-modifier behavior
  */
 export function getInstructionDefinitions(plainTextByDefault: boolean, swapOpenNoteKeybinds: boolean) {
     const instructions = [
         { command: '↑↓', purpose: 'to navigate' },
-        { command: 'ctrl ↵', purpose: plainTextByDefault ? 'to insert link' : 'to insert plain text' },
+        { command: `${PRIMARY_MOD} ↵`, purpose: plainTextByDefault ? 'to insert link' : 'to insert plain text' },
         { command: 'alt ↵', purpose: 'to use alt format' },
         { command: 'shift ↵', purpose: 'to use suggested text' },
         { command: 'shift alt ↵', purpose: 'to force no alias' },
         { command: 'shift ␣', purpose: swapOpenNoteKeybinds ? 'to open in new tab' : 'to open note' },
-        { command: 'ctrl shift ␣', purpose: swapOpenNoteKeybinds ? 'to open note' : 'to open in new tab' },
+        { command: `${PRIMARY_MOD} shift ␣`, purpose: swapOpenNoteKeybinds ? 'to open note' : 'to open in new tab' },
         { command: 'esc', purpose: 'to dismiss' }
     ];
     return instructions;
@@ -160,6 +167,7 @@ export const CLASSES = {
     errorIcon: 'qd-error-icon',
     timeRelevantSuggestion: 'qd-time-relevant-suggestion',
     activeTrigger: 'qd-active-trigger',
+    suggester: 'qd-suggester',
 };
 
 /**

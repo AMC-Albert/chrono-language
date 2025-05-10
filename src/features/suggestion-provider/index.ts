@@ -1,12 +1,12 @@
-import ChronoLanguage from '../../main';
-import { App, moment, Notice, TFile } from 'obsidian';
+import QuickDates from '../../main';
+import { moment, Notice, TFile } from 'obsidian';
 import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
 import { getOrCreateDailyNote, DateFormatter, createDailyNoteLink } from '../../utils/helpers';
 import { DateParser } from './date-parser';
 import { InsertMode, ContentFormat } from '../../types';
 import { KeyboardHandler } from '../../utils/keyboard-handler';
 import { Link } from 'obsidian-dev-utils/obsidian';
-import { ChronoLanguageSettings } from '../../settings';
+import { QuickDatesSettings } from '../../settings';
 import { CLASSES } from '../../constants';
 import { renderSuggestionContent, updatePreviewContent } from './render';
 
@@ -14,15 +14,15 @@ import { renderSuggestionContent, updatePreviewContent } from './render';
  * Shared suggester for date suggestions. Handles rendering and updating of suggestions.
  */
 export class SuggestionProvider {
-    app: App;
-    plugin: ChronoLanguage;
+    app: any; // Changed App to any
+    plugin: QuickDates;
     currentElements: Map<string, HTMLElement> = new Map();
     contextProvider: any;
     keyboardHandler: KeyboardHandler;
     isSuggesterOpen: boolean = false;
     private holidaySuggestions: string[] = [];
 
-    constructor(app: App, plugin: ChronoLanguage) {
+    constructor(app: any, plugin: QuickDates) { // Changed App to any
         this.app = app;
         this.plugin = plugin;
         // Initialize keyboard handler without requiring a scope
@@ -103,15 +103,13 @@ export class SuggestionProvider {
             const m = moment(parsed);
             const file = await getOrCreateDailyNote(this.app, m, false);
             if (file) {
-                const leaf = this.app.workspace.getLeaf(newTab);
-                await leaf.openFile(file);
+                await this.app.workspace.openLinkText(file.path, '', newTab);
             }
         } else if (context?.file) {
             // Open as regular note by resolving link path
             const dest = this.app.metadataCache.getFirstLinkpathDest(raw, context.file.path);
             if (dest instanceof TFile) {
-                const leaf = this.app.workspace.getLeaf(newTab);
-                await leaf.openFile(dest);
+                await this.app.workspace.openLinkText(dest.path, '', newTab);
             } else {
                 new Notice(`Note not found: ${raw}`, 3000);
             }
@@ -277,9 +275,9 @@ export class SuggestionProvider {
         itemText: string,
         insertMode: InsertMode,
         contentFormat: ContentFormat,
-        settings: ChronoLanguageSettings,
+        settings: QuickDatesSettings,
         activeFile: TFile,
-        app: App
+        app: any // Changed App to any
     ): string {
         const parsedDate = DateParser.parseDate(itemText);; 
 

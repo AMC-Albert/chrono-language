@@ -1,9 +1,9 @@
-import { App, Editor, MarkdownView, Notice, moment, TFile } from 'obsidian';
+import { Editor, MarkdownView, Notice, moment } from 'obsidian';
 import { DateParser } from '../suggestion-provider/date-parser';
 import { DateFormatter, createDailyNoteLink } from '../../utils/helpers';
 import { ContentFormat } from '../../types';
 import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
-import { ChronoLanguageSettings } from '../../settings';
+import { QuickDatesSettings } from '../../settings';
 import { TextSearcher } from './text-searcher';
 
 // Define helper types for the parse info result
@@ -23,10 +23,10 @@ interface DateCommandParseError {
  * Commands for parsing and formatting dates from selected text
  */
 export class DateCommands {
-    private app: App;
-    private settings: ChronoLanguageSettings;
+    private app: any;
+    private settings: QuickDatesSettings;
 
-    constructor(app: App, settings: ChronoLanguageSettings) {
+    constructor(app: any, settings: QuickDatesSettings) {
         this.app = app;
         this.settings = settings;
     }
@@ -34,7 +34,7 @@ export class DateCommands {
     /**
      * Updates the plugin settings reference
      */
-    updateSettings(settings: ChronoLanguageSettings): void {
+    updateSettings(settings: QuickDatesSettings): void {
         this.settings = settings;
     }    
     /**
