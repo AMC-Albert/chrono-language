@@ -20,7 +20,6 @@ export function parseTriggerContext(
     lastInsertionEnd: { line: number, ch: number } | null,
     isOpen: boolean
 ): TriggerParseResult | null {
-    // ...existing logic from onTrigger up to the return statement...
     const originalLine = editor.getLine(cursor.line);
     const prefixBeforeCursor = originalLine.slice(0, cursor.ch);
     const lastTriggerIndexInPrefix = prefixBeforeCursor.lastIndexOf(triggerPhrase);
@@ -37,7 +36,14 @@ export function parseTriggerContext(
         }
     }
     if (cursor.ch < posImmediatelyAfterTrigger) return null;
-    if (!isOpen && (cursor.ch > posImmediatelyAfterTrigger || originalLine.slice(cursor.ch).trim() !== '')) return null;
+
+    if (!isOpen) {
+        const textBetweenTriggerAndCursor = originalLine.slice(posImmediatelyAfterTrigger, cursor.ch);
+        if (textBetweenTriggerAndCursor !== '' && textBetweenTriggerAndCursor !== ' ') {
+            return null;
+        }
+    }
+
     let queryForSuggestions: string;
     let finalEndPosForContext: EditorPosition = cursor;
     let shouldInsertSpaceOnOpen = false;
