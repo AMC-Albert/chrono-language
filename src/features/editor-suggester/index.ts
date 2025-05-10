@@ -262,6 +262,13 @@ export class EditorSuggester extends EditorSuggest<string> {
     open(): void {
         super.open();
 
+        // Add a unique class to the newly opened suggestion container
+        setTimeout(() => {
+            const containers = document.body.querySelectorAll('.suggestion-container');
+            const last = containers[containers.length - 1];
+            if (last) last.classList.add('qd-suggester');
+        }, 0);
+
         // Auto-insert space to separate trigger phrase and query
         if (this.shouldInsertSpaceOnOpen && this.context) {
             const editor = this.context.editor;

@@ -71,3 +71,8 @@
   resize: none;
   min-width: 164.8px; 
 }
+
+.is-mobile .qd-suggester .prompt-instructions {
+  /* A lof of instructions on suggestion modals on mobile causes it to be very long horizontally */
+  max-width: 500px;
+}
