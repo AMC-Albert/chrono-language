@@ -235,7 +235,7 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-		.setName("Conditional insert timestamp only")
+		.setName("If inserting a time from today, insert timestamp only")
 		.setDesc("Timestamps will be the ONLY thing inserted if selecting some time today.")
 		.addToggle((toggle) =>
 			toggle
