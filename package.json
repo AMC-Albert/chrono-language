@@ -1,7 +1,7 @@
 {
 	"name": "quick-dates",
-	"version": "0.2.4",
-	"description": "Link to and jump between daily notes fast, using a powerful, responsive suggestion system. Intended to be a replacement and enhancement of the Natural Language Dates plugin.",
+	"version": "0.2.5",
+	"description": "Link to and jump between daily notes fast, using a responsive suggestion system. Convert selected plain-text dates to links, and even process entire notes at once.",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
