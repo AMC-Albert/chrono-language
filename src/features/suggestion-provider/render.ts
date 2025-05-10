@@ -1,5 +1,5 @@
 import { getDailyNote, getDailyNoteSettings, DEFAULT_DAILY_NOTE_FORMAT } from 'obsidian-daily-notes-interface';
-import { DateParser } from './parser';
+import { DateParser } from './date-parser';
 import { DateFormatter } from '../../utils/helpers';
 import { CLASSES } from '../../constants';
 import { getOrCreateDailyNote } from '../../utils/helpers';

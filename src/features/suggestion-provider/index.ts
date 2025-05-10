@@ -2,7 +2,7 @@ import ChronoLanguage from '../../main';
 import { App, moment, Notice, TFile } from 'obsidian';
 import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
 import { getOrCreateDailyNote, DateFormatter, createDailyNoteLink } from '../../utils/helpers';
-import { DateParser } from './parser';
+import { DateParser } from './date-parser';
 import { InsertMode, ContentFormat } from '../../types';
 import { KeyboardHandler } from '../../utils/keyboard-handler';
 import { Link } from 'obsidian-dev-utils/obsidian';
@@ -39,8 +39,13 @@ export class SuggestionProvider {
      * Initialize holiday suggestions from the EnhancedDateParser
      */
     private initializeHolidaySuggestions(): void {
+        const locale = this.plugin.settings.holidayLocale;
+        if (!locale) {
+            this.holidaySuggestions = [];
+            DateParser.setLocale(''); // Ensure parser disables holidays
+            return;
+        }
         try {
-            const locale = this.plugin.settings.holidayLocale || 'US';
             DateParser.setLocale(locale);
             this.holidaySuggestions = DateParser.getHolidayNames().sort();
         } catch (error) {
@@ -53,8 +58,11 @@ export class SuggestionProvider {
      * Update holiday locale based on user settings
      */
     updateHolidayLocale(locale: string): void {
-        if (!locale) return;
-        
+        if (!locale) {
+            this.holidaySuggestions = [];
+            DateParser.setLocale('');
+            return;
+        }
         try {
             DateParser.setLocale(locale);
             this.initializeHolidaySuggestions();
@@ -190,7 +198,7 @@ export class SuggestionProvider {
         }
 
         // 3. Add matching holiday suggestions
-        if (lowerQuery.length >= 1) { 
+        if (lowerQuery.length >= 1 && this.holidaySuggestions.length > 0 && this.plugin.settings.holidayLocale) { 
             const matchingHolidays = this.holidaySuggestions
                 .filter(holiday => holiday.toLowerCase().includes(lowerQuery))
                 .slice(0, 5); 

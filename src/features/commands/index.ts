@@ -1,5 +1,5 @@
 import { App, Editor, MarkdownView, Notice, moment, TFile } from 'obsidian';
-import { DateParser } from '../suggestion-provider/parser';
+import { DateParser } from '../suggestion-provider/date-parser';
 import { DateFormatter, createDailyNoteLink } from '../../utils/helpers';
 import { ContentFormat } from '../../types';
 import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';

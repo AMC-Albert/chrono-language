@@ -2,7 +2,7 @@ import { App, normalizePath, Notice, TFile, moment } from 'obsidian';
 import { Link, ObsidianSettings, FileSystem } from 'obsidian-dev-utils/obsidian';
 import { getDailyNoteSettings, getDailyNote, getAllDailyNotes, createDailyNote, DEFAULT_DAILY_NOTE_FORMAT } from 'obsidian-daily-notes-interface';
 import { ChronoLanguageSettings } from '../settings';
-import { DateParser } from '../features/suggestion-provider/parser';
+import { DateParser } from '../features/suggestion-provider/date-parser';
 import { ERRORS } from '../constants';
 import { ContentFormat } from '../types';
 import { DEFAULT_SETTINGS } from '../settings';

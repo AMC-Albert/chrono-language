@@ -30,7 +30,7 @@ export const DEFAULT_SETTINGS: ChronoLanguageSettings = {
 	plainTextByDefault: false,
 	initialEditorSuggestions: ['Today', 'Tomorrow', 'Yesterday'],
 	initialOpenDailyNoteSuggestions: ['Today', 'Tomorrow', 'Yesterday'],
-	holidayLocale: '',
+	holidayLocale: 'US',
 	timeFormat: '',
 	timeOnly: false,
 	timeSeparator: ' ',
@@ -100,7 +100,7 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 		.setDesc((() => {
 			const fragment = document.createDocumentFragment();
 			fragment.createSpan({
-				text: "Set your country/region code to show region-specific holidays (IANA format, e.g. 'US', 'GB', 'DE')."
+				text: "Set your country/region code to show region-specific holidays (IANA format, e.g. 'US', 'GB', 'DE'). Set to empty to disable holiday suggestions."
 			});
 			fragment.createEl("br");
 			fragment.createEl("a", {
@@ -154,7 +154,7 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 			.setDesc("Customize the trigger phrase to activate the editor suggester. If empty, the suggester will be disabled. Can be a word or single character.")
 			.addText((text) =>
 				text
-					.setPlaceholder("td")
+					.setPlaceholder("qd")
 					.setValue(this.plugin.settings.triggerPhrase)
 					.onChange(async (value) => {
 						this.plugin.settings.triggerPhrase = value;

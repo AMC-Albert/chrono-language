@@ -1,7 +1,7 @@
 import { Notice, FuzzySuggestModal, App, FuzzyMatch, moment } from "obsidian";
 import ChronoLanguage from "../../main";
 import { SuggestionProvider,  } from "../suggestion-provider";
-import { DateParser } from "../suggestion-provider/parser";
+import { DateParser } from "../suggestion-provider/date-parser";
 import { getOrCreateDailyNote } from "../../utils/helpers";
 import { ERRORS } from "../../constants";
 

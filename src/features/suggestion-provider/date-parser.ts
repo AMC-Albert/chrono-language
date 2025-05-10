@@ -224,14 +224,14 @@ export class DateParser {
         // Holiday pattern (if partially matching a known holiday)
         {
             pattern: (input: string) => { // Function pattern to check if input might be a holiday
-                if (!DateParser.holidaysInstance) DateParser.initHolidays();
+                if (!DateParser.holidaysInstance || !DateParser.currentLocale) return false;
                 const lower = input.trim().toLowerCase();
                 if (lower.length < 2) return false; 
                 return Array.from(DateParser.holidayCache.keys())
                     .some(name => name.includes(lower)); // Check if input is part of any holiday name
             },
             generate: (input: string) => {
-                if (!DateParser.holidaysInstance) DateParser.initHolidays();
+                if (!DateParser.holidaysInstance || !DateParser.currentLocale) return [];
                 const lower = input.trim().toLowerCase();
                 return Array.from(DateParser.holidayCache.values())
                     .filter(holiday => holiday.name.toLowerCase().includes(lower))
@@ -247,6 +247,12 @@ export class DateParser {
      * @param locale Locale code (e.g., 'US', 'GB', 'DE')
      */
     static initHolidays(locale: string = 'US'): void {
+        if (!locale) {
+            this.holidaysInstance = null;
+            this.holidayCache.clear();
+            this.currentLocale = '';
+            return;
+        }
         try {
             this.holidaysInstance = new Holidays(locale);
             this.currentLocale = locale;
@@ -333,6 +339,12 @@ export class DateParser {
      * @param locale Locale code (e.g., 'US', 'GB', 'DE')
      */
     static setLocale(locale: string): void {
+        if (!locale) {
+            this.holidaysInstance = null;
+            this.holidayCache.clear();
+            this.currentLocale = '';
+            return;
+        }
         // Always re-init holidays to ensure cache is refreshed,
         // even if the locale string hasn't changed.
         this.initHolidays(locale);
@@ -342,9 +354,7 @@ export class DateParser {
      * Check if text contains a holiday reference and return the date if found
      */
     private static checkForHoliday(text: string): Date | null {
-        if (!this.holidaysInstance) {
-            this.initHolidays();
-        }
+        if (!this.holidaysInstance || !this.currentLocale) return null;
 
         const cleanedText = text.toLowerCase().trim();
         
@@ -368,7 +378,7 @@ export class DateParser {
      */
     private static getNextUpcomingDate(dates: Date[]): Date | null {
         const now = new Date();
-        const sorted = dates.slice().sort((a, b) => a.getTime() - b.getTime());
+        const sorted = dates.slice().sort((a, b) => a.getTime() - (b.getTime()));
         
         // Find the first date in the future
         const futureDate = sorted.find(date => date >= now);
@@ -506,6 +516,8 @@ export class DateParser {
                         generatedItems = generator.generate(input.trim(), match); 
                     }
                 }
+                // If this is the holiday generator and holidays are disabled, skip
+                if (generator.priority === 40 && (!this.holidaysInstance || !this.currentLocale)) continue;
                 generatedItems.forEach(s => suggestions.add(s));
             } catch (error) {
                 console.error("Error in suggestion generator:", error, generator);
@@ -518,9 +530,7 @@ export class DateParser {
      * Get a list of all available holidays for the current locale and year
      */
     static getHolidayNames(): string[] {
-        if (!this.holidaysInstance) {
-            this.initHolidays();
-        }
+        if (!this.holidaysInstance || !this.currentLocale) return [];
         // Return unique, capitalized holiday names
         return Array.from(new Set(
             Array.from(this.holidayCache.values()).map(v => v.name)
