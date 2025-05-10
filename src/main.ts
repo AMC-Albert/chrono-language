@@ -90,7 +90,8 @@ export default class ChronoLanguage extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const loaded = (await this.loadData()) as Partial<ChronoLanguageSettings>;
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded) as ChronoLanguageSettings;
 	}
 
 	async saveSettings() {
