@@ -26,14 +26,44 @@ export default class ChronoLanguage extends Plugin {
 		// Register date-related commands
 		this.addCommand({
 			id: 'parse-date-as-link',
-			name: 'Parse selected text as date link',
+			name: 'Convert selected text to date link',
 			editorCallback: (editor: Editor, view: MarkdownView) => this.dateCommands.parseDateAsLink(editor, view)
 		});
 
 		this.addCommand({
 			id: 'parse-date-as-text',
-			name: 'Parse selected text as plain date',
+			name: 'Convert selected text to plain-text date',
 			editorCallback: (editor: Editor, view: MarkdownView) => this.dateCommands.parseDateAsText(editor, view)
+		});
+
+		this.addCommand({
+			id: 'parse-all-dates-as-links',
+			name: 'Convert all dates in note to date links',
+			editorCallback: async (editor: Editor, view: MarkdownView) => {
+				await this.dateCommands.parseAllDatesAsLinks(editor, view);
+			}
+		});
+
+		this.addCommand({
+			id: 'parse-all-dates-as-text',
+			name: 'Convert all dates in note to plain-text dates',
+			editorCallback: async (editor: Editor, view: MarkdownView) => {
+				await this.dateCommands.parseAllDatesAsText(editor, view);
+			}
+		});
+
+		this.addCommand({
+			id: 'parse-date-as-link-keep-alias',
+			name: 'Convert selected text to date link (keep original text as alias)',
+			editorCallback: (editor: Editor, view: MarkdownView) => this.dateCommands.parseDateAsLinkKeepOriginalTextAlias(editor, view)
+		});
+
+		this.addCommand({
+			id: 'parse-all-dates-as-links-keep-alias',
+			name: 'Convert all dates in note to date links (keep original text as alias)',
+			editorCallback: async (editor: Editor, view: MarkdownView) => {
+				await this.dateCommands.parseAllDatesAsLinksKeepOriginalTextAlias(editor, view);
+			}
 		});
 
 		this.addCommand({
