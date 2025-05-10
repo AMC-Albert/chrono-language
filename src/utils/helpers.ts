@@ -161,7 +161,6 @@ export function determineDailyNoteAlias(
     if (forceTextAsAlias) return itemText;
 
     const dailySettings = getDailyNoteSettings();
-    
     const aliasContentFormat = useAlternateFormatForAlias ? ContentFormat.ALTERNATE : ContentFormat.PRIMARY;
 
     const alias = DateFormatter.getFormattedDateText(
@@ -174,9 +173,21 @@ export function determineDailyNoteAlias(
 
     const dailyNoteName = momentDate.format(dailySettings.format || DEFAULT_DAILY_NOTE_FORMAT);
     if (alias === dailyNoteName) {
-        return undefined; // No alias if it's identical to the note name
+        // HideFolders fallback: if HideFolders is true, and no alias would be used, use filename as alias if the link includes a folder
+        if (settings.HideFolders) {
+            // Get the path that would be used for the link
+            const targetPath = getDailyNotePath(app, settings, momentDate);
+            // If the path includes a folder (has a slash), use the filename as alias
+            if (targetPath.includes("/")) {
+                const filename = targetPath.substring(targetPath.lastIndexOf("/") + 1);
+                // Only use as alias if filename is different from the full path (i.e., path includes folder)
+                if (filename !== targetPath) {
+                    return filename;
+                }
+            }
+        }
+        return undefined; // No alias if it's identical to the note name and no HideFolders fallback
     }
-
     return alias || undefined; // Ensure undefined if empty string (though unlikely with new formatter)
 }
 
