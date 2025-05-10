@@ -6,35 +6,37 @@ import ChronoLanguage from './main';
 export interface ChronoLanguageSettings {
 	primaryFormat: string;
 	alternateFormat: string;
+	holidayLocale: string;
 	includeFolderInLinks: boolean;
 	HideFolders: boolean;
 	triggerPhrase: string;
 	triggerHappy: boolean;
 	plainTextByDefault: boolean;
-	initialEditorSuggestions: string[];
-	initialOpenDailyNoteSuggestions: string[];
-	holidayLocale: string;
-	timeFormat: string;
-	timeOnly: boolean;
-	timeSeparator: string;
 	swapOpenNoteKeybinds: boolean;
+	cleanupTriggerOnClose: boolean;
+	initialEditorSuggestions: string[];
+	timeFormat: string;
+	timeSeparator: string;
+	timeOnly: boolean;
+	initialOpenDailyNoteSuggestions: string[];
 }
 
 export const DEFAULT_SETTINGS: ChronoLanguageSettings = {
 	primaryFormat: '',
 	alternateFormat: 'dddd, MMMM Do YYYY',
+	holidayLocale: 'US',
 	includeFolderInLinks: true,
 	HideFolders: true,
 	triggerPhrase: 'qd',
 	triggerHappy: false,
 	plainTextByDefault: false,
-	initialEditorSuggestions: ['Today', 'Tomorrow', 'Yesterday'],
-	initialOpenDailyNoteSuggestions: ['Today', 'Tomorrow', 'Yesterday'],
-	holidayLocale: 'US',
-	timeFormat: '',
-	timeOnly: false,
-	timeSeparator: ' ',
 	swapOpenNoteKeybinds: false,
+	cleanupTriggerOnClose: true,
+	initialEditorSuggestions: ['Today', 'Tomorrow', 'Yesterday'],
+	timeFormat: '',
+	timeSeparator: ' ',
+	timeOnly: false,
+	initialOpenDailyNoteSuggestions: ['Today', 'Tomorrow', 'Yesterday'],
 };
 
 export class ChronoLanguageSettingTab extends PluginSettingTab {
@@ -197,6 +199,19 @@ export class ChronoLanguageSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.swapOpenNoteKeybinds)
 					.onChange(async (value) => {
 						this.plugin.settings.swapOpenNoteKeybinds = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Cleanup trigger phrase on dismiss")
+			.setDesc("Automatically remove the trigger phrase if no suggestion is chosen. \
+				If enabled, make sure you don't accidentally run into a natural occurrence of your trigger phrase in a note.")
+			.addToggle(toggle =>
+				toggle
+					.setValue(this.plugin.settings.cleanupTriggerOnClose)
+					.onChange(async (value) => {
+						this.plugin.settings.cleanupTriggerOnClose = value;
 						await this.plugin.saveSettings();
 					})
 			);

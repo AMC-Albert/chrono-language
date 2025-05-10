@@ -23,6 +23,9 @@ export class EditorSuggester extends EditorSuggest<string> {
     private decoratedEditorView: EditorView | null = null; // To track editor view with active decorations
     private firstSpaceBlocked = false; // Track if we've already blocked the first space
     private shouldInsertSpaceOnOpen: boolean = false; // Flag to insert space when suggester opens
+    private suggestionChosen = false;
+    private lastContext: EditorSuggestContext | null = null;
+    private cleanupEnd: EditorPosition | null = null;
 
     constructor(plugin: ChronoLanguage) {
         super(plugin.app);
@@ -80,6 +83,7 @@ export class EditorSuggester extends EditorSuggest<string> {
     private handleSelectionKey = (event: KeyboardEvent): boolean => {
         if (!this.isOpen || !this.suggester || !this.context) return false;
         if (event.shiftKey) event.preventDefault();
+        this.suggestionChosen = true;
         return this.suggestions.useSelectedItem(event);
     };
 
@@ -149,6 +153,7 @@ export class EditorSuggester extends EditorSuggest<string> {
         if (!editorView) return false;
         const query = this.context.query;
         if (query === '') {
+            this.suggestionChosen = true; // prevent cleanup of trigger when removing space
             const { line, ch } = this.context.end;
             const off = this.context.editor.posToOffset({ line, ch });
             // Remove the inserted space before context.end
@@ -165,6 +170,7 @@ export class EditorSuggester extends EditorSuggest<string> {
      * Handles Tab key events to auto-complete the selected suggestion
      * Returns true if the event was handled (should be prevented)
      */    private handleTabKey = (event: KeyboardEvent): boolean => {
+        this.suggestionChosen = true;
         if (!this.isOpen || !this.context || !this.suggester) return false;
         
         // Get the currently selected suggestion
@@ -288,6 +294,29 @@ export class EditorSuggester extends EditorSuggest<string> {
         this.firstSpaceBlocked = false;
         
         super.close();
+        if (this.plugin.settings.cleanupTriggerOnClose && !this.suggestionChosen && !this.lastInsertionEnd && this.lastContext && this.cleanupEnd) {
+            const { start, editor } = this.lastContext;
+            try {
+                const lineText = editor.getLine(start.line);
+                const toRemove = lineText.slice(start.ch, this.cleanupEnd.ch);
+                // Only remove if range still matches trigger phrase
+                if (toRemove === this.plugin.settings.triggerPhrase) {
+                    // Remove trigger phrase
+                    editor.replaceRange('', start, this.cleanupEnd);
+                    // Also remove following space if present
+                    const postLine = editor.getLine(start.line);
+                    if (postLine[start.ch] === ' ') {
+                        editor.replaceRange('', start, { line: start.line, ch: start.ch + 1 });
+                    }
+                }
+            } catch {
+                // ignore invalid range errors
+            }
+        }
+        // Clear cleanup state
+        this.cleanupEnd = null;
+        this.lastContext = null;
+        this.lastInsertionEnd = null;
     }
 
     // Apply decorations based on current context
@@ -307,12 +336,11 @@ export class EditorSuggester extends EditorSuggest<string> {
         const effects: StateEffect<any>[] = [addTriggerDecorationEffect.of({ from: triggerStartOffset, to: triggerEndOffset })];
         
         const query = this.context.query;
-
-        // Always add spacer widget when there's no query to maintain separation
+        // Maintain a spacer widget at trigger end when query is empty
         if (query === '') {
             effects.push(addSpacerWidgetEffect.of(triggerEndOffset));
         }
-        
+
         try {
             if (editor.cm.dom.isConnected) {
                 editor.cm.dispatch({
@@ -326,6 +354,7 @@ export class EditorSuggester extends EditorSuggest<string> {
     }
     
     onTrigger(cursor: EditorPosition, editor: Editor): EditorSuggestContext | null {
+        this.suggestionChosen = false;
         const triggerPhrase = this.plugin.settings.triggerPhrase;
         if (!triggerPhrase) {
             this.firstSpaceBlocked = false;
@@ -353,13 +382,17 @@ export class EditorSuggester extends EditorSuggest<string> {
             this.firstSpaceBlocked = false;
             return null;
         }
-        return {
+        // Track range to cleanup: just the trigger phrase
+        this.cleanupEnd = { line: result.start.line, ch: result.start.ch + triggerPhrase.length };
+        const ctx: EditorSuggestContext = {
             start: result.start,
             end: result.end,
             query: result.query,
             editor,
             file: activeFile
         };
+        this.lastContext = ctx;
+        return ctx;
     }
 
     getSuggestions(ctx: EditorSuggestContext): string[] {
@@ -374,6 +407,7 @@ export class EditorSuggester extends EditorSuggest<string> {
     }
 
     selectSuggestion(item: string, event: KeyboardEvent | MouseEvent): void {
+        this.suggestionChosen = true;
         if (!this.context || !this.suggester) return;
 
         const { editor, start, end, file } = this.context; // 'start' is trigger start, 'end' is query end
@@ -408,6 +442,8 @@ export class EditorSuggester extends EditorSuggest<string> {
         
         // Explicitly set the cursor to the end of the inserted text
         editor.setCursor(this.lastInsertionEnd);
+        // Disable cleanup after a selection
+        this.cleanupEnd = null;
         
         // The EditorSuggest base class typically handles closing the suggester after this method completes.
     }

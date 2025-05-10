@@ -39,7 +39,7 @@ export function parseTriggerContext(
 
     if (!isOpen) {
         const textBetweenTriggerAndCursor = originalLine.slice(posImmediatelyAfterTrigger, cursor.ch);
-        if (textBetweenTriggerAndCursor !== '' && textBetweenTriggerAndCursor !== ' ') {
+        if (textBetweenTriggerAndCursor.length > 1) {
             return null;
         }
     }

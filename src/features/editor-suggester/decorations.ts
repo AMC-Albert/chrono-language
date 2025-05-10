@@ -11,9 +11,7 @@ export const addSpacerWidgetEffect = StateEffect.define<number>(); // Position f
 class SpacerWidget extends WidgetType {
   toDOM() {
     const span = document.createElement('span');
-    // Zero-width space allows the cursor to be positioned here
-    // and be pushed by the margin of the preceding element.
-    span.textContent = '\u200B'; 
+    // Empty spacer to allow cursor placement without inserting invisible characters
     return span;
   }
 
