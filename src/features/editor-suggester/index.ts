@@ -55,7 +55,11 @@ export class EditorSuggester extends EditorSuggest<string> {
      * Handles Shift+Space key for opening the daily note
      */
     private handleDailyNoteKey = (event: KeyboardEvent): boolean => {
-        if (!this.isOpen || !this.suggester || !this.context) return false;
+        // Ensure suggester is open with context before handling
+        if (!this.isOpen || !this.suggester || !this.context) {
+            return false;
+        }
+        // Handle Shift+Space for opening daily note
         if (event.shiftKey && event.key === KEYS.SPACE) {
             this.suggester.handleDailyNoteAction(event, false, this.context);
             return true;
@@ -67,7 +71,11 @@ export class EditorSuggester extends EditorSuggest<string> {
      * Handles Ctrl+Shift+Space key for opening the daily note in a new tab
      */
     private handleDailyNoteNewTabKey = (event: KeyboardEvent): boolean => {
-        if (!this.isOpen || !this.suggester || !this.context) return false;
+        // Ensure suggester is open with context before handling
+        if (!this.isOpen || !this.suggester || !this.context) {
+            return false;
+        }
+        // Handle Ctrl+Shift+Space for opening daily note in a new tab
         if (event.ctrlKey && event.shiftKey && event.key === KEYS.SPACE) {
             this.suggester.handleDailyNoteAction(event, true, this.context);
             return true;

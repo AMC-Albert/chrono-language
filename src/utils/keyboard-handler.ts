@@ -11,7 +11,6 @@ import {
     MODIFIER_KEY,
     MODIFIER_COMBOS
 } from '../constants';
-import { getInstructionDefinitions } from '../constants';
 
 /**
  * Callback function type for key state change events
@@ -179,18 +178,7 @@ export class KeyboardHandler {
     update(settings: Partial<{ plainTextByDefault: boolean }>): void {
         if (settings.plainTextByDefault !== undefined) this.plainTextByDefault = settings.plainTextByDefault;
     }
-    getInstructions(): { command: string, purpose: string }[] {
-        // Use dynamic instruction definitions based on current setting
-        return getInstructionDefinitions(this.plainTextByDefault);
-    }
-    registerAllKeyHandlers(callbacks: Record<string, (event: KeyboardEvent) => boolean | void>): void {
-        if (!this.scope) return;
-        // Register Shift+Space explicitly for openDailyNote actions
-        this.scope.register([MODIFIER_KEY.SHIFT], KEYS.SPACE, (event: KeyboardEvent) => {
-            if (callbacks.openDailyNote) return callbacks.openDailyNote(event);
-        });
-        // ...other dynamic key registrations if needed...
-    }
+    
     /**
      * Registers Enter key handlers for all modifier combinations
      */
@@ -200,6 +188,7 @@ export class KeyboardHandler {
             this.scope!.register(mods, KEYS.ENTER, callback);
         });
     }
+
     /**
      * Registers handlers for Shift+Space and Ctrl+Shift+Space for daily note actions
      */
@@ -208,6 +197,7 @@ export class KeyboardHandler {
         this.scope.register([MODIFIER_KEY.SHIFT], KEYS.SPACE, shiftSpaceHandler);
         this.scope.register([MODIFIER_KEY.CTRL, MODIFIER_KEY.SHIFT], KEYS.SPACE, ctrlShiftSpaceHandler);
     }
+
     getEffectiveInsertModeAndFormat(event?: KeyboardEvent): { insertMode: InsertMode, contentFormat: ContentFormat } {
         const ctrl = event ? event.ctrlKey : this.keyState[KEYS.CONTROL];
         const shift = event ? event.shiftKey : this.keyState[KEYS.SHIFT];
@@ -226,9 +216,6 @@ export class KeyboardHandler {
             contentFormat = ContentFormat.ALTERNATE;
         }
         return { insertMode, contentFormat };
-    }
-    isKeyPressed(key: string): boolean {
-        return !!this.keyState[key];
     }
     
     resetModifierKeys(): void {

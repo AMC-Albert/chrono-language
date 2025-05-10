@@ -7,6 +7,7 @@ import { InsertMode, ContentFormat } from '../../types';
 import { KeyboardHandler } from '../../utils/keyboard-handler';
 import { Link } from 'obsidian-dev-utils/obsidian';
 import { ChronoLanguageSettings } from '../../settings';
+import { CLASSES } from '../../constants';
 import { renderSuggestionContent, updatePreviewContent } from './render';
 
 /**
@@ -81,14 +82,31 @@ export class SuggestionProvider {
         e.preventDefault();
         e.stopImmediatePropagation();
 
-        this.cleanupTriggerPhrase(context); // context is EditorSuggestContext from EditorSuggester
-        const momentDate = this.getSelectedDate();
-        if (!momentDate) return;
+        // Remove trigger and query text
+        this.cleanupTriggerPhrase(context);
+        // Get selected suggestion text
+        const selEl = document.querySelector(`.is-selected .${CLASSES.suggestionContainer}`) as HTMLElement;
+        const raw = selEl?.getAttribute('data-suggestion');
+        if (!raw) return;
 
-        const file = await getOrCreateDailyNote(this.app, momentDate, false);
-        if (file) {
-            const leaf = this.app.workspace.getLeaf(newTab);
-            await leaf.openFile(file);
+        // Attempt to parse as date for daily note
+        const parsed = DateParser.parseDate(raw);
+        if (parsed) {
+            const m = moment(parsed);
+            const file = await getOrCreateDailyNote(this.app, m, false);
+            if (file) {
+                const leaf = this.app.workspace.getLeaf(newTab);
+                await leaf.openFile(file);
+            }
+        } else if (context?.file) {
+            // Open as regular note by resolving link path
+            const dest = this.app.metadataCache.getFirstLinkpathDest(raw, context.file.path);
+            if (dest instanceof TFile) {
+                const leaf = this.app.workspace.getLeaf(newTab);
+                await leaf.openFile(dest);
+            } else {
+                new Notice(`Note not found: ${raw}`, 3000);
+            }
         }
         this.closeSuggester();
     }
@@ -100,15 +118,6 @@ export class SuggestionProvider {
             // This range covers the trigger and the query text.
             editor.replaceRange('', context.start, context.end);
         }
-    }
-    
-    private getSelectedDate(): moment.Moment | null {
-        const sel = document.querySelector('.is-selected .chrono-suggestion-container') as HTMLElement;
-        const raw = sel?.getAttribute('data-suggestion');
-        if (!raw) return null;
-
-        const parsed = DateParser.parseDate(raw);
-        return parsed ? moment(parsed) : null;
     }
 
     unload() {
@@ -230,6 +239,8 @@ export class SuggestionProvider {
     }
 
     renderSuggestionContent(item: string, el: HTMLElement, context?: any) {
+        // Keep reference to the EditorSuggester instance for later close
+        this.contextProvider = context;
         this.isSuggesterOpen = true;
         this.keyboardHandler.resetModifierKeys();
         renderSuggestionContent(this, item, el, context);
