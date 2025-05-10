@@ -1,7 +1,7 @@
 {
 	"id": "quick-dates",
 	"name": "Quick Dates",
-	"version": "0.2.4",
+	"version": "0.2.5",
 	"minAppVersion": "0.15.0",
 	"description": "Link to and jump between daily notes fast, using a powerful, responsive suggestion system. Intended to be a replacement and enhancement of the Natural Language Dates plugin.",
 	"author": "Albert O'Shea",
