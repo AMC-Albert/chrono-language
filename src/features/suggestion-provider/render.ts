@@ -109,7 +109,10 @@ function renderPreview(
     const dailyNoteSettings = getDailyNoteSettings();
     const dailyNoteFilenameCandidate = momentDate.isValid() ? momentDate.format(dailyNoteSettings.format || DEFAULT_DAILY_NOTE_FORMAT) : item;
     if (momentDate.isValid() && allNotes && rawParsedDate) {
-        dailyNote = getDailyNote(momentDate, allNotes) as TFile;
+        const note = getDailyNote(momentDate, allNotes);
+        if (note instanceof TFile) {
+            dailyNote = note;
+        }
     }
     const previewContainer = container.createEl('span', { cls: [CLASSES.suggestionPreview] });
     if (!rawParsedDate) {

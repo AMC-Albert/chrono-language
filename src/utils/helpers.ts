@@ -1,4 +1,4 @@
-import { App, normalizePath, Notice, TFile, moment } from 'obsidian';
+import { App, normalizePath, Notice, TFile, TFolder, moment } from 'obsidian';
 import { Link, ObsidianSettings, FileSystem } from 'obsidian-dev-utils/obsidian';
 import { getDailyNoteSettings, getDailyNote, getAllDailyNotes, createDailyNote, DEFAULT_DAILY_NOTE_FORMAT } from 'obsidian-daily-notes-interface';
 import { QuickDatesSettings } from '../settings';
@@ -149,7 +149,7 @@ export function getDailyNotePreview(dateText: string): string {
  * @returns The alias to use for the link, or undefined if no alias should be used
  */
 export function determineDailyNoteAlias(
-    app: App,
+    app: any,
     settings: QuickDatesSettings,
     itemText: string, // The original suggestion text, e.g., "Next Friday at 3pm"
     forceTextAsAlias: boolean,
@@ -195,7 +195,7 @@ export function determineDailyNoteAlias(
  * Creates a markdown link to the daily note
  */
 export function createDailyNoteLink(
-    app: App, 
+    app: any, 
     settings: QuickDatesSettings, 
     sourceFile: TFile, 
     dateText = '', 
@@ -250,7 +250,7 @@ export function createDailyNoteLink(
  * Gets the path to a daily note for a specific date
  */
 export function getDailyNotePath(
-    app: App,
+    app: any,
     settings: QuickDatesSettings,
     momentDate: moment.Moment
 ): string {
@@ -279,7 +279,7 @@ export function getDailyNotePath(
  * @returns The daily note file or null if it couldn't be found/created
  */
 export async function getOrCreateDailyNote(
-    app: App,
+    app: any,
     momentDate: moment.Moment,
     shouldOpen = false,
     silent = false
@@ -350,7 +350,7 @@ export async function createDailyNotesFolderIfNeeded(app: App, silent: boolean =
  * @returns Record of daily notes or null if the folder is missing
  */
 export async function getAllDailyNotesSafe(
-    app: App, 
+    app: any, 
     createIfNeeded: boolean = false,
     silentIfMissingAndNotCreating: boolean = false
 ): Promise<Record<string, TFile> | null> {
@@ -358,14 +358,30 @@ export async function getAllDailyNotesSafe(
     const folderPath = dailyNoteSettings.folder ?? '';
     
     let folder = FileSystem.getFolderOrNull(app, folderPath);
+    const vaultRoot = this.app.vault.getRoot();
     
-    if ((folderPath === '' && app.vault.getRoot() !== null) || folder !== null) {
-        return getAllDailyNotes() as Record<string, TFile>;
+    if ((folderPath === '' && vaultRoot instanceof TFolder) || folder instanceof TFolder) {
+        // Only include valid TFile instances
+        const all = getAllDailyNotes();
+        const validNotes: Record<string, TFile> = {};
+        for (const [key, file] of Object.entries(all)) {
+            if (file instanceof TFile) {
+                validNotes[key] = file;
+            }
+        }
+        return validNotes;
     } else if (createIfNeeded) {
-        const created = await createDailyNotesFolderIfNeeded(app, true); // silent=true for createDailyNotesFolderIfNeeded
+        const created = await createDailyNotesFolderIfNeeded(app, true);
         if (created) {
-            new Notice(`Created daily notes folder: ${folderPath}`, 3000); // Notify here
-            return getAllDailyNotes() as Record<string, TFile>;
+            new Notice(`Created daily notes folder: ${folderPath}`, 3000);
+            const all = getAllDailyNotes();
+            const validNotes: Record<string, TFile> = {};
+            for (const [key, file] of Object.entries(all)) {
+                if (file instanceof TFile) {
+                    validNotes[key] = file;
+                }
+            }
+            return validNotes;
         }
     }
     
