@@ -58,7 +58,13 @@ export class KeyboardHandler {
         
         // Handle space key intercept if this is a keydown event
         if (isKeyDown && key === ' ') {
-            this.handleSpaceKeyEvent(event);
+            // Only intercept pure space (no modifiers); shift+space, ctrl+space, etc. go to CodeMirror scope
+            if (!event.shiftKey && !event.ctrlKey && !event.altKey) {
+                if (this.handleSpaceKeyEvent(event)) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                }
+            }
         }
 
         // Handle Tab key for auto-completion

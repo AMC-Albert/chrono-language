@@ -1,6 +1,5 @@
 import QuickDates from '../../main';
 import { moment, Notice, TFile } from 'obsidian';
-import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
 import { getOrCreateDailyNote, DateFormatter, createDailyNoteLink } from '../../utils/helpers';
 import { DateParser } from './date-parser';
 import { InsertMode, ContentFormat } from '../../types';
@@ -9,6 +8,9 @@ import { Link } from 'obsidian-dev-utils/obsidian';
 import { QuickDatesSettings } from '../../settings';
 import { CLASSES } from '../../constants';
 import { renderSuggestionContent, updatePreviewContent } from './render';
+import { EditorSuggester } from '../editor-suggester';
+import { OpenDailyNoteModal } from '../open-daily-note';
+import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
 
 /**
  * Shared suggester for date suggestions. Handles rendering and updating of suggestions.
@@ -16,8 +18,12 @@ import { renderSuggestionContent, updatePreviewContent } from './render';
 export class SuggestionProvider {
     app: any; // Changed App to any
     plugin: QuickDates;
+    // Context for rendering suggestions
+    public contextProvider: { context?: { query: string }; query?: string } = {};
     currentElements: Map<string, HTMLElement> = new Map();
-    contextProvider: any;
+    // Parent UI references for closing
+    private editorSuggesterRef: EditorSuggester | null = null;
+    private openDailyModalRef: OpenDailyNoteModal | null = null;
     keyboardHandler: KeyboardHandler;
     isSuggesterOpen: boolean = false;
     private holidaySuggestions: string[] = [];
@@ -245,8 +251,7 @@ export class SuggestionProvider {
     }
 
     renderSuggestionContent(item: string, el: HTMLElement, context?: any) {
-        // Keep reference to the EditorSuggester instance for later close
-        this.contextProvider = context;
+        // Show suggestions; no contextProvider needed
         this.isSuggesterOpen = true;
         this.keyboardHandler.resetModifierKeys();
         renderSuggestionContent(this, item, el, context);
@@ -256,15 +261,25 @@ export class SuggestionProvider {
         updatePreviewContent(this, item, container);
     }
 
+    /** Register the EditorSuggester that created this provider */
+    public setEditorSuggesterRef(ref: EditorSuggester) {
+        this.editorSuggesterRef = ref;
+    }
+
+    /** Register the OpenDailyNoteModal that created this provider */
+    public setOpenDailyModalRef(ref: OpenDailyNoteModal) {
+        this.openDailyModalRef = ref;
+    }
+
     // Helper method to close the suggester UI
     private closeSuggester() {
         this.isSuggesterOpen = false;
-        
-        const suggesterInstance = this.contextProvider as any; // this.contextProvider is the EditorSuggester instance
-        
-        // Call the close method on the EditorSuggester instance.
-        // This will trigger EditorSuggester.close(), which handles UI and internal state.
-        suggesterInstance?.close?.(); 
+        // Close the appropriate parent UI
+        if (this.openDailyModalRef) {
+            this.openDailyModalRef.close();
+        } else if (this.editorSuggesterRef) {
+            this.editorSuggesterRef.close();
+        }
     }
     
     getKeyboardHandler(): KeyboardHandler {
@@ -279,7 +294,7 @@ export class SuggestionProvider {
         activeFile: TFile,
         app: any // Changed App to any
     ): string {
-        const parsedDate = DateParser.parseDate(itemText);; 
+        const parsedDate = DateParser.parseDate(itemText);
 
         if (!parsedDate) { // itemText is not a parsable date string
             if (insertMode === InsertMode.PLAINTEXT) {

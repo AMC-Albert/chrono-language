@@ -5,7 +5,7 @@ import QuickDates from '../../main';
 import { addTriggerDecorationEffect, addSpacerWidgetEffect, safelyClearDecorations } from './decorations';
 import { SuggestionProvider } from '../suggestion-provider';
 import { KeyboardHandler } from '../../utils/keyboard-handler';
-import { KEYS, CLASSES, getInstructionDefinitions } from '../../constants';
+import { KEYS, CLASSES, getInstructionDefinitions, MODIFIER_KEY } from '../../constants';
 import { parseTriggerContext } from './trigger-parser';
 
 /**
@@ -27,6 +27,10 @@ export class EditorSuggester extends EditorSuggest<string> {
     private lastContext: EditorSuggestContext | null = null;
     private cleanupEnd: EditorPosition | null = null;
 
+    // Handler references for daily note keybinds
+    private openDailySameTabHandler: any = null;
+    private openDailyNewTabHandler: any = null;
+
     constructor(plugin: QuickDates) {
         super(plugin.app);
         this.plugin = plugin;
@@ -37,110 +41,39 @@ export class EditorSuggester extends EditorSuggest<string> {
         // Initialize keyboard handler and suggester
         this.keyboardHandler = new KeyboardHandler(this.scope, this.plugin.settings.plainTextByDefault);
         this.suggester = new SuggestionProvider(this.app, this.plugin);
-        // Register keyboard handlers using KeyboardHandler API
+        this.suggester.setEditorSuggesterRef(this);
+
+        // Register Enter key handlers
         this.keyboardHandler.registerEnterKeyHandlers(this.handleSelectionKey);
-        // Determine handlers for daily note actions, swapping if requested
-        const openDaily = this.handleDailyNoteKey.bind(this);
-        const openDailyNewTab = this.handleDailyNoteNewTabKey.bind(this);
-        if (this.plugin.settings.swapOpenNoteKeybinds) {
-            this.keyboardHandler.registerDailyNoteKeyHandlers(openDailyNewTab, openDaily);
-        } else {
-            this.keyboardHandler.registerDailyNoteKeyHandlers(openDaily, openDailyNewTab);
-        }
-        this.keyboardHandler.registerSpaceKeyHandler(this.handleSpaceKey);
+
+        // Register daily note keybinds (Shift+Space / Ctrl+Shift+Space)
+        this.registerDailyNoteKeybinds();
+
         this.keyboardHandler.registerBackspaceKeyHandler(this.handleBackspaceKey);
         this.keyboardHandler.registerTabKeyHandler(this.handleTabKey);
         this.keyboardHandler.addKeyStateChangeListener(() => this.updateInstructions());
         this.updateInstructions();
     }
 
-    /**
-     * Handles Shift+Space key for opening the daily note
-     */
-    private handleDailyNoteKey = (event: KeyboardEvent): boolean => {
+    /** Handle Shift+Space to open daily note in same tab */
+    private handleDailyNote(event: KeyboardEvent): boolean {
         if (!this.isOpen || !this.suggester || !this.context) return false;
-        if (event.shiftKey && event.key === KEYS.SPACE) {
-            const newTab = this.plugin.settings.swapOpenNoteKeybinds;
-            this.suggester.handleDailyNoteAction(event, newTab, this.context);
-            return true;
-        }
-        return false;
-    };
+        this.suggester.handleDailyNoteAction(event, false, this.context);
+        return true;
+    }
 
-    /**
-     * Handles Ctrl+Shift+Space key for opening the daily note in a new tab
-     */
-    private handleDailyNoteNewTabKey = (event: KeyboardEvent): boolean => {
+    /** Handle Ctrl+Shift+Space to open daily note in new tab */
+    private handleDailyNoteNewTab(event: KeyboardEvent): boolean {
         if (!this.isOpen || !this.suggester || !this.context) return false;
-        if (event.ctrlKey && event.shiftKey && event.key === KEYS.SPACE) {
-            const openTab = !this.plugin.settings.swapOpenNoteKeybinds;
-            this.suggester.handleDailyNoteAction(event, openTab, this.context);
-            return true;
-        }
-        return false;
-    };
+        this.suggester.handleDailyNoteAction(event, true, this.context);
+        return true;
+    }
 
     private handleSelectionKey = (event: KeyboardEvent): boolean => {
         if (!this.isOpen || !this.suggester || !this.context) return false;
         if (event.shiftKey) event.preventDefault();
         this.suggestionChosen = true;
         return this.suggestions.useSelectedItem(event);
-    };
-
-    /**
-     * Handles space key events to intercept spaces at the beginning of a query
-     * Returns true if the event was handled (should be prevented)
-     */
-    private handleSpaceKey = (event: KeyboardEvent): boolean => {
-        // Only intercept space if the suggester is open
-        if (!this.isOpen || !this.context) return false;
-        
-        const editor = this.context.editor;
-        const cursor = editor.getCursor();
-        const line = editor.getLine(cursor.line);
-        const cursorSubstring = line.slice(0, cursor.ch);
-        const triggerPhrase = this.plugin.settings.triggerPhrase;
-        if (!triggerPhrase) return false;
-        
-        const lastTriggerIndex = cursorSubstring.lastIndexOf(triggerPhrase);
-        if (lastTriggerIndex === -1) return false;
-        
-        const posAfterTrigger = lastTriggerIndex + triggerPhrase.length;
-        const query = cursorSubstring.slice(posAfterTrigger);
-        
-        // Check if we're at the beginning of query (right after trigger phrase or auto-inserted space)
-        if (cursor.ch === posAfterTrigger || query.trim() === '') {
-            if (!this.firstSpaceBlocked) {
-                // This is the first space - block it by preventing default editor action.
-                this.firstSpaceBlocked = true;
-                event.preventDefault(); 
-                event.stopImmediatePropagation();
-                return true; // Signal that the event was handled (and default prevented)
-            } else {
-                // This is the second space - allow it and dismiss suggester.
-                this.firstSpaceBlocked = false; // Reset flag
-                
-                // Set state to prevent immediate re-trigger if user types near same spot.
-                this.lastReplacedTriggerStart = { line: cursor.line, ch: lastTriggerIndex };
-                this.lastInsertionEnd = { line: cursor.line, ch: cursor.ch + 1 }; // Account for the space being inserted
-                
-                // Close the suggester. The space character will be inserted by default editor action.
-                setTimeout(() => {
-                    // Remove the extra space if there are two spaces after the trigger
-                    const updatedLine = editor.getLine(cursor.line);
-                    const afterTrigger = updatedLine.slice(posAfterTrigger, posAfterTrigger + 2);
-                    if (afterTrigger === '  ') {
-                        // Remove one of the spaces
-                        editor.replaceRange('', { line: cursor.line, ch: posAfterTrigger }, { line: cursor.line, ch: posAfterTrigger + 1 });
-                    }
-                    this.close();
-                }, 0);
-                
-                return false; // Do NOT prevent default; let the space be inserted.
-            }
-        }
-        
-        return false; // Not at the beginning of the query, don't intercept.
     };
 
     /**
@@ -242,7 +175,7 @@ export class EditorSuggester extends EditorSuggest<string> {
     }
 
     unload() {
-        this.clearDecorations(); // Ensure decorations are cleared when plugin unloads
+        this.clearDecorations();
         this.suggester?.unload();
         this.keyboardHandler.unload();
     }
@@ -261,7 +194,7 @@ export class EditorSuggester extends EditorSuggest<string> {
     // Track when the suggester is opened
     open(): void {
         super.open();
-
+        this.suggester?.setEditorSuggesterRef(this);
         // Add a unique class to the newly opened suggestion container
         setTimeout(() => {
             const containers = document.body.querySelectorAll('.suggestion-container');
@@ -403,14 +336,16 @@ export class EditorSuggester extends EditorSuggest<string> {
     }
 
     getSuggestions(ctx: EditorSuggestContext): string[] {
-        return this.suggester ? this.suggester.getDateSuggestions(
+        if (!this.suggester) return [];
+        return this.suggester.getDateSuggestions(
             { query: ctx.query },
-            this.plugin.settings.initialEditorSuggestions // Pass specific initial suggestions
-        ) : [];
+            this.plugin.settings.initialEditorSuggestions
+        );
     }
 
     renderSuggestion(item: string, el: HTMLElement) {
-        this.suggester?.renderSuggestionContent(item, el, this);
+        // Forward query context for highlighting
+        this.suggester?.renderSuggestionContent(item, el);
     }
 
     selectSuggestion(item: string, event: KeyboardEvent | MouseEvent): void {
@@ -460,18 +395,35 @@ export class EditorSuggester extends EditorSuggest<string> {
      */
     updateSettings(settings: { keyBindings?: Record<string, string>; plainTextByDefault?: boolean; holidayLocale?: string; swapOpenNoteKeybinds?: boolean }): void {
         this.keyboardHandler.update(settings);
-        // Re-register daily note key handlers when swapOpenNoteKeybinds setting changes
-        const openDaily = this.handleDailyNoteKey.bind(this);
-        const openDailyNewTab = this.handleDailyNoteNewTabKey.bind(this);
-        if (settings.swapOpenNoteKeybinds) {
-            this.keyboardHandler.registerDailyNoteKeyHandlers(openDailyNewTab, openDaily);
-        } else {
-            this.keyboardHandler.registerDailyNoteKeyHandlers(openDaily, openDailyNewTab);
-        }
+        // Update keybinds immediately based on new settings
+        this.registerDailyNoteKeybinds();
         this.updateInstructions(settings.swapOpenNoteKeybinds);
         this.suggester?.updateSettings({
             plainTextByDefault: settings.plainTextByDefault ?? this.plugin.settings.plainTextByDefault,
             holidayLocale: settings.holidayLocale ?? this.plugin.settings.holidayLocale,
         });
+    }
+
+    /**
+     * Register daily note keybinds based on current settings
+     */
+    private registerDailyNoteKeybinds(): void {
+        // Unregister previous handlers
+        if (this.openDailySameTabHandler) {
+            this.scope.unregister(this.openDailySameTabHandler);
+            this.openDailySameTabHandler = null;
+        }
+        if (this.openDailyNewTabHandler) {
+            this.scope.unregister(this.openDailyNewTabHandler);
+            this.openDailyNewTabHandler = null;
+        }
+        // Register new handlers according to current settings
+        if (this.plugin.settings.swapOpenNoteKeybinds) {
+            this.openDailySameTabHandler = this.scope.register([MODIFIER_KEY.CTRL, MODIFIER_KEY.SHIFT], KEYS.SPACE, this.handleDailyNote.bind(this));
+            this.openDailyNewTabHandler = this.scope.register([MODIFIER_KEY.SHIFT], KEYS.SPACE, this.handleDailyNoteNewTab.bind(this));
+        } else {
+            this.openDailySameTabHandler = this.scope.register([MODIFIER_KEY.SHIFT], KEYS.SPACE, this.handleDailyNote.bind(this));
+            this.openDailyNewTabHandler = this.scope.register([MODIFIER_KEY.CTRL, MODIFIER_KEY.SHIFT], KEYS.SPACE, this.handleDailyNoteNewTab.bind(this));
+        }
     }
 }

@@ -202,9 +202,7 @@ export function createDailyNoteLink(
     forceTextAsAlias = false,
     useAlternateFormat = false,
     forceNoAlias = false
-): string {
-    const dailyNoteSettings = getDailyNoteSettings();
-    
+): string {    
     // Use Chrono to parse the date from text, or use current date if no text provided
     let parsedDate;
     if (dateText && dateText.trim().length > 0) {
@@ -219,8 +217,7 @@ export function createDailyNoteLink(
     
     // Convert to moment date
     const momentDate = moment(parsedDate);
-    const dailyNoteFormat = dailyNoteSettings.format || DEFAULT_DAILY_NOTE_FORMAT; 
-    
+
     // Get the path to the daily note
     const targetPath = getDailyNotePath(app, settings, momentDate);
 
@@ -326,12 +323,9 @@ export async function createDailyNotesFolderIfNeeded(app: App, silent: boolean =
     const folderPath = dailyNoteSettings.folder ?? '';
     
     // Check if folder exists (empty string means root folder, which always exists)
-    if (folderPath === '') {
-        return true;
-    }
+    if (folderPath === '') return true;
     
     try {
-        // Use FileSystem.getOrCreateFolder utility
         await FileSystem.getOrCreateFolder(app, folderPath);
         return true;
     } catch (error) {
@@ -385,8 +379,6 @@ export async function getAllDailyNotesSafe(
         }
     }
     
-    if (!silentIfMissingAndNotCreating) {
-        new Notice(ERRORS.DAILY_NOTES_FOLDER_MISSING, 5000);
-    }
+    if (!silentIfMissingAndNotCreating) new Notice(ERRORS.DAILY_NOTES_FOLDER_MISSING, 5000);
     return null;
 }

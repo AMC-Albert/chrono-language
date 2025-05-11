@@ -1,4 +1,4 @@
-import { Notice, FuzzySuggestModal, FuzzyMatch, moment, Platform } from "obsidian";
+import { Notice, FuzzySuggestModal, FuzzyMatch, moment } from "obsidian";
 import QuickDates from "../../main";
 import { SuggestionProvider } from "../suggestion-provider";
 import { DateParser } from "../suggestion-provider/date-parser";
@@ -12,11 +12,12 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
   plugin: QuickDates;
   private suggester: SuggestionProvider;
 
-  constructor(app: any, plugin: QuickDates) { // Changed App to any
+  constructor(app: any, plugin: QuickDates) {
     super(app);
     this.plugin = plugin;
-    this.suggester = new SuggestionProvider(this.plugin.app, this.plugin);
-    this.setPlaceholder("Enter a date or relative time...");
+    this.suggester = new SuggestionProvider(this.app, this.plugin);
+    this.suggester.setOpenDailyModalRef(this);
+    this.setPlaceholder('Enter a date or relative time...');
   }
 
   onOpen(): void {
@@ -40,7 +41,7 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
 
   getItems(): string[] {
     const query = (this.modalEl.querySelector(".prompt-input") as HTMLInputElement)?.value || "";
-    this.suggester.contextProvider = { context: { query } };
+    this.suggester.setOpenDailyModalRef(this);
     return this.suggester.getDateSuggestions(
       { query },
       this.plugin.settings.initialOpenDailyNoteSuggestions
@@ -53,7 +54,7 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
 
   renderSuggestion(item: FuzzyMatch<string>, el: HTMLElement) {
     const query = (this.modalEl.querySelector(".prompt-input") as HTMLInputElement)?.value || "";
-    this.suggester.renderSuggestionContent(item.item, el, { context: { query } });
+    this.suggester.renderSuggestionContent(item.item, el, { context: { query } }); // setOpenDailyModalRef already applied
   }
 
   async onChooseItem(item: string): Promise<void> {
@@ -67,8 +68,7 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
       // Open the file in active leaf
       const file = await getOrCreateDailyNote(this.plugin.app, moment(parsed), true);
       if (file) {
-        const newPane = false;
-        await this.plugin.app.workspace.openLinkText(file.path, '', newPane);
+        await this.plugin.app.workspace.openLinkText(file.path, '', false);
       }
     } catch (error) {
       new Notice(ERRORS.FAILED_HANDLE_NOTE);

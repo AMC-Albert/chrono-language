@@ -61,7 +61,7 @@ export function renderSuggestionContent(
     }
     container.appendChild(suggestionSpan);
     provider.currentElements.set(item, container);
-    if (context) provider.contextProvider = context;
+    if (context) provider.contextProvider = { ...(provider.contextProvider || {}), ...context };
     provider.updatePreviewContent(item, container);
 }
 
@@ -220,7 +220,10 @@ function createLinkPreview(
         event.preventDefault();
         event.stopPropagation();
         if (provider.contextProvider) {
-            provider.cleanupTriggerPhrase((provider.contextProvider as any).context);
+            const context = provider.contextProvider.context;
+            if (context) {
+                provider.cleanupTriggerPhrase(context);
+            }
         }
         provider['closeSuggester']();
         const file = await getOrCreateDailyNote(provider.app, momentDate, true);

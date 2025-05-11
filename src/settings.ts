@@ -39,7 +39,7 @@ export const DEFAULT_SETTINGS: QuickDatesSettings = {
 	initialOpenDailyNoteSuggestions: ['Today', 'Tomorrow', 'Yesterday'],
 };
 
-export class ChronoLanguageSettingTab extends PluginSettingTab {
+export class QuickDatesSettingTab extends PluginSettingTab {
 	plugin: QuickDates;
 	hideFoldersSetting: HTMLElement;
 

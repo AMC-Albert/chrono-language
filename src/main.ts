@@ -1,5 +1,5 @@
 import { Plugin, Editor, MarkdownView } from 'obsidian';
-import { QuickDatesSettings, ChronoLanguageSettingTab, DEFAULT_SETTINGS } from './settings';
+import { QuickDatesSettings, QuickDatesSettingTab, DEFAULT_SETTINGS } from './settings';
 import { EditorSuggester } from './features/editor-suggester';
 import { OpenDailyNoteModal } from './features/open-daily-note';
 import { triggerDecorationStateField } from './features/editor-suggester/decorations';
@@ -72,7 +72,7 @@ export default class QuickDates extends Plugin {
 			callback: () => new OpenDailyNoteModal(this.app, this).open()
 		});
 
-		this.addSettingTab(new ChronoLanguageSettingTab(this.app, this));
+		this.addSettingTab(new QuickDatesSettingTab(this.app, this));
 	}
 	async onSettingsChanged() {
 		if (this.editorSuggester) this.editorSuggester.unload();
@@ -97,7 +97,14 @@ export default class QuickDates extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
-		this.editorSuggester?.updateInstructions(); 
+		// Apply updated settings immediately
+		this.editorSuggester?.updateSettings({ 
+			plainTextByDefault: this.settings.plainTextByDefault,
+			holidayLocale: this.settings.holidayLocale,
+			swapOpenNoteKeybinds: this.settings.swapOpenNoteKeybinds
+		});
+		// Update commands if needed
+		this.dateCommands?.updateSettings(this.settings);
 	}
 
 	updateKeyBindings(): void {
