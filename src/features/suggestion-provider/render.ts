@@ -30,30 +30,23 @@ export function renderSuggestionContent(
     el: HTMLElement,
     context?: any
 ) {
-    const container = el.createEl('div', { 
+    // Derive the current query from passed context (highest priority)
+    const query = context?.context?.query ?? context?.query ?? '';
+    // Update provider context for subsequent preview updates
+    provider.contextProvider = { context: { query }, query };
+    const container = el.createEl('div', {
         cls: [CLASSES.suggestionContainer],
         attr: { 'data-suggestion': item }
     });
     if (DateParser.inputHasTimeComponent(item)) {
         container.addClass(CLASSES.timeRelevantSuggestion);
     }
-    // Highlight matching characters in the suggestion text
-    let suggestionText = item;
-    const contextProvider = provider.contextProvider;
-    let query = '';
-    if (contextProvider && contextProvider.context && contextProvider.context.query) {
-        query = contextProvider.context.query;
-    } else if (contextProvider && contextProvider.query) {
-        query = contextProvider.query;
-    }
-
-    const trimmedQuery = query.trim(); // Trim the query
-
-    // create suggestion span and append nodes instead of innerHTML
+    // Prepare suggestion text with highlighted query matches
+    const trimmedQuery = query.trim();
     const suggestionSpan = document.createElement('span');
     suggestionSpan.className = CLASSES.suggestionText;
-    if (trimmedQuery.length > 0) {
-        const escaped = trimmedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (trimmedQuery) {
+        const escaped = trimmedQuery.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
         const regex = new RegExp(escaped, 'gi');
         highlightMatches(suggestionSpan, item, regex);
     } else {
@@ -61,7 +54,6 @@ export function renderSuggestionContent(
     }
     container.appendChild(suggestionSpan);
     provider.currentElements.set(item, container);
-    if (context) provider.contextProvider = { ...(provider.contextProvider || {}), ...context };
     provider.updatePreviewContent(item, container);
 }
 

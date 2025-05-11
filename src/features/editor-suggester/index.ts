@@ -344,8 +344,9 @@ export class EditorSuggester extends EditorSuggest<string> {
     }
 
     renderSuggestion(item: string, el: HTMLElement) {
-        // Forward query context for highlighting
-        this.suggester?.renderSuggestionContent(item, el);
+        // Forward current query context for highlighting
+        const query = this.context?.query ?? '';
+        this.suggester?.renderSuggestionContent(item, el, { context: { query } });
     }
 
     selectSuggestion(item: string, event: KeyboardEvent | MouseEvent): void {
