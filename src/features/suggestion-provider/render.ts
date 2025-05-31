@@ -1,6 +1,6 @@
 import { getDailyNote, getDailyNoteSettings, DEFAULT_DAILY_NOTE_FORMAT } from 'obsidian-daily-notes-interface';
 import { DateParser } from './date-parser';
-import { DateFormatter, getOrCreateDailyNote, getAllDailyNotesSafe } from '../../utils/helpers';
+import { DateFormatter, getOrCreateDailyNote } from '../../utils/helpers';
 import { CLASSES } from '../../constants';
 import { InsertMode, ContentFormat } from '../../types';
 import { TFile, moment, Platform } from 'obsidian';
@@ -68,16 +68,16 @@ export function updatePreviewContent(
         container.setAttribute('data-updating', 'true');
         // Remove all existing preview elements
         const existingPreviews = container.querySelectorAll('.' + CLASSES.suggestionPreview);
-        existingPreviews.forEach(previewNode => previewNode.remove());
-
-        const { insertMode, contentFormat } = provider.keyboardHandler.getEffectiveInsertModeAndFormat();
+        existingPreviews.forEach(previewNode => previewNode.remove());        const { insertMode, contentFormat } = provider.keyboardHandler.getEffectiveInsertModeAndFormat();
         const parsedDate = DateParser.parseDate(item);
         const momentDate = parsedDate ? moment(parsedDate) : moment();
-        getAllDailyNotesSafe(provider.app, true).then(allNotes => {
+        
+        // Use cached daily notes from provider instead of scanning vault on every keystroke
+        provider.getDailyNotes().then(allNotes => {
             renderPreview(provider, container, item, parsedDate, momentDate, insertMode, contentFormat, allNotes);
             container.removeAttribute('data-updating');
         }).catch((error) => {
-            console.error("Error in getAllDailyNotesSafe chain:", error);
+            console.error("Error getting cached daily notes:", error);
             renderPreview(provider, container, item, parsedDate, momentDate, insertMode, contentFormat, null);
             container.removeAttribute('data-updating');
         });

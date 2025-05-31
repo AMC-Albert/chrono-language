@@ -1,6 +1,6 @@
 import QuickDates from '../../main';
 import { moment, Notice, TFile } from 'obsidian';
-import { getOrCreateDailyNote, DateFormatter, createDailyNoteLink } from '../../utils/helpers';
+import { getOrCreateDailyNote, DateFormatter, createDailyNoteLink, getAllDailyNotesSafe } from '../../utils/helpers';
 import { DateParser } from './date-parser';
 import { InsertMode, ContentFormat } from '../../types';
 import { KeyboardHandler } from '../../utils/keyboard-handler';
@@ -27,6 +27,12 @@ export class SuggestionProvider {
     keyboardHandler: KeyboardHandler;
     isSuggesterOpen: boolean = false;
     private holidaySuggestions: string[] = [];
+    
+    // Performance optimization: Cache daily notes to avoid vault scanning on every keystroke
+    private dailyNotesCache: Record<string, TFile> | null = null;
+    private dailyNotesCacheTimestamp: number = 0;
+    private readonly CACHE_DURATION_MS = 5000; // Cache for 5 seconds
+    private cacheUpdatePromise: Promise<Record<string, TFile> | null> | null = null;
 
     constructor(app: any, plugin: QuickDates) { // Changed App to any
         this.app = app;
@@ -39,6 +45,9 @@ export class SuggestionProvider {
         
         // Initialize holiday suggestions
         this.initializeHolidaySuggestions();
+        
+        // Register vault events to invalidate cache when files are added/deleted/renamed
+        this.registerVaultEvents();
     }
     
     /**
@@ -86,11 +95,19 @@ export class SuggestionProvider {
     handleKeyStateChange = (): void => {
         // Only update previews if suggester is open
         if (this.isSuggesterOpen) {
-            // Debounce or throttle this if it becomes too frequent
-            requestAnimationFrame(() => this.updateAllPreviews());
+            // Debounce frequent updates to reduce performance impact
+            if (this.updatePreviewsTimeout) {
+                clearTimeout(this.updatePreviewsTimeout);
+            }
+            this.updatePreviewsTimeout = setTimeout(() => {
+                this.updateAllPreviews();
+                this.updatePreviewsTimeout = null;
+            }, 50); // 50ms debounce
         }
     };
     
+    private updatePreviewsTimeout: NodeJS.Timeout | null = null;
+
     // Handle daily note opening actions
     public async handleDailyNoteAction(e: KeyboardEvent, newTab: boolean, context?: any) {
         e.preventDefault();
@@ -130,20 +147,54 @@ export class SuggestionProvider {
             // This range covers the trigger and the query text.
             editor.replaceRange('', context.start, context.end);
         }
-    }
-
-    unload() {
+    }    unload() {
         this.keyboardHandler.removeKeyStateChangeListener(this.handleKeyStateChange);
         this.currentElements.clear();
         this.keyboardHandler.unload();
         this.isSuggesterOpen = false;
+        
+        // Clear any pending preview update timeouts
+        if (this.updatePreviewsTimeout) {
+            clearTimeout(this.updatePreviewsTimeout);
+            this.updatePreviewsTimeout = null;
+        }
+        
+        // Clean up vault event listeners
+        if (this.app?.vault) {
+            this.app.vault.off('create', this.invalidateCache);
+            this.app.vault.off('delete', this.invalidateCache);
+            this.app.vault.off('rename', this.invalidateCache);
+        }
+        
+        // Clear cache
+        this.invalidateCache();
     }
 
     updateAllPreviews() {
         if (!this.isSuggesterOpen) return;
-        this.currentElements.forEach((el, item) => {
-            if (el.isConnected) this.updatePreviewContent(item, el);
-        });
+        
+        // Process preview updates in batches to avoid blocking the UI
+        const entries = Array.from(this.currentElements.entries());
+        const batchSize = 3; // Process 3 suggestions at a time
+        
+        const processBatch = (startIndex: number) => {
+            const endIndex = Math.min(startIndex + batchSize, entries.length);
+            for (let i = startIndex; i < endIndex; i++) {
+                const [item, el] = entries[i];
+                if (el.isConnected) {
+                    this.updatePreviewContent(item, el);
+                }
+            }
+            
+            // Schedule next batch if there are more items
+            if (endIndex < entries.length) {
+                requestAnimationFrame(() => processBatch(endIndex));
+            }
+        };
+        
+        if (entries.length > 0) {
+            processBatch(0);
+        }
     }
 
     /**
@@ -286,6 +337,13 @@ export class SuggestionProvider {
         return this.keyboardHandler;
     }
 
+    /**
+     * Public method to get cached daily notes for use by other components
+     */
+    public async getDailyNotes(): Promise<Record<string, TFile> | null> {
+        return this.getCachedDailyNotes();
+    }
+
     public getFinalInsertText(
         itemText: string,
         insertMode: InsertMode,
@@ -337,6 +395,64 @@ export class SuggestionProvider {
                 useAlternateFormatForAlias,
                 forceNoAlias
             );
+        }
+    }
+
+    /**
+     * Register vault events to invalidate cache when files are added/deleted/renamed
+     */
+    private registerVaultEvents(): void {
+        if (this.app?.vault) {
+            this.app.vault.on('create', this.invalidateCache.bind(this));
+            this.app.vault.on('delete', this.invalidateCache.bind(this));
+            this.app.vault.on('rename', this.invalidateCache.bind(this));
+        }
+    }
+    
+    /**
+     * Invalidate the daily notes cache
+     */
+    private invalidateCache(): void {
+        this.dailyNotesCache = null;
+        this.dailyNotesCacheTimestamp = 0;
+        this.cacheUpdatePromise = null;
+    }
+    
+    /**
+     * Get daily notes with caching to avoid repeated vault scans
+     */
+    private async getCachedDailyNotes(): Promise<Record<string, TFile> | null> {
+        const now = Date.now();
+        
+        // Return cached data if it's still valid
+        if (this.dailyNotesCache && (now - this.dailyNotesCacheTimestamp) < this.CACHE_DURATION_MS) {
+            return this.dailyNotesCache;
+        }
+        
+        // If there's already a cache update in progress, wait for it
+        if (this.cacheUpdatePromise) {
+            return this.cacheUpdatePromise;
+        }
+        
+        // Start a new cache update
+        this.cacheUpdatePromise = this.updateDailyNotesCache();
+        const result = await this.cacheUpdatePromise;
+        this.cacheUpdatePromise = null;
+        return result;
+    }
+    
+    /**
+     * Update the daily notes cache
+     */
+    private async updateDailyNotesCache(): Promise<Record<string, TFile> | null> {
+        try {
+            const result = await getAllDailyNotesSafe(this.app, true, true);
+            this.dailyNotesCache = result;
+            this.dailyNotesCacheTimestamp = Date.now();
+            return result;
+        } catch (error) {
+            console.error('Failed to update daily notes cache:', error);
+            return null;
         }
     }
 }
