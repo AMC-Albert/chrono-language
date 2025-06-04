@@ -129,7 +129,7 @@ export class QuickDatesSettingTab extends PluginSettingTab {
 				})
 		);
 
-		new Setting(containerEl).setName('Link Format').setHeading();
+		new Setting(containerEl).setName('Link format').setHeading();
 
 		new Setting(containerEl)
 			.setName("Include folders in links")
