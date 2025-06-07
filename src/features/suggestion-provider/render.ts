@@ -32,7 +32,7 @@ export function renderSuggestionContent(
 	context?: any
 ) {
 	// Log rendering of suggestion
-	debug('SuggestionRenderer', 'renderSuggestionContent', `Rendering item: ${item}`);
+	debug(this, `Rendering item: ${item}`);
 	
 	// Derive the current query from passed context (highest priority)
 	const query = context?.context?.query ?? context?.query ?? '';
@@ -44,7 +44,7 @@ export function renderSuggestionContent(
 	});
 	if (DateParser.inputHasTimeComponent(item, provider)) {
 		container.addClass(CLASSES.timeRelevantSuggestion);
-		debug('SuggestionRenderer', 'renderSuggestionContent', `Suggestion has time component: ${item}`);
+		debug(this, `Suggestion has time component: ${item}`);
 	}
 	// Prepare suggestion text with highlighted query matches
 	const trimmedQuery = query.trim();
@@ -54,7 +54,7 @@ export function renderSuggestionContent(
 		const escaped = trimmedQuery.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
 		const regex = new RegExp(escaped, 'gi');
 		highlightMatches(suggestionSpan, item, regex);
-		debug('SuggestionRenderer', 'renderSuggestionContent', `Highlighted query matches for: ${item}`);
+		debug(this, `Highlighted query matches for: ${item}`);
 	} else {
 		suggestionSpan.textContent = item;
 	}
@@ -73,8 +73,8 @@ export function updatePreviewContent(
 			container.hasAttribute('data-updating')) return;
 			
 		// Log preview update
-		debug('SuggestionRenderer', 'updatePreviewContent', `Updating preview for: ${item}`);
-		
+		debug(this, `Updating preview for: ${item}`);
+
 		container.setAttribute('data-updating', 'true');
 		// Remove all existing preview elements
 		const existingPreviews = container.querySelectorAll('.' + CLASSES.suggestionPreview);
@@ -82,21 +82,21 @@ export function updatePreviewContent(
 		const { insertMode, contentFormat } = provider.keyboardHandler.getEffectiveInsertModeAndFormat();
 		const parsedDate = DateParser.parseDate(item, provider);
 		const momentDate = parsedDate ? moment(parsedDate) : moment();
-		debug('SuggestionRenderer', 'updatePreviewContent', `Parsed date for: ${item} result: ${parsedDate?.toISOString() || 'null'}`);
-		
+		debug(this, `Parsed date for: ${item} result: ${parsedDate?.toISOString() || 'null'}`);
+
 		// Use cached daily notes from provider instead of scanning vault on every keystroke
 		provider.getDailyNotes().then(allNotes => {
 			renderPreview(provider, container, item, parsedDate, momentDate, insertMode, contentFormat, allNotes);
 			container.removeAttribute('data-updating');
 		}).catch((err) => {
 			const errorMsg = err instanceof Error ? err.message : String(err);
-			error('SuggestionRenderer', 'updatePreviewContent', `Error getting cached daily notes: ${errorMsg}`);
+			error(this, `Error getting cached daily notes: ${errorMsg}`);
 			renderPreview(provider, container, item, parsedDate, momentDate, insertMode, contentFormat, null);
 			container.removeAttribute('data-updating');
 		});
 	} catch (e) {
 		const errorMsg = e instanceof Error ? e.message : String(e);
-		error('SuggestionRenderer', 'updatePreviewContent', `Error updating preview content: ${errorMsg}`);
+		error(this, `Error updating preview content: ${errorMsg}`);
 		container?.removeAttribute?.('data-updating');
 	}
 }
