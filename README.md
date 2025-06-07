@@ -32,6 +32,12 @@ I am open to pull requests and feature requests if they make sense for the goals
 
 If a setting or feature doesn't make sense, its description is confusing, or just behaves unexpectedly, let me know in an issue and I will attempt to clarify either in the README or in the setting description itself.
 
+## Debugging
+
+In Devloper Console, run `window.DEBUG.enable('quick-dates')`
+
+To learn more, see [obsidian-logger](https://github.com/AMC-Albert/obsidian-logger).
+
 ## Credits
 
 - Original [Natural Language Dates](https://github.com/argenos/nldates-obsidian) plugin by argenos.
