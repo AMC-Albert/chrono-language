@@ -6,7 +6,7 @@ import { InsertMode, ContentFormat } from '@/types';
 import { Link } from 'obsidian-dev-utils/obsidian';
 import { QuickDatesSettings } from '@/settings';
 import { CLASSES } from '@/constants';
-import { renderSuggestionContent, updatePreviewContent } from './render';
+import { SuggestionRenderer } from './SuggestionRenderer';
 import { EditorSuggester } from '../editor-suggester';
 import { OpenDailyNoteModal } from '../open-daily-note';
 import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
@@ -26,6 +26,7 @@ export class SuggestionProvider {
 	keyboardHandler: KeyboardHandler;
 	isSuggesterOpen: boolean = false;
 	private holidaySuggestions: string[] = [];
+	private renderer: SuggestionRenderer;
 	
 	// Performance optimization: Cache daily notes to avoid vault scanning on every keystroke
 	private dailyNotesCache: Record<string, TFile> | null = null;
@@ -38,10 +39,13 @@ export class SuggestionProvider {
 		
 		this.app = app;
 		this.plugin = plugin;
-		
 		debug(this, 'Setting up keyboard handler for suggestion interactions');
 		// Initialize keyboard handler without requiring a scope
 		this.keyboardHandler = new KeyboardHandler(undefined, plugin.settings.plainTextByDefault);
+		
+		debug(this, 'Initializing suggestion renderer for UI rendering');
+		// Initialize the suggestion renderer
+		this.renderer = new SuggestionRenderer();
 		
 		debug(this, 'Registering keyboard state change listener for dynamic suggestion updates');
 		// Register for key state changes
@@ -159,7 +163,9 @@ export class SuggestionProvider {
 			// This range covers the trigger and the query text.
 			editor.replaceRange('', context.start, context.end);
 		}
-	}    unload() {
+	}
+	
+	unload() {
 		this.keyboardHandler.removeKeyStateChangeListener(this.handleKeyStateChange);
 		this.currentElements.clear();
 		this.keyboardHandler.unload();
@@ -312,16 +318,16 @@ export class SuggestionProvider {
 
 		return finalSuggestions.slice(0, 15); // Limit total suggestions
 	}
-
+	
 	renderSuggestionContent(item: string, el: HTMLElement, context?: any) {
 		// Show suggestions; no contextProvider needed
 		this.isSuggesterOpen = true;
 		this.keyboardHandler.resetModifierKeys();
-		renderSuggestionContent(this, item, el, context);
+		this.renderer.renderSuggestionContent(this, item, el, context);
 	}
 
 	updatePreviewContent(item: string, container: HTMLElement) {
-		updatePreviewContent(this, item, container);
+		this.renderer.updatePreviewContent(this, item, container);
 	}
 
 	/** Register the EditorSuggester that created this provider */

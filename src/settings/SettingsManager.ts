@@ -57,7 +57,7 @@ export class QuickDatesSettingTab extends PluginSettingTab {
 
 		debug(this, 'Clearing existing settings container content');
 		containerEl.empty();
-		// TODO: Review UI text and heading guidelines for this section
+		
 		debug(this, 'Creating primary date format setting control');
 		new Setting(containerEl)
 			.setName("Primary date format")
