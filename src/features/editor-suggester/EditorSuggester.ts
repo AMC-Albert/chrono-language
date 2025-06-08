@@ -7,6 +7,7 @@ import { SuggestionProvider } from '../suggestion-provider';
 import { KeyboardHandler, debug, info, warn, error, registerLoggerClass } from '@/utils';
 import { KEYS, CLASSES, getInstructionDefinitions, MODIFIER_KEY } from '@/constants';
 import { parseTriggerContext } from './trigger-parser';
+import { ServiceContainer } from '@/services';
 
 /**
  * A suggester for the editor that provides date parsing suggestions
@@ -15,6 +16,7 @@ export class EditorSuggester extends EditorSuggest<string> {
 	plugin: QuickDates;
 	private suggester: SuggestionProvider | null = null;
 	private keyboardHandler: KeyboardHandler;
+	private serviceContainer?: ServiceContainer;
 
 	// For tracking state after a suggestion is selected to prevent immediate re-trigger on an earlier phrase
 	private lastReplacedTriggerStart: { line: number, ch: number } | null = null;
@@ -30,9 +32,10 @@ export class EditorSuggester extends EditorSuggest<string> {
 	// Handler references for daily note keybinds
 	private openDailySameTabHandler: any = null;
 	private openDailyNewTabHandler: any = null;
-	constructor(plugin: QuickDates) {
+	constructor(plugin: QuickDates, serviceContainer?: ServiceContainer) {
 		super(plugin.app);
 		this.plugin = plugin;
+		this.serviceContainer = serviceContainer;
 		registerLoggerClass(this, 'EditorSuggester');
 		
 		debug(this, 'Initializing editor suggester component for date parsing');
@@ -41,7 +44,8 @@ export class EditorSuggester extends EditorSuggest<string> {
 		info(this, 'Editor suggester successfully initialized and ready for user input', {
 			triggerPhrase: plugin.settings.triggerPhrase,
 			plainTextByDefault: plugin.settings.plainTextByDefault,
-			swapOpenNoteKeybinds: plugin.settings.swapOpenNoteKeybinds
+			swapOpenNoteKeybinds: plugin.settings.swapOpenNoteKeybinds,
+			serviceLayerEnabled: !!serviceContainer
 		});
 	}
 

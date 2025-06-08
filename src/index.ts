@@ -4,6 +4,7 @@ export * from '@/settings';
 export * from '@/features';
 export * from '@/utils';
 export * from '@/constants';
+export * from '@/services';
 
 // Re-export types explicitly to avoid conflicts
 export type {

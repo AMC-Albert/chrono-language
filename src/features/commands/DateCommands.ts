@@ -5,6 +5,7 @@ import { ContentFormat } from '@/types';
 import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
 import { QuickDatesSettings } from '@/settings';
 import { TextSearcher } from './TextSearcher';
+import { ServiceContainer, EventBus } from '@/services';
 import * as chrono from 'chrono-node';
 
 // Define helper types for the parse info result
@@ -47,18 +48,30 @@ function stripFormattingWithMap(line: string): { text: string; map: number[] } {
 export class DateCommands {
 	private app: any;
 	private settings: QuickDatesSettings;
+	private serviceContainer?: ServiceContainer;
 
-	constructor(app: any, settings: QuickDatesSettings) {
+	constructor(app: any, settings: QuickDatesSettings, serviceContainer?: ServiceContainer) {
 		this.app = app;
 		this.settings = settings;
+		this.serviceContainer = serviceContainer;
 		registerLoggerClass(this, 'DateCommands');
+		// Set up event listener for settings changes if service container is available
+		if (this.serviceContainer) {
+			const eventBus = this.serviceContainer.get('eventBus') as EventBus;
+			if (eventBus && eventBus.on) {
+				eventBus.on('settings:changed', (newSettings: QuickDatesSettings) => {
+					this.updateSettings(newSettings);
+				});
+			}
+		}
 		
 		info(this, 'DateCommands component initialized with configuration', {
 			primaryFormat: settings.primaryFormat || 'using daily note format',
 			alternateFormat: settings.alternateFormat,
 			plainTextByDefault: settings.plainTextByDefault,
 			timeOnly: settings.timeOnly,
-			timeFormat: settings.timeFormat || 'none configured'
+			timeFormat: settings.timeFormat || 'none configured',
+			serviceLayerEnabled: !!serviceContainer
 		});
 	}
 

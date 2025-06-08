@@ -2,6 +2,7 @@ import { Notice, FuzzySuggestModal, FuzzyMatch, moment } from "obsidian";
 import QuickDates from "../../main";
 import { SuggestionProvider, DateParser } from "../suggestion-provider";
 import { getOrCreateDailyNote, debug, info, warn, error, registerLoggerClass } from "@/utils";
+import { ServiceContainer } from "@/services";
 import { ERRORS } from "@/constants";
 
 /**
@@ -10,12 +11,15 @@ import { ERRORS } from "@/constants";
 export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
 	plugin: QuickDates;
 	private suggester: SuggestionProvider;
-	constructor(app: any, plugin: QuickDates) {
+	private serviceContainer?: ServiceContainer;
+	
+	constructor(app: any, plugin: QuickDates, serviceContainer?: ServiceContainer) {
 		super(app);
 		debug(this, 'Initializing daily note modal for quick date-based note access');
 		registerLoggerClass(this, 'OpenDailyNoteModal');
 		
 		this.plugin = plugin;
+		this.serviceContainer = serviceContainer;
 		debug(this, 'Creating suggestion provider for date parsing and rendering');
 		this.suggester = new SuggestionProvider(this.app, this.plugin);
 		this.suggester.setOpenDailyModalRef(this);
@@ -23,9 +27,10 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
 		
 		info(this, 'Daily note modal ready for user interaction', {
 			placeholder: 'Enter a date or relative time...',
-			suggestionProviderConfigured: !!this.suggester
+			suggestionProviderConfigured: !!this.suggester,
+			serviceLayerEnabled: !!serviceContainer
 		});
-	}	onOpen(): void {
+	}onOpen(): void {
 		debug(this, 'Opening daily note modal and setting up keyboard handlers');
 		super.onOpen();
 		const input = this.modalEl.querySelector('.prompt-input') as HTMLInputElement;
