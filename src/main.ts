@@ -69,8 +69,9 @@ export default class QuickDates extends Plugin implements ServiceInterface {
 		try {
 			debug(this, 'Loading plugin settings from vault storage');
 			await this.loadSettings();
-					// Update configuration service with loaded settings
-			this.configService.setSettings(this.settings);			debug(this, 'Creating and registering editor suggester component');
+			// Update configuration service with loaded settings
+			this.configService.setSettings(this.settings);
+			debug(this, 'Creating and registering editor suggester component');
 			this.editorSuggester = new EditorSuggester(this, this.serviceContainer);
 			this.registerEditorSuggest(this.editorSuggester);
 
@@ -88,7 +89,8 @@ export default class QuickDates extends Plugin implements ServiceInterface {
 			this.registerDateCommands();
 
 			debug(this, 'Adding settings tab to Obsidian preferences');
-			this.addSettingTab(new QuickDatesSettingTab(this.app, this));			// Set up event listeners for configuration changes
+			this.addSettingTab(new QuickDatesSettingTab(this.app, this));
+			// Set up event listeners for configuration changes
 			this.eventBus.on('settings:changed', this.onSettingsChanged.bind(this));
 
 			info(this, 'Quick Dates plugin successfully loaded and ready', { 
@@ -96,7 +98,8 @@ export default class QuickDates extends Plugin implements ServiceInterface {
 				componentsInitialized: !!(this.editorSuggester && this.dateCommands),
 				triggerPhrase: this.settings.triggerPhrase,
 				servicesInitialized: true
-			});		} catch (initError) {
+			});
+		} catch (initError) {
 			error(this, 'Failed to initialize Quick Dates plugin', { 
 				error: initError instanceof Error ? initError.message : String(initError),
 				stack: initError instanceof Error ? initError.stack : undefined
@@ -190,7 +193,9 @@ export default class QuickDates extends Plugin implements ServiceInterface {
 		});
 
 		debug(this, 'All command palette entries registered successfully');
-	}	async onSettingsChanged(newSettings?: QuickDatesSettings) {
+	}
+	
+	async onSettingsChanged(newSettings?: QuickDatesSettings) {
 		debug(this, 'Processing settings change - reinitializing components with new configuration');
 		
 		try {
@@ -227,7 +232,9 @@ export default class QuickDates extends Plugin implements ServiceInterface {
 				stack: settingsError instanceof Error ? settingsError.stack : undefined
 			});
 		}
-	}async loadSettings() {
+	}
+	
+	async loadSettings() {
 		debug(this, 'Loading plugin settings from vault storage');
 		
 		try {
@@ -248,7 +255,9 @@ export default class QuickDates extends Plugin implements ServiceInterface {
 			this.settings = DEFAULT_SETTINGS;
 			warn(this, 'Using default settings due to load failure - user configuration reset');
 		}
-	}	async saveSettings() {
+	}
+	
+	async saveSettings() {
 		debug(this, 'Persisting plugin settings to vault storage');
 		
 		try {
@@ -273,6 +282,7 @@ export default class QuickDates extends Plugin implements ServiceInterface {
 			throw saveError;
 		}
 	}
+	
 	updateKeyBindings(): void {
 		debug(this, 'Updating key bindings configuration for editor suggester');
 		this.editorSuggester?.updateSettings({ 
