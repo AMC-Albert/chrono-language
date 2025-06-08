@@ -1,7 +1,8 @@
 import { PluginSettingTab, Setting } from 'obsidian';
 import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
 import { MultipleTextComponent } from 'obsidian-dev-utils/obsidian/Components/SettingComponents/MultipleTextComponent';
-import QuickDates from './main';
+import { debug, info, warn, error, registerLoggerClass } from '@/utils';
+import QuickDates from '../main';
 
 export interface QuickDatesSettings {
 	primaryFormat: string;
@@ -43,17 +44,21 @@ export class QuickDatesSettingTab extends PluginSettingTab {
 	plugin: QuickDates;
 	hideFoldersSetting: HTMLElement;
 
-	constructor(app: any, plugin: QuickDates) { // Changed App to any
+	constructor(app: any, plugin: QuickDates) {
 		super(app, plugin);
 		this.plugin = plugin;
+		registerLoggerClass(this, 'QuickDatesSettingTab');
+		debug(this, 'Settings tab initialized and ready for user configuration');
 	}
 
 	display(): void {
+		debug(this, 'Rendering settings tab UI - building user interface elements');
 		const { containerEl } = this;
 
+		debug(this, 'Clearing existing settings container content');
 		containerEl.empty();
 		// TODO: Review UI text and heading guidelines for this section
-
+		debug(this, 'Creating primary date format setting control');
 		new Setting(containerEl)
 			.setName("Primary date format")
 			.setDesc((() => {
@@ -77,6 +82,10 @@ export class QuickDatesSettingTab extends PluginSettingTab {
 					.setPlaceholder(getDailyNoteSettings().format || "YYYY-MM-DD")
 					.setValue(this.plugin.settings.primaryFormat)
 					.onChange(async (value) => {
+						debug(this, 'User modified primary date format setting', { 
+							oldValue: this.plugin.settings.primaryFormat,
+							newValue: value || 'using daily note format'
+						});
 						this.plugin.settings.primaryFormat = value || "";
 						await this.plugin.saveSettings();
 					})
@@ -157,7 +166,7 @@ export class QuickDatesSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl).setName('Editor suggester').setHeading()
-
+		debug(this, 'Creating trigger phrase setting control');
 		new Setting(containerEl)
 			.setName("Trigger phrase")
 			.setDesc("Customize the trigger phrase to activate the editor suggester. If empty, the suggester will be disabled. Can be a word or single character.")
@@ -166,8 +175,25 @@ export class QuickDatesSettingTab extends PluginSettingTab {
 					.setPlaceholder("qd")
 					.setValue(this.plugin.settings.triggerPhrase)
 					.onChange(async (value) => {
+						debug(this, 'User modified trigger phrase setting', { 
+							oldValue: this.plugin.settings.triggerPhrase,
+							newValue: value,
+							suggesterEnabled: !!value
+						});
+						
+						if (!value.trim()) {
+							warn(this, 'User disabled editor suggester by clearing trigger phrase', {
+								previousTrigger: this.plugin.settings.triggerPhrase
+							});
+						}
+						
 						this.plugin.settings.triggerPhrase = value;
 						await this.plugin.saveSettings();
+						
+						info(this, 'Trigger phrase setting updated successfully', {
+							newTriggerPhrase: value || 'disabled',
+							requiresReload: 'components will reinitialize automatically'
+						});
 					})
 			);
 
@@ -306,13 +332,17 @@ export class QuickDatesSettingTab extends PluginSettingTab {
 		const initialOpenDailyNoteSuggestionsBox = new MultipleTextComponent(initialOpenDailyNoteSuggestionsSettings.controlEl);
 		initialOpenDailyNoteSuggestionsBox
 			.setPlaceholder("Today\nTomorrow\nYesterday")
-			.setValue(this.plugin.settings.initialOpenDailyNoteSuggestions)
-			.onChange(async (value) => {
+			.setValue(this.plugin.settings.initialOpenDailyNoteSuggestions)			.onChange(async (value) => {
+				debug(this, 'User modified open daily note suggestions', { 
+					newSuggestionCount: value.filter(item => item.trim().length > 0).length
+				});
 				const suggestions = value.filter(item => item.trim().length > 0);
 				this.plugin.settings.initialOpenDailyNoteSuggestions = suggestions.length > 0
 					? [...suggestions]
 					: DEFAULT_SETTINGS.initialOpenDailyNoteSuggestions;
 				await this.plugin.saveSettings();
 			});
+			
+		debug(this, 'Settings tab UI rendering completed - all controls configured and ready for user interaction');
 	}
 }

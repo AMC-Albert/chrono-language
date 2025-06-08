@@ -1,5 +1,5 @@
 import { Editor } from 'obsidian';
-import { DateParser } from '../suggestion-provider/date-parser';
+import { DateParser } from '../suggestion-provider';
 import * as chrono from 'chrono-node';
 
 export interface WordAtCursorResult {

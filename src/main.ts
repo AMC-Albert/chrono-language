@@ -1,10 +1,8 @@
 import { Plugin, Editor, MarkdownView } from 'obsidian';
-import { QuickDatesSettings, QuickDatesSettingTab, DEFAULT_SETTINGS } from './settings';
-import { EditorSuggester } from './features/editor-suggester';
-import { OpenDailyNoteModal } from './features/open-daily-note';
-import { triggerDecorationStateField } from './features/editor-suggester/decorations';
-import { DateCommands } from './features/commands';
-import { initLogger, debug, info, warn, error, registerLoggerClass } from './utils/obsidian-logger';
+import { QuickDatesSettings, QuickDatesSettingTab, DEFAULT_SETTINGS } from '@/settings';
+import { EditorSuggester, OpenDailyNoteModal, DateCommands } from '@/features';
+import { triggerDecorationStateField } from '@/features/editor-suggester/decorations';
+import { initLogger, debug, info, warn, error, registerLoggerClass } from '@/utils';
 
 export default class QuickDates extends Plugin {
 	settings: QuickDatesSettings;
@@ -13,153 +11,221 @@ export default class QuickDates extends Plugin {
 	
 	constructor(app: any, manifest: any) {
 		super(app, manifest);
-		// Initialize the logger system
+		debug(this, 'Initializing logger system for Quick Dates plugin');
 		initLogger(this);
 		registerLoggerClass(this, 'QuickDates');
 	}
-		async onload() {
-		debug(this, 'onload', 'Plugin loading...');
-		await this.loadSettings();
-		debug(this, 'onload', 'Settings loaded');
-		// Initialize editor suggester
-		this.editorSuggester = new EditorSuggester(this);
-		this.registerEditorSuggest(this.editorSuggester);
-		debug(this, 'onload', 'Editor suggester initialized');
 
-		// Register the StateField for decorations
-		this.registerEditorExtension(triggerDecorationStateField);
+	async onload() {
+		info(this, 'Quick Dates plugin starting initialization', { version: this.manifest.version });
+		
+		try {
+			debug(this, 'Loading plugin settings from vault storage');
+			await this.loadSettings();
+			
+			debug(this, 'Creating and registering editor suggester component');
+			this.editorSuggester = new EditorSuggester(this);
+			this.registerEditorSuggest(this.editorSuggester);
 
-		// Initialize date commands
-		this.dateCommands = new DateCommands(this.app, this.settings);
-		debug(this, 'onload', 'Date commands initialized');
-		// Register date-related commands
-		debug(this, 'onload', 'Registering date-related commands...');
+			debug(this, 'Registering CodeMirror extension for trigger decorations');
+			this.registerEditorExtension(triggerDecorationStateField);
+
+			debug(this, 'Initializing date commands component');
+			this.dateCommands = new DateCommands(this.app, this.settings);
+
+			debug(this, 'Registering all logger classes for enhanced debugging');
+			registerLoggerClass(this.editorSuggester, 'EditorSuggester');
+			registerLoggerClass(this.dateCommands, 'DateCommands');
+
+			debug(this, 'Registering command palette entries for date operations');
+			this.registerDateCommands();
+
+			debug(this, 'Adding settings tab to Obsidian preferences');
+			this.addSettingTab(new QuickDatesSettingTab(this.app, this));
+
+			info(this, 'Quick Dates plugin successfully loaded and ready', { 
+				settingsLoaded: !!this.settings,
+				componentsInitialized: !!(this.editorSuggester && this.dateCommands),
+				triggerPhrase: this.settings.triggerPhrase
+			});
+		} catch (initError) {
+			error(this, 'Failed to initialize Quick Dates plugin', { 
+				error: initError instanceof Error ? initError.message : String(initError),
+				stack: initError instanceof Error ? initError.stack : undefined
+			});
+			throw initError;
+		}
+	}
+	private registerDateCommands(): void {
+		debug(this, 'Registering date parsing command: convert selected text to date link');
 		this.addCommand({
 			id: 'parse-date-as-link',
 			name: 'Convert selected text to date link',
 			editorCallback: (editor: Editor, view: MarkdownView) => {
-				debug(this, 'parse-date-as-link', 'Command executed');
+				debug(this, 'User executed convert-to-link command');
 				return this.dateCommands.parseDateAsLink(editor, view);
 			}
 		});
 
+		debug(this, 'Registering date parsing command: convert selected text to plain text date');
 		this.addCommand({
 			id: 'parse-date-as-text',
 			name: 'Convert selected text to plain-text date',
 			editorCallback: (editor: Editor, view: MarkdownView) => {
-				debug(this, 'parse-date-as-text', 'Command executed');
+				debug(this, 'User executed convert-to-text command');
 				return this.dateCommands.parseDateAsText(editor, view);
 			}
 		});
+
+		debug(this, 'Registering bulk date parsing command: convert all dates to links');
 		this.addCommand({
 			id: 'parse-all-dates-as-links',
 			name: 'Convert all dates in note to date links',
 			editorCallback: async (editor: Editor, view: MarkdownView) => {
-				debug(this, 'parse-all-dates-as-links', 'Command executed');
+				debug(this, 'User executed convert-all-to-links command');
 				await this.dateCommands.parseAllDatesAsLinks(editor, view);
 			}
 		});
 
+		debug(this, 'Registering bulk date parsing command: convert all dates to plain text');
 		this.addCommand({
 			id: 'parse-all-dates-as-text',
 			name: 'Convert all dates in note to plain-text dates',
 			editorCallback: async (editor: Editor, view: MarkdownView) => {
-				debug(this, 'parse-all-dates-as-text', 'Command executed');
+				debug(this, 'User executed convert-all-to-text command');
 				await this.dateCommands.parseAllDatesAsText(editor, view);
 			}
 		});
 
+		debug(this, 'Registering alias-preserving date command: convert with original text as alias');
 		this.addCommand({
 			id: 'parse-date-as-link-keep-alias',
 			name: 'Convert selected text to date link (keep original text as alias)',
 			editorCallback: (editor: Editor, view: MarkdownView) => {
-				debug(this, 'parse-date-as-link-keep-alias', 'Command executed');
+				debug(this, 'User executed convert-to-link-keep-alias command');
 				return this.dateCommands.parseDateAsLinkKeepOriginalTextAlias(editor, view);
 			}
 		});
+
+		debug(this, 'Registering bulk alias-preserving date command: convert all with aliases');
 		this.addCommand({
 			id: 'parse-all-dates-as-links-keep-alias',
 			name: 'Convert all dates in note to date links (keep original text as alias)',
 			editorCallback: async (editor: Editor, view: MarkdownView) => {
-				debug(this, 'parse-all-dates-as-links-keep-alias', 'Command executed');
+				debug(this, 'User executed convert-all-to-links-keep-alias command');
 				await this.dateCommands.parseAllDatesAsLinksKeepOriginalTextAlias(editor, view);
 			}
 		});
 
+		debug(this, 'Registering daily note command: open daily note modal');
 		this.addCommand({
 			id: 'open-daily-note',
 			name: 'Open daily note',
 			callback: () => {
-				debug(this, 'open-daily-note', 'Command executed');
+				debug(this, 'User executed open-daily-note command');
 				return new OpenDailyNoteModal(this.app, this).open();
 			}
 		});
-		debug(this, 'onload', 'All commands registered successfully');
-		this.addSettingTab(new QuickDatesSettingTab(this.app, this));
-		info(this, 'onload', 'Quick Dates plugin loaded successfully');
-	}	async onSettingsChanged() {
-		debug(this, 'onSettingsChanged', 'Settings changed, reinitializing editor suggester');
+
+		debug(this, 'All command palette entries registered successfully');
+	}
+	async onSettingsChanged() {
+		debug(this, 'Processing settings change - reinitializing components with new configuration');
+		
 		try {
+			debug(this, 'Cleaning up existing editor suggester instance');
 			if (this.editorSuggester) this.editorSuggester.unload();
+			
+			debug(this, 'Creating new editor suggester with updated settings');
 			this.editorSuggester = new EditorSuggester(this);
 			this.registerEditorSuggest(this.editorSuggester);
+			registerLoggerClass(this.editorSuggester, 'EditorSuggester');
+			
+			debug(this, 'Applying updated settings to editor suggester component');
 			this.editorSuggester.updateSettings({ 
 				plainTextByDefault: this.settings.plainTextByDefault,
 				holidayLocale: this.settings.holidayLocale,
 				swapOpenNoteKeybinds: this.settings.swapOpenNoteKeybinds
-			});			debug(this, 'onSettingsChanged', 'Editor suggester settings updated');
-			
-			// Update settings in date commands
+			});
+
+			debug(this, 'Updating date commands with new settings configuration');
 			if (this.dateCommands) {
 				this.dateCommands.updateSettings(this.settings);
-				debug(this, 'onSettingsChanged', 'Date commands settings updated');
 			}
-			info(this, 'onSettingsChanged', 'Settings changed successfully applied');
-		} catch (error) {
-			error(this, 'onSettingsChanged', { error });
+			
+			info(this, 'Settings change successfully applied to all components', {
+				plainTextByDefault: this.settings.plainTextByDefault,
+				triggerPhrase: this.settings.triggerPhrase,
+				holidayLocale: this.settings.holidayLocale
+			});
+		} catch (settingsError) {
+			error(this, 'Failed to apply settings changes', { 
+				error: settingsError instanceof Error ? settingsError.message : String(settingsError),
+				stack: settingsError instanceof Error ? settingsError.stack : undefined
+			});
 		}
 	}	async loadSettings() {
-		debug(this, 'loadSettings', 'Loading settings...');
+		debug(this, 'Loading plugin settings from vault storage');
+		
 		try {
-			const loaded = (await this.loadData()) as Partial<QuickDatesSettings>;
-			this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded) as QuickDatesSettings;
-			debug(this, 'loadSettings', 'Settings loaded successfully');
-		} catch (error) {
-			error(this, 'loadSettings', { error });
-			this.settings = DEFAULT_SETTINGS;			warn(this, 'loadSettings', 'Using default settings due to load failure');
+			const savedData = await this.loadData() as Partial<QuickDatesSettings>;
+			this.settings = Object.assign({}, DEFAULT_SETTINGS, savedData) as QuickDatesSettings;
+			
+			info(this, 'Plugin settings loaded successfully', { 
+				settingsKeys: Object.keys(this.settings).length,
+				triggerPhrase: this.settings.triggerPhrase,
+				primaryFormat: this.settings.primaryFormat || 'using daily note format',
+				plainTextByDefault: this.settings.plainTextByDefault
+			});
+		} catch (loadError) {
+			error(this, 'Failed to load plugin settings from storage', { 
+				error: loadError instanceof Error ? loadError.message : String(loadError),
+				fallbackAction: 'using default settings'
+			});
+			this.settings = DEFAULT_SETTINGS;
+			warn(this, 'Using default settings due to load failure - user configuration reset');
 		}
 	}
-	
-	async saveSettings() {
-		debug(this, 'saveSettings', 'Saving settings...');
+		async saveSettings() {
+		debug(this, 'Persisting plugin settings to vault storage');
+		
 		try {
 			await this.saveData(this.settings);
-			debug(this, 'saveSettings', 'Settings saved successfully');
+			info(this, 'Plugin settings successfully saved to vault storage', { 
+				settingsKeys: Object.keys(this.settings),
+				triggerPhrase: this.settings.triggerPhrase,
+				plainTextByDefault: this.settings.plainTextByDefault
+			});
 			
-			// Apply updated settings immediately
+			debug(this, 'Applying updated settings to editor suggester component');
 			this.editorSuggester?.updateSettings({ 
 				plainTextByDefault: this.settings.plainTextByDefault,
 				holidayLocale: this.settings.holidayLocale,
 				swapOpenNoteKeybinds: this.settings.swapOpenNoteKeybinds
 			});
-			debug(this, 'saveSettings', 'Editor suggester settings updated after save');
 			
-			// Update commands if needed
+			debug(this, 'Applying updated settings to date commands component');
 			this.dateCommands?.updateSettings(this.settings);
-			debug(this, 'saveSettings', 'Date commands settings updated after save');
-		} catch (error) {
-			error(this, 'saveSettings', { error });
+		} catch (saveError) {
+			error(this, 'Failed to save plugin settings to vault storage', { 
+				error: saveError instanceof Error ? saveError.message : String(saveError),
+				settings: this.settings,
+				retryAction: 'user should try changing settings again'
+			});
+			throw saveError;
 		}
 	}
-
 	updateKeyBindings(): void {
-		debug(this, 'updateKeyBindings', 'Updating key bindings...');
+		debug(this, 'Updating key bindings configuration for editor suggester');
 		this.editorSuggester?.updateSettings({ 
 			plainTextByDefault: this.settings.plainTextByDefault,
 			holidayLocale: this.settings.holidayLocale,
 			swapOpenNoteKeybinds: this.settings.swapOpenNoteKeybinds
 		});
-		debug(this, 'updateKeyBindings', 'Key bindings updated');
+		info(this, 'Key bindings successfully updated with current settings', {
+			swapOpenNoteKeybinds: this.settings.swapOpenNoteKeybinds,
+			plainTextByDefault: this.settings.plainTextByDefault
+		});
 	}
 }
 

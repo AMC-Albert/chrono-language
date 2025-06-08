@@ -1,7 +1,7 @@
 import * as chrono from 'chrono-node';
 import Holidays from 'date-holidays';
-import { COMMON_STRINGS, DAYS_OF_THE_WEEK, MONTHS_OF_THE_YEAR, TIME_OF_DAY_PHRASES, HOLIDAY_ALIASES } from '../../constants';
-import { debug, info, warn, error } from '../../utils/obsidian-logger';
+import { COMMON_STRINGS, DAYS_OF_THE_WEEK, MONTHS_OF_THE_YEAR, TIME_OF_DAY_PHRASES, HOLIDAY_ALIASES } from '@/constants';
+import { debug, info, warn, error } from '@/utils';
 
 /**
  * Enhanced date parsing that adds additional capabilities to chrono

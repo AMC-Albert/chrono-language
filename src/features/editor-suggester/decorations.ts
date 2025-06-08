@@ -1,6 +1,6 @@
 import { StateField, StateEffect, Range, Transaction } from '@codemirror/state';
 import { EditorView, Decoration, WidgetType, DecorationSet } from '@codemirror/view';
-import { CLASSES } from '../../constants';
+import { CLASSES } from '@/constants';
 
 // Effects for adding/clearing trigger phrase decorations
 export const addTriggerDecorationEffect = StateEffect.define<{ from: number, to: number }>();

@@ -1,11 +1,10 @@
 import { getDailyNote, getDailyNoteSettings, DEFAULT_DAILY_NOTE_FORMAT } from 'obsidian-daily-notes-interface';
-import { DateParser } from './date-parser';
-import { DateFormatter, getOrCreateDailyNote } from '../../utils/helpers';
-import { CLASSES } from '../../constants';
-import { InsertMode, ContentFormat } from '../../types';
+import { DateParser } from './DateParser';
+import { DateFormatter, getOrCreateDailyNote, debug, info, warn, error } from '@/utils';
+import { CLASSES } from '@/constants';
+import { InsertMode, ContentFormat } from '@/types';
 import { TFile, moment, Platform } from 'obsidian';
-import { SuggestionProvider } from './index';
-import { debug, info, warn, error } from '../../utils/obsidian-logger';
+import { SuggestionProvider } from './SuggestionProvider';
 
 // helper to highlight matching text
 function highlightMatches(el: HTMLElement, text: string, regex: RegExp): void {
@@ -32,7 +31,7 @@ export function renderSuggestionContent(
 	context?: any
 ) {
 	// Log rendering of suggestion
-	debug(this, `Rendering item: ${item}`);
+	debug(provider, `Rendering item: ${item}`);
 	
 	// Derive the current query from passed context (highest priority)
 	const query = context?.context?.query ?? context?.query ?? '';
@@ -44,17 +43,16 @@ export function renderSuggestionContent(
 	});
 	if (DateParser.inputHasTimeComponent(item, provider)) {
 		container.addClass(CLASSES.timeRelevantSuggestion);
-		debug(this, `Suggestion has time component: ${item}`);
+		debug(provider, `Suggestion has time component: ${item}`);
 	}
 	// Prepare suggestion text with highlighted query matches
 	const trimmedQuery = query.trim();
 	const suggestionSpan = document.createElement('span');
-	suggestionSpan.className = CLASSES.suggestionText;
-	if (trimmedQuery) {
+	suggestionSpan.className = CLASSES.suggestionText;	if (trimmedQuery) {
 		const escaped = trimmedQuery.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
 		const regex = new RegExp(escaped, 'gi');
 		highlightMatches(suggestionSpan, item, regex);
-		debug(this, `Highlighted query matches for: ${item}`);
+		debug(provider, `Highlighted query matches for: ${item}`);
 	} else {
 		suggestionSpan.textContent = item;
 	}
@@ -73,7 +71,7 @@ export function updatePreviewContent(
 			container.hasAttribute('data-updating')) return;
 			
 		// Log preview update
-		debug(this, `Updating preview for: ${item}`);
+		debug(provider, `Updating preview for: ${item}`);
 
 		container.setAttribute('data-updating', 'true');
 		// Remove all existing preview elements
@@ -82,7 +80,7 @@ export function updatePreviewContent(
 		const { insertMode, contentFormat } = provider.keyboardHandler.getEffectiveInsertModeAndFormat();
 		const parsedDate = DateParser.parseDate(item, provider);
 		const momentDate = parsedDate ? moment(parsedDate) : moment();
-		debug(this, `Parsed date for: ${item} result: ${parsedDate?.toISOString() || 'null'}`);
+		debug(provider, `Parsed date for: ${item} result: ${parsedDate?.toISOString() || 'null'}`);
 
 		// Use cached daily notes from provider instead of scanning vault on every keystroke
 		provider.getDailyNotes().then(allNotes => {
@@ -90,13 +88,13 @@ export function updatePreviewContent(
 			container.removeAttribute('data-updating');
 		}).catch((err) => {
 			const errorMsg = err instanceof Error ? err.message : String(err);
-			error(this, `Error getting cached daily notes: ${errorMsg}`);
+			error(provider, `Error getting cached daily notes: ${errorMsg}`);
 			renderPreview(provider, container, item, parsedDate, momentDate, insertMode, contentFormat, null);
 			container.removeAttribute('data-updating');
 		});
 	} catch (e) {
 		const errorMsg = e instanceof Error ? e.message : String(e);
-		error(this, `Error updating preview content: ${errorMsg}`);
+		error(provider, `Error updating preview content: ${errorMsg}`);
 		container?.removeAttribute?.('data-updating');
 	}
 }

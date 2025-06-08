@@ -1,11 +1,11 @@
 import { App, normalizePath, Notice, TFile, TFolder, moment } from 'obsidian';
 import { Link, ObsidianSettings, FileSystem } from 'obsidian-dev-utils/obsidian';
 import { getDailyNoteSettings, getDailyNote, getAllDailyNotes, createDailyNote, DEFAULT_DAILY_NOTE_FORMAT } from 'obsidian-daily-notes-interface';
-import { QuickDatesSettings } from '../settings';
-import { DateParser } from '../features/suggestion-provider/date-parser';
-import { ERRORS } from '../constants';
-import { ContentFormat } from '../types';
-import { DEFAULT_SETTINGS } from '../settings';
+import { QuickDatesSettings } from '@/settings';
+import { DateParser } from '@/features/suggestion-provider/DateParser';
+import { ERRORS } from '@/constants';
+import { ContentFormat } from '@/types';
+import { DEFAULT_SETTINGS } from '@/settings';
 import { debug, info, warn, error } from './obsidian-logger';
 
 /**

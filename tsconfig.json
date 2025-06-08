@@ -14,7 +14,15 @@
     "lib": [
       "DOM",
       "ES2017"
-    ]
+    ],
+    "paths": {
+      "@/*": ["src/*"],
+      "@/settings": ["src/settings/index.ts"],
+      "@/features": ["src/features/index.ts"],
+      "@/utils": ["src/utils/index.ts"],
+      "@/constants": ["src/constants/index.ts"],
+      "@/types": ["src/types/index.ts"]
+    }
   },
   "include": [
     "src/**/*.ts"
