@@ -1,5 +1,5 @@
 import { debug, info, warn } from '@/utils';
-import type { IResourceManager, ServiceInterface } from './types';
+import type { IResourceManager, ServiceInterface, Disposable } from './types';
 
 /**
  * Centralized resource management for automatic cleanup and memory management
@@ -7,7 +7,7 @@ import type { IResourceManager, ServiceInterface } from './types';
  */
 export class ResourceManager implements IResourceManager, ServiceInterface {
 	public readonly name = 'ResourceManager';
-	private resources: Set<{ dispose(): void | Promise<void> }> = new Set();
+	private resources: Set<Disposable> = new Set();
 	private disposed = false;
 
 	constructor() {
@@ -17,11 +17,11 @@ export class ResourceManager implements IResourceManager, ServiceInterface {
 	async initialize(): Promise<void> {
 		debug(this, 'Resource manager initialization completed');
 	}
-
+    
 	/**
 	 * Register a resource for automatic cleanup
 	 */
-	register(resource: { dispose(): void | Promise<void> }): void {
+	register(resource: Disposable): void {
 		if (this.disposed) {
 			warn(this, 'Cannot register resource after disposal');
 			return;
@@ -34,7 +34,7 @@ export class ResourceManager implements IResourceManager, ServiceInterface {
 	/**
 	 * Unregister a resource from automatic cleanup
 	 */
-	unregister(resource: { dispose(): void | Promise<void> }): void {
+	unregister(resource: Disposable): void {
 		this.resources.delete(resource);
 		debug(this, `Resource unregistered from cleanup management (remaining: ${this.resources.size})`);
 	}

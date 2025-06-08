@@ -1,8 +1,10 @@
 import { debug, info, warn, error } from '@/utils';
 import type { ServiceInterface } from './types';
+import type { QuickDatesSettings } from '@/settings';
 import { EventBus } from './EventBus';
 import { ResourceManager } from './ResourceManager';
 import { ConfigurationService } from './ConfigurationService';
+import { Plugin } from 'obsidian';
 
 /**
  * Dependency injection container for plugin services
@@ -18,7 +20,7 @@ export class ServiceContainer {
 	public readonly resourceManager: ResourceManager;
 	public readonly configuration: ConfigurationService;
 
-	constructor(plugin: any, initialSettings: any) {
+	constructor(plugin: Plugin, initialSettings: QuickDatesSettings) {
 		debug(this, 'Initializing service container for dependency injection');
 
 		// Initialize core services
@@ -52,22 +54,22 @@ export class ServiceContainer {
 
 		this.services.set(name, service);
 		debug(this, `Service registered: ${name} (total: ${this.services.size})`);
-
 		// Auto-register with resource manager if service has dispose method
 		if ('dispose' in service && typeof service.dispose === 'function') {
-			this.resourceManager.register(service as any);
+			this.resourceManager.register(service);
 		}
 	}
-
 	/**
 	 * Get a service from the container
 	 */
 	get<T extends ServiceInterface>(name: string): T | undefined {
-		const service = this.services.get(name) as T;
+		const service = this.services.get(name);
 		if (!service) {
 			debug(this, `Service '${name}' not found in container`);
+			return undefined;
 		}
-		return service;
+		// Type guard: services should always extend ServiceInterface
+		return service as T;
 	}
 
 	/**
@@ -85,10 +87,9 @@ export class ServiceContainer {
 		if (service) {
 			this.services.delete(name);
 			debug(this, `Service unregistered: ${name} (remaining: ${this.services.size})`);
-			
-			// Remove from resource manager if it was auto-registered
+            // Remove from resource manager if it was auto-registered
 			if ('dispose' in service && typeof service.dispose === 'function') {
-				this.resourceManager.unregister(service as any);
+				this.resourceManager.unregister(service);
 			}
 			return true;
 		}

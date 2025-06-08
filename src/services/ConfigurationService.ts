@@ -3,6 +3,7 @@ import type { QuickDatesSettings } from '@/settings';
 import { DEFAULT_SETTINGS } from '@/settings';
 import type { IConfigurationService, ConfigurationChangeEvent, ServiceInterface } from './types';
 import { EventBus } from './EventBus';
+import { Plugin } from 'obsidian';
 
 /**
  * Centralized configuration management with event-driven updates
@@ -11,10 +12,9 @@ import { EventBus } from './EventBus';
 export class ConfigurationService implements IConfigurationService, ServiceInterface {
 	public readonly name = 'ConfigurationService';
 	private settings: QuickDatesSettings;
-	private eventBus: EventBus;
-	private plugin: any; // Reference to main plugin for persistence
+	private eventBus: EventBus;	private plugin: Plugin; // Reference to main plugin for persistence
 
-	constructor(initialSettings: QuickDatesSettings, plugin: any, eventBus: EventBus) {
+	constructor(initialSettings: QuickDatesSettings, plugin: Plugin, eventBus: EventBus) {
 		this.settings = { ...initialSettings };
 		this.plugin = plugin;
 		this.eventBus = eventBus;
@@ -54,11 +54,10 @@ export class ConfigurationService implements IConfigurationService, ServiceInter
 		debug(this, `Configuration value retrieved: ${String(key)} = ${JSON.stringify(value)}`);
 		return value;
 	}
-
 	/**
 	 * Set a configuration value and persist it
 	 */
-	async set<T>(key: keyof QuickDatesSettings, value: T): Promise<void> {
+	async set<K extends keyof QuickDatesSettings>(key: K, value: QuickDatesSettings[K]): Promise<void> {
 		const oldValue = this.settings[key];
 		
 		if (oldValue === value) {
@@ -70,8 +69,8 @@ export class ConfigurationService implements IConfigurationService, ServiceInter
 			oldValue: JSON.stringify(oldValue),
 			newValue: JSON.stringify(value)
 		});
-
-		(this.settings as any)[key] = value;
+		// Type-safe assignment using computed property
+		(this.settings as Record<keyof QuickDatesSettings, unknown>)[key] = value;
 
 		try {
 			// Persist the settings through the plugin
@@ -90,8 +89,8 @@ export class ConfigurationService implements IConfigurationService, ServiceInter
 
 			info(this, `Configuration updated and persisted: ${String(key)}`);
 		} catch (error) {
-			// Revert the change if persistence failed
-			(this.settings as any)[key] = oldValue;
+			// Revert the change if persistence failed - type-safe assignment
+			(this.settings as Record<keyof QuickDatesSettings, unknown>)[key] = oldValue;
 			warn(this, `Failed to persist configuration change for ${String(key)}:`, error);
 			throw error;
 		}
@@ -111,14 +110,14 @@ export class ConfigurationService implements IConfigurationService, ServiceInter
 	async updateBatch(updates: Partial<QuickDatesSettings>): Promise<void> {
 		const changes: ConfigurationChangeEvent[] = [];
 		const oldSettings = { ...this.settings };
-
 		// Apply all changes to memory first
 		for (const [key, value] of Object.entries(updates)) {
 			const typedKey = key as keyof QuickDatesSettings;
 			const oldValue = this.settings[typedKey];
 			
 			if (oldValue !== value) {
-				(this.settings as any)[typedKey] = value;
+				// Type-safe assignment using computed property access
+				(this.settings as Record<keyof QuickDatesSettings, unknown>)[typedKey] = value;
 				changes.push({
 					key: typedKey,
 					oldValue,

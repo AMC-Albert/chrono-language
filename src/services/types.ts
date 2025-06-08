@@ -4,23 +4,27 @@ export interface ServiceInterface {
 	dispose(): Promise<void> | void;
 }
 
+export interface Disposable {
+	dispose(): void | Promise<void>;
+}
+
 export interface IConfigurationService {
 	get<T>(key: keyof QuickDatesSettings): T;
-	set<T>(key: keyof QuickDatesSettings, value: T): Promise<void>;
+	set<K extends keyof QuickDatesSettings>(key: K, value: QuickDatesSettings[K]): Promise<void>;
 	getAll(): QuickDatesSettings;
 	subscribe(callback: (event: ConfigurationChangeEvent) => void): () => void;
 }
 
 export interface IResourceManager {
-	register(resource: { dispose(): void | Promise<void> }): void;
-	unregister(resource: { dispose(): void | Promise<void> }): void;
+	register(resource: Disposable): void;
+	unregister(resource: Disposable): void;
 	dispose(): Promise<void>;
 }
 
-export interface ConfigurationChangeEvent {
+export interface ConfigurationChangeEvent<T = unknown> {
 	key: keyof QuickDatesSettings;
-	oldValue: any;
-	newValue: any;
+	oldValue: T;
+	newValue: T;
 	source: string;
 }
 

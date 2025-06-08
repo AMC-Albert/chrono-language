@@ -1,7 +1,14 @@
 import { debug, info, warn, error } from '@/utils';
-import type { ServiceInterface } from './types';
+import type { ServiceInterface, Disposable } from './types';
 import { EventBus } from './EventBus';
 import { ResourceManager } from './ResourceManager';
+
+/**
+ * Type guard to check if a component implements the Disposable interface
+ */
+function isDisposable(obj: any): obj is Disposable {
+	return obj && typeof obj.dispose === 'function';
+}
 
 /**
  * Component lifecycle states
@@ -218,10 +225,9 @@ export class LifecycleManager implements ServiceInterface {
 		if (typeof entry.component.initialize === 'function') {
 			await entry.component.initialize();
 		}
-
-		// Register with resource manager if component supports disposal
-		if (typeof entry.component.dispose === 'function') {
-			this.resourceManager.register(entry.component as any);
+        // Register with resource manager if component supports disposal
+		if (isDisposable(entry.component)) {
+			this.resourceManager.register(entry.component);
 		}
 	}
 
