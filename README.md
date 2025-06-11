@@ -34,7 +34,7 @@ If a setting or feature doesn't make sense, its description is confusing, or jus
 
 ## Debugging
 
-In Developer Console (`Ctrl+Shift+I`), run `window.DEBUG.enable('quick-dates')`
+In Developer Console (`Ctrl+Shift+I`), run `window.DEBUG['quick-dates'].enable()`
 
 To learn more, see [obsidian-logger](https://github.com/AMC-Albert/obsidian-logger).
 
