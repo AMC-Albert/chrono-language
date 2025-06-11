@@ -1,7 +1,7 @@
 import * as chrono from 'chrono-node';
 import Holidays from 'date-holidays';
 import { COMMON_STRINGS, DAYS_OF_THE_WEEK, MONTHS_OF_THE_YEAR, TIME_OF_DAY_PHRASES, HOLIDAY_ALIASES } from '@/constants';
-import { debug, info, warn, error } from '@/utils';
+import { loggerDebug, loggerInfo, loggerWarn, loggerError } from '@/utils';
 
 /**
  * Enhanced date parsing that adds additional capabilities to chrono
@@ -249,9 +249,9 @@ export class DateParser {
 	 */
 	static initHolidays(locale: string = 'US', context?: any): void {
 		const logContext = context || 'DateParser';
-		debug(logContext, 'initHolidays', { locale });
+		loggerDebug(logContext, 'initHolidays', { locale });
 		if (!locale) {
-			warn(logContext, 'initHolidays: empty locale, clearing holidays');
+			loggerWarn(logContext, 'initHolidays: empty locale, clearing holidays');
 			this.holidaysInstance = null;
 			this.holidayCache.clear();
 			this.currentLocale = '';
@@ -261,12 +261,12 @@ export class DateParser {
 			this.holidaysInstance = new Holidays(locale);
 			this.currentLocale = locale;
 			this.refreshHolidayCache();
-			info(logContext, `holidays initialized for locale: ${locale}, cache size: ${this.holidayCache.size}`);
+			loggerInfo(logContext, `holidays initialized for locale: ${locale}, cache size: ${this.holidayCache.size}`);
 		} catch (error) {
-			error(logContext, 'failed to initialize holidays for locale', { locale, error });
+			loggerError(logContext, 'failed to initialize holidays for locale', { locale, error });
 			// Fallback to US if specified locale fails
 			if (locale !== 'US') {
-				warn(logContext, 'falling back to US locale');
+				loggerWarn(logContext, 'falling back to US locale');
 				this.holidaysInstance = new Holidays('US');
 				this.currentLocale = 'US';
 				this.refreshHolidayCache();
@@ -285,7 +285,7 @@ export class DateParser {
 		this.holidayCache.clear();
 		const currentYear = this.currentYear;
 		
-		debug('DateParser', 'refreshHolidayCache', { currentYear, locale: this.currentLocale });
+		loggerDebug('DateParser', 'refreshHolidayCache', { currentYear, locale: this.currentLocale });
 		
 		// Process holidays for current and next year in one loop
 		this.processHolidaysForYears([currentYear, currentYear + 1]);
@@ -293,7 +293,7 @@ export class DateParser {
 		// Add common holiday aliases
 		this.addHolidayAliases();
 		
-		info('DateParser', `holiday cache refreshed, total entries: ${this.holidayCache.size}`);
+		loggerInfo('DateParser', `holiday cache refreshed, total entries: ${this.holidayCache.size}`);
 	}
 	
 	/**
@@ -347,17 +347,24 @@ export class DateParser {
 	/**
 	 * Set or update the locale for holiday detection
 	 * @param locale Locale code (e.g., 'US', 'GB', 'DE')
-	 */
-	static setLocale(locale: string, context?: any): void {
+	 */	static setLocale(locale: string, context?: any): void {
 		if (!locale) {
 			this.holidaysInstance = null;
 			this.holidayCache.clear();
 			this.currentLocale = '';
 			return;
 		}
-		// Always re-init holidays to ensure cache is refreshed,
-		// even if the locale string hasn't changed.
-		this.initHolidays(locale, context);
+		// Only re-init holidays if the locale has actually changed
+		if (this.currentLocale !== locale) {
+			this.initHolidays(locale, context);
+		}
+	}
+
+	/**
+	 * Get the current locale
+	 */
+	static getCurrentLocale(): string {
+		return this.currentLocale;
 	}
 
 	/**
@@ -485,19 +492,19 @@ export class DateParser {
 	 */
 	static parseDate(text: string, context?: any): Date | null {
 		const logContext = typeof context === 'string' ? context : 'DateParser';
-		debug(logContext, `Parsing text: ${text}`);
-		
+		loggerDebug(logContext, `Parsing text: ${text}`);
+
 		const trimmed = text.trim();
 		// Year-only input should map to January 1st of that year
 		if (/^\d{4}$/.test(trimmed)) {
 			const yearDate = new Date(Number(trimmed), 0, 1);
-			debug(logContext, `Year-only input`, { trimmed, result: yearDate });
+			loggerDebug(logContext, `Year-only input`, { trimmed, result: yearDate });
 			return yearDate;
 		}
 		
 		const { holidayDate, modifiedText } = this.handleParsing(text);
 		const result = holidayDate || chrono.parseDate(modifiedText);
-		debug(logContext, `parseDate result`, { text, result: result?.toISOString() || 'null' });
+		loggerDebug(logContext, `parseDate result`, { text, result: result?.toISOString() || 'null' });
 
 		return result;
 	}
@@ -510,20 +517,20 @@ export class DateParser {
 	 */
 	static getPatternSuggestions(input: string, context?: any): string[] {
 		const logContext = context || 'DateParser';
-		debug(logContext, 'getPatternSuggestions', { input });
-		
+		loggerDebug(logContext, 'getPatternSuggestions', { input });
+
 		const trimmedInputForMatching = input.trim().toLowerCase(); // Use lower for matching patterns
 		const suggestions = new Set<string>();
 
 		if (!input.trim()) { // Use original input for this check
-			debug(logContext, 'getPatternSuggestions: empty input, returning empty array');
+			loggerDebug(logContext, 'getPatternSuggestions: empty input, returning empty array');
 			return [];
 		}
 
 		const sortedGenerators = [...this.suggestionGenerators]
 			.sort((a, b) => (b.priority || 0) - (a.priority || 0));
 
-		debug(logContext, 'Processing suggestion generators', { 
+		loggerDebug(logContext, 'Processing suggestion generators', { 
 			generatorCount: sortedGenerators.length,
 			trimmedInput: trimmedInputForMatching 
 		});
@@ -548,7 +555,7 @@ export class DateParser {
 				if (generator.priority === 40 && (!this.holidaysInstance || !this.currentLocale)) continue;
 				
 				if (generatedItems.length > 0) {
-					debug(logContext, 'Generator produced suggestions', {
+					loggerDebug(logContext, 'Generator produced suggestions', {
 						priority: generator.priority,
 						suggestions: generatedItems
 					});
@@ -565,7 +572,7 @@ export class DateParser {
 		}
 		
 		const result = Array.from(suggestions);
-		debug(logContext, 'getPatternSuggestions result', { 
+		loggerDebug(logContext, 'getPatternSuggestions result', { 
 			input, 
 			suggestionCount: result.length,
 			suggestions: result.slice(0, 5) // Log first 5 for brevity

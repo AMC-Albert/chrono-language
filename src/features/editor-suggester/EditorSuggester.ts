@@ -4,10 +4,10 @@ import { StateEffect } from '@codemirror/state';
 import QuickDates from '../../main';
 import { addTriggerDecorationEffect, addSpacerWidgetEffect, safelyClearDecorations } from './decorations';
 import { SuggestionProvider } from '../suggestion-provider';
-import { KeyboardHandler, debug, info, warn, error, registerLoggerClass } from '@/utils';
+import { KeyboardHandler, loggerDebug, loggerInfo, loggerWarn, loggerError, registerLoggerClass } from '@/utils';
 import { KEYS, CLASSES, getInstructionDefinitions, MODIFIER_KEY } from '@/constants';
 import { parseTriggerContext } from './trigger-parser';
-import { ServiceContainer } from '@/services';
+import { DailyNotesService } from '@/services';
 
 /**
  * A suggester for the editor that provides date parsing suggestions
@@ -16,7 +16,7 @@ export class EditorSuggester extends EditorSuggest<string> {
 	plugin: QuickDates;
 	private suggester: SuggestionProvider | null = null;
 	private keyboardHandler: KeyboardHandler;
-	private serviceContainer?: ServiceContainer;
+	private dailyNotesService: DailyNotesService;
 
 	// For tracking state after a suggestion is selected to prevent immediate re-trigger on an earlier phrase
 	private lastReplacedTriggerStart: { line: number, ch: number } | null = null;
@@ -31,42 +31,44 @@ export class EditorSuggester extends EditorSuggest<string> {
 
 	// Handler references for daily note keybinds
 	private openDailySameTabHandler: any = null;
-	private openDailyNewTabHandler: any = null;
-	constructor(plugin: QuickDates, serviceContainer?: ServiceContainer) {
+	private openDailyNewTabHandler: any = null;	constructor(plugin: QuickDates, dailyNotesService: DailyNotesService) {
 		super(plugin.app);
 		this.plugin = plugin;
-		this.serviceContainer = serviceContainer;
+		this.dailyNotesService = dailyNotesService;
 		registerLoggerClass(this, 'EditorSuggester');
 		
-		debug(this, 'Initializing editor suggester component for date parsing');
+		loggerDebug(this, 'Initializing editor suggester component for date parsing');
 		this.initComponents();
 		
-		info(this, 'Editor suggester successfully initialized and ready for user input', {
+		loggerInfo(this, 'Editor suggester successfully initialized and ready for user input', {
 			triggerPhrase: plugin.settings.triggerPhrase,
 			plainTextByDefault: plugin.settings.plainTextByDefault,
-			swapOpenNoteKeybinds: plugin.settings.swapOpenNoteKeybinds,
-			serviceLayerEnabled: !!serviceContainer
+			swapOpenNoteKeybinds: plugin.settings.swapOpenNoteKeybinds
 		});
 	}
-
 	private initComponents() {
-		debug(this, 'Setting up keyboard handlers and suggestion provider components');
+		loggerDebug(this, 'Setting up keyboard handlers and suggestion provider components');
 		
 		this.keyboardHandler = new KeyboardHandler(this.scope, this.plugin.settings.plainTextByDefault);
-		this.suggester = new SuggestionProvider(this.app, this.plugin);
+				// Get DailyNotesService
+		if (!this.dailyNotesService) {
+			throw new Error('DailyNotesService not available');
+		}
+		
+		this.suggester = new SuggestionProvider(this.app, this.plugin, this.dailyNotesService);
 		this.suggester.setEditorSuggesterRef(this);
 
-		debug(this, 'Registering keyboard event handlers for suggester interaction');
+		loggerDebug(this, 'Registering keyboard event handlers for suggester interaction');
 		this.keyboardHandler.registerEnterKeyHandlers(this.handleSelectionKey);
 		this.registerDailyNoteKeybinds();
 		this.keyboardHandler.registerBackspaceKeyHandler(this.handleBackspaceKey);
 		this.keyboardHandler.registerTabKeyHandler(this.handleTabKey);
 		
-		debug(this, 'Setting up key state change listeners for dynamic instruction updates');
+		loggerDebug(this, 'Setting up key state change listeners for dynamic instruction updates');
 		this.keyboardHandler.addKeyStateChangeListener(() => this.updateInstructions());
 		this.updateInstructions();
 		
-		debug(this, 'Editor suggester component initialization completed');
+		loggerDebug(this, 'Editor suggester component initialization completed');
 	}
 
 	/** Handle Shift+Space to open daily note in same tab */
@@ -308,7 +310,7 @@ export class EditorSuggester extends EditorSuggest<string> {
 		}
 	}
 		onTrigger(cursor: EditorPosition, editor: Editor): EditorSuggestContext | null {
-		debug(this, 'Evaluating trigger conditions at cursor position', { 
+		loggerDebug(this, 'Evaluating trigger conditions at cursor position', { 
 			line: cursor.line, 
 			ch: cursor.ch 
 		});
@@ -317,14 +319,14 @@ export class EditorSuggester extends EditorSuggest<string> {
 		const triggerPhrase = this.plugin.settings.triggerPhrase;
 		
 		if (!triggerPhrase) {
-			warn(this, 'Editor suggester disabled - no trigger phrase configured in settings', {
+			loggerWarn(this, 'Editor suggester disabled - no trigger phrase configured in settings', {
 				settingsPath: 'Settings > Editor suggester > Trigger phrase'
 			});
 			this.firstSpaceBlocked = false;
 			return null;
 		}
 		
-		debug(this, 'Analyzing text context for trigger phrase match', { 
+		loggerDebug(this, 'Analyzing text context for trigger phrase match', { 
 			triggerPhrase,
 			triggerHappy: this.plugin.settings.triggerHappy
 		});
@@ -343,12 +345,12 @@ export class EditorSuggester extends EditorSuggest<string> {
 		this.lastInsertionEnd = null;
 		
 		if (!result) {
-			debug(this, 'No valid trigger context detected at current position');
+			loggerDebug(this, 'No valid trigger context detected at current position');
 			this.firstSpaceBlocked = false;
 			return null;
 		}
 		
-		debug(this, 'Valid trigger context detected - preparing suggestion interface', { 
+		loggerDebug(this, 'Valid trigger context detected - preparing suggestion interface', { 
 			startPosition: result.start, 
 			endPosition: result.end, 
 			currentQuery: result.query,
@@ -360,7 +362,7 @@ export class EditorSuggester extends EditorSuggest<string> {
 		
 		const activeFile = this.app.workspace.getActiveFile();
 		if (!activeFile) {
-			warn(this, 'Cannot activate suggester - no active file in workspace', {
+			loggerWarn(this, 'Cannot activate suggester - no active file in workspace', {
 				workspace: 'no file currently open for editing'
 			});
 			this.firstSpaceBlocked = false;
@@ -369,7 +371,7 @@ export class EditorSuggester extends EditorSuggest<string> {
 		
 		this.cleanupEnd = { line: result.start.line, ch: result.start.ch + triggerPhrase.length };
 		
-		info(this, 'Creating suggestion context for date parsing interface', {
+		loggerInfo(this, 'Creating suggestion context for date parsing interface', {
 			activeFile: activeFile.path,
 			triggerDetected: triggerPhrase,
 			queryLength: result.query.length
@@ -400,19 +402,19 @@ export class EditorSuggester extends EditorSuggest<string> {
 	}
 
 	selectSuggestion(item: string, event: KeyboardEvent | MouseEvent): void {
-		debug(this, 'selectSuggestion called with item:', item);
+		loggerDebug(this, 'selectSuggestion called with item:', item);
 		this.suggestionChosen = true;
 		if (!this.context || !this.suggester) {
-			error(this, 'No context or suggester available for selection');
+			loggerError(this, 'No context or suggester available for selection');
 			return;
 		}
 
 		const { editor, start, end, file } = this.context; // 'start' is trigger start, 'end' is query end
-		debug(this, 'Selection context:', { start, end, file: file?.name });
+		loggerDebug(this, 'Selection context:', { start, end, file: file?.name });
 
 		// Calculate finalText first, as its generation is independent of the removal timing
 		const { insertMode, contentFormat } = this.keyboardHandler.getEffectiveInsertModeAndFormat(event as KeyboardEvent);
-		debug(this, 'Insert mode and format:', { insertMode, contentFormat });
+		loggerDebug(this, 'Insert mode and format:', { insertMode, contentFormat });
 
 		const finalText = this.suggester.getFinalInsertText(
 			item,
@@ -422,7 +424,7 @@ export class EditorSuggester extends EditorSuggest<string> {
 			file, // Pass the active TFile
 			this.app // Pass the App instance
 		);
-		debug(this, 'Generated final text:', finalText);
+		loggerDebug(this, 'Generated final text:', finalText);
 
 		// Store the original start position of the trigger phrase. This is where the new text will be inserted.
 		const originalTriggerStartPos = { line: start.line, ch: start.ch };
@@ -430,13 +432,13 @@ export class EditorSuggester extends EditorSuggest<string> {
 		// Step 1: Remove the trigger phrase and any query text.
 		// The range (start, end) from the context covers the trigger phrase and the query.
 		editor.replaceRange('', start, end);
-		debug(this, 'Removed trigger phrase and query');
+		loggerDebug(this, 'Removed trigger phrase and query');
 
 		// Step 2: Insert the final text at the original start position of the trigger phrase.
 		// After the first editor.replaceRange, the cursor is effectively at originalTriggerStartPos.
 		// We insert the finalText there, so the range for this replacement is (originalTriggerStartPos, originalTriggerStartPos).
 		editor.replaceRange(finalText, originalTriggerStartPos, originalTriggerStartPos);
-		info(this, 'Successfully inserted suggestion:', finalText);
+		loggerInfo(this, 'Successfully inserted suggestion:', finalText);
 
 		// Update state for preventing re-trigger. This should be based on the original trigger start
 		// and the length of the newly inserted text.

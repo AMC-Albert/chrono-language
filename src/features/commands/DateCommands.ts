@@ -1,11 +1,11 @@
 import { Editor, MarkdownView, Notice, moment } from 'obsidian';
 import { DateParser } from '../suggestion-provider';
-import { DateFormatter, createDailyNoteLink, debug, info, warn, error, registerLoggerClass } from '@/utils';
+import { DateFormatter, loggerDebug, loggerInfo, loggerWarn, loggerError, registerLoggerClass } from '@/utils';
+import { DailyNotesService } from '@/services';
 import { ContentFormat } from '@/types';
 import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
 import { QuickDatesSettings } from '@/settings';
 import { TextSearcher } from './TextSearcher';
-import { ServiceContainer, EventBus } from '@/services';
 import * as chrono from 'chrono-node';
 
 // Define helper types for the parse info result
@@ -48,30 +48,19 @@ function stripFormattingWithMap(line: string): { text: string; map: number[] } {
 export class DateCommands {
 	private app: any;
 	private settings: QuickDatesSettings;
-	private serviceContainer?: ServiceContainer;
-
-	constructor(app: any, settings: QuickDatesSettings, serviceContainer?: ServiceContainer) {
+	private dailyNotesService: DailyNotesService;
+	constructor(app: any, settings: QuickDatesSettings, dailyNotesService: DailyNotesService) {
 		this.app = app;
 		this.settings = settings;
-		this.serviceContainer = serviceContainer;
+		this.dailyNotesService = dailyNotesService;
 		registerLoggerClass(this, 'DateCommands');
-		// Set up event listener for settings changes if service container is available
-		if (this.serviceContainer) {
-			const eventBus = this.serviceContainer.get('eventBus') as EventBus;
-			if (eventBus && eventBus.on) {
-				eventBus.on('settings:changed', (newSettings: QuickDatesSettings) => {
-					this.updateSettings(newSettings);
-				});
-			}
-		}
 		
-		info(this, 'DateCommands component initialized with configuration', {
+		loggerInfo(this, 'DateCommands component initialized with configuration', {
 			primaryFormat: settings.primaryFormat || 'using daily note format',
 			alternateFormat: settings.alternateFormat,
 			plainTextByDefault: settings.plainTextByDefault,
 			timeOnly: settings.timeOnly,
-			timeFormat: settings.timeFormat || 'none configured',
-			serviceLayerEnabled: !!serviceContainer
+			timeFormat: settings.timeFormat || 'none configured'
 		});
 	}
 
@@ -79,7 +68,7 @@ export class DateCommands {
 	 * Updates the plugin settings reference and logs configuration changes
 	 */
 	updateSettings(settings: QuickDatesSettings): void {
-		debug(this, 'Updating date commands settings configuration', {
+		loggerDebug(this, 'Updating date commands settings configuration', {
 			oldPrimaryFormat: this.settings.primaryFormat,
 			newPrimaryFormat: settings.primaryFormat,
 			oldPlainTextByDefault: this.settings.plainTextByDefault,
@@ -89,7 +78,7 @@ export class DateCommands {
 		
 		this.settings = settings;
 		
-		info(this, 'Date commands settings successfully updated', {
+		loggerInfo(this, 'Date commands settings successfully updated', {
 			primaryFormat: settings.primaryFormat || 'using daily note format',
 			plainTextByDefault: settings.plainTextByDefault,
 			timeOnly: settings.timeOnly
@@ -102,6 +91,12 @@ export class DateCommands {
 	 */
 	private getWordAtCursor(editor: Editor): { word: string, from: number, to: number } | null {
 		return TextSearcher.getWordAtCursor(editor);
+	}
+	/**
+	 * Gets the DailyNotesService 
+	 */
+	private getDailyNotesService(): DailyNotesService {
+		return this.dailyNotesService;
 	}
 
 	private getInitialTextAndParseInfo(editor: Editor, commandContext: string): DateCommandParseSuccess | DateCommandParseError {
@@ -140,11 +135,11 @@ export class DateCommands {
 	 * Creates Obsidian-style wikilinks pointing to daily notes
 	 */
 	parseDateAsLink(editor: Editor, view: MarkdownView): void {
-		debug(this, 'Processing user request to convert date text to daily note link');
+		loggerDebug(this, 'Processing user request to convert date text to daily note link');
 		const parseInfo = this.getInitialTextAndParseInfo(editor, 'converting to link');
 
 		if ('errorNotice' in parseInfo) {
-			warn(this, 'Date parsing failed for link conversion', { 
+			loggerWarn(this, 'Date parsing failed for link conversion', { 
 				reason: parseInfo.errorNotice,
 				context: parseInfo.textToProcessContext 
 			});
@@ -153,7 +148,7 @@ export class DateCommands {
 		}
 
 		const { textToProcess, parsedDate, from, to } = parseInfo;
-		debug(this, 'Successfully parsed date text for link conversion', {
+		loggerDebug(this, 'Successfully parsed date text for link conversion', {
 			originalText: textToProcess,
 			parsedDate: parsedDate.toISOString(),
 			selectionBounds: from !== null && to !== null ? { from, to } : 'using selection',
@@ -161,23 +156,22 @@ export class DateCommands {
 		});
 
 		if (!view.file) {
-			error(this, 'Cannot create daily note link - active file not saved to vault', {
+			loggerError(this, 'Cannot create daily note link - active file not saved to vault', {
 				hasActiveView: !!view,
 				fileStatus: 'unsaved'
 			});
 			new Notice('Cannot create link: file not saved');
 			return;
 		}
-
-		debug(this, 'Generating daily note link from parsed date');
-		const link = createDailyNoteLink(
-			this.app,
+		loggerDebug(this, 'Generating daily note link from parsed date');
+		const dailyNotesService = this.getDailyNotesService();
+		const link = dailyNotesService.createDailyNoteLink(
 			this.settings,
 			view.file,
 			textToProcess
 		);
 
-		debug(this, 'Replacing original text with generated daily note link', {
+		loggerDebug(this, 'Replacing original text with generated daily note link', {
 			originalText: textToProcess,
 			generatedLink: link,
 			linkLength: link.length
@@ -187,7 +181,7 @@ export class DateCommands {
 			const cursor = editor.getCursor();
 			editor.replaceRange(link, { line: cursor.line, ch: from }, { line: cursor.line, ch: to });
 			
-			debug(this, 'Adjusting cursor position after link replacement');
+			loggerDebug(this, 'Adjusting cursor position after link replacement');
 			if (cursor.ch === from) {
 				editor.setCursor({ line: cursor.line, ch: from });
 			} else {
@@ -197,7 +191,7 @@ export class DateCommands {
 			editor.replaceSelection(link);
 		}
 
-		info(this, 'Successfully converted date text to daily note link', {
+		loggerInfo(this, 'Successfully converted date text to daily note link', {
 			originalText: textToProcess,
 			linkGenerated: link,
 			operation: 'date to link conversion'
@@ -207,11 +201,11 @@ export class DateCommands {
 	 * Respects time component detection and user format preferences
 	 */
 	parseDateAsText(editor: Editor, view: MarkdownView): void {
-		debug(this, 'Processing user request to convert date text to formatted plain text');
+		loggerDebug(this, 'Processing user request to convert date text to formatted plain text');
 		const parseInfo = this.getInitialTextAndParseInfo(editor, 'converting to plain text');
 
 		if ('errorNotice' in parseInfo) {
-			warn(this, 'Date parsing failed for text conversion', { 
+			loggerWarn(this, 'Date parsing failed for text conversion', { 
 				reason: parseInfo.errorNotice,
 				context: parseInfo.textToProcessContext 
 			});
@@ -220,7 +214,7 @@ export class DateCommands {
 		}
 
 		const { textToProcess, parsedDate, from, to } = parseInfo;
-		debug(this, 'Successfully parsed date text for plain text conversion', {
+		loggerDebug(this, 'Successfully parsed date text for plain text conversion', {
 			originalText: textToProcess,
 			parsedDate: parsedDate.toISOString(),
 			targetFormat: this.settings.primaryFormat || 'daily note format'
@@ -229,7 +223,7 @@ export class DateCommands {
 		const dailyNoteSettings = getDailyNoteSettings();
 		const momentDate = moment(parsedDate);
 
-		debug(this, 'Applying date formatting with user preferences');
+		loggerDebug(this, 'Applying date formatting with user preferences');
 		const formattedDate = DateFormatter.getFormattedDateText(
 			textToProcess,
 			momentDate,
@@ -239,7 +233,7 @@ export class DateCommands {
 			this
 		);
 
-		debug(this, 'Replacing original text with formatted date', {
+		loggerDebug(this, 'Replacing original text with formatted date', {
 			originalText: textToProcess,
 			formattedText: formattedDate,
 			formatUsed: this.settings.primaryFormat || 'daily note format'
@@ -248,7 +242,7 @@ export class DateCommands {
 			const cursor = editor.getCursor();
 			editor.replaceRange(formattedDate, { line: cursor.line, ch: from }, { line: cursor.line, ch: to });
 			
-			debug(this, 'Adjusting cursor position after text replacement');
+			loggerDebug(this, 'Adjusting cursor position after text replacement');
 			if (cursor.ch === from) {
 				editor.setCursor({ line: cursor.line, ch: from });
 			} else {
@@ -258,7 +252,7 @@ export class DateCommands {
 			editor.replaceSelection(formattedDate);
 		}
 
-		info(this, 'Successfully converted date text to formatted plain text', {
+		loggerInfo(this, 'Successfully converted date text to formatted plain text', {
 			originalText: textToProcess,
 			formattedResult: formattedDate,
 			operation: 'date to text conversion'
@@ -282,11 +276,11 @@ export class DateCommands {
 				const startIx = r.index;
 				const endIx = startIx + phrase.length;
 				const fromCh = map[startIx];
-				const toCh = map[endIx - 1] + 1;
-				let replacement: string;
+				const toCh = map[endIx - 1] + 1;				let replacement: string;
 				if (asLink) {
 					if (!view.file) continue;
-					replacement = createDailyNoteLink(this.app, this.settings, view.file, phrase, forceTextAsAliasForLink);
+					const dailyNotesService = this.getDailyNotesService();
+					replacement = dailyNotesService.createDailyNoteLink(this.settings, view.file, phrase, forceTextAsAliasForLink);
 				} else {
 					const m = moment(r.start.date());
 					replacement = DateFormatter.getFormattedDateText(phrase, m, this.settings, ContentFormat.PRIMARY, getDailyNoteSettings(), this);
@@ -309,21 +303,21 @@ export class DateCommands {
 	 * Scans the entire note for date/time phrases and replaces them with daily note links.
 	 */
 	public async parseAllDatesAsLinks(editor: Editor, view: MarkdownView): Promise<void> {
-		debug(this, 'parseAllDatesAsLinks', 'parseAllDatesAsLinks called');
+		loggerDebug(this, 'parseAllDatesAsLinks', 'parseAllDatesAsLinks called');
 		if (!view.file) {
-			error(this, 'parseAllDatesAsLinks', 'Cannot process note - current view is not a markdown editor');
+			loggerError(this, 'parseAllDatesAsLinks', 'Cannot process note - current view is not a markdown editor');
 			new Notice('Cannot process note: Current view is not a markdown editor.');
 			return;
 		}
-		info(this, 'parseAllDatesAsLinks', 'Starting to parse all dates as links in note');
+		loggerInfo(this, 'parseAllDatesAsLinks', 'Starting to parse all dates as links in note');
 		await this.parseAllDatesInNoteInternal(editor, view, true, false);
 	}
 
 	/**
 	 * Scans the entire note for date/time phrases and replaces them with formatted plain text dates.
 	 */
-	public async parseAllDatesAsText(editor: Editor, view: MarkdownView): Promise<void> {        debug(this, 'parseAllDatesAsText', 'parseAllDatesAsText called');
-		info(this, 'parseAllDatesAsText', 'Starting to parse all dates as text in note');
+	public async parseAllDatesAsText(editor: Editor, view: MarkdownView): Promise<void> {        loggerDebug(this, 'parseAllDatesAsText', 'parseAllDatesAsText called');
+		loggerInfo(this, 'parseAllDatesAsText', 'Starting to parse all dates as text in note');
 		await this.parseAllDatesInNoteInternal(editor, view, false);
 	}
 
@@ -343,9 +337,8 @@ export class DateCommands {
 			new Notice('Cannot create link: file not saved');
 			return;
 		}
-
-		const link = createDailyNoteLink(
-			this.app,
+		const dailyNotesService = this.getDailyNotesService();
+		const link = dailyNotesService.createDailyNoteLink(
 			this.settings,
 			view.file,
 			textToProcess, // textToProcess is string here

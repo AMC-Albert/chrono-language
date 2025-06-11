@@ -1,4 +1,4 @@
-import { debug, info, warn } from '@/utils';
+import { loggerDebug, loggerInfo, loggerWarn, registerLoggerClass } from '@/utils';
 import type { QuickDatesSettings } from '@/settings';
 import { DEFAULT_SETTINGS } from '@/settings';
 import type { IConfigurationService, ConfigurationChangeEvent, ServiceInterface } from './types';
@@ -13,14 +13,14 @@ export class ConfigurationService implements IConfigurationService, ServiceInter
 	public readonly name = 'ConfigurationService';
 	private settings: QuickDatesSettings;
 	private eventBus: EventBus;	private plugin: Plugin; // Reference to main plugin for persistence
-
 	constructor(initialSettings: QuickDatesSettings, plugin: Plugin, eventBus: EventBus) {
 		this.settings = { ...initialSettings };
 		this.plugin = plugin;
 		this.eventBus = eventBus;
 		
-		debug(this, 'Configuration service initialized with settings management');
-		info(this, 'Configuration service ready', {
+		registerLoggerClass(this, 'ConfigurationService');
+		loggerDebug(this, 'Configuration service initialized with settings management');
+		loggerInfo(this, 'Configuration service ready', {
 			triggerPhrase: this.settings.triggerPhrase,
 			plainTextByDefault: this.settings.plainTextByDefault,
 			eventBusConnected: !!eventBus
@@ -28,19 +28,19 @@ export class ConfigurationService implements IConfigurationService, ServiceInter
 	}
 
 	async initialize(): Promise<void> {
-		debug(this, 'Configuration service initialization completed');
+		loggerDebug(this, 'Configuration service initialization completed');
 	}
 
 	async dispose(): Promise<void> {
-		debug(this, 'Configuration service disposed');
+		loggerDebug(this, 'Configuration service disposed');
 	}
 	/**
 	 * Set all configuration values at once (usually for initial load)
 	 */
 	setSettings(newSettings: QuickDatesSettings): void {
-		debug(this, 'Setting configuration from loaded settings');
+		loggerDebug(this, 'Setting configuration from loaded settings');
 		this.settings = { ...newSettings };
-		info(this, 'Configuration settings updated', {
+		loggerInfo(this, 'Configuration settings updated', {
 			triggerPhrase: this.settings.triggerPhrase,
 			plainTextByDefault: this.settings.plainTextByDefault
 		});
@@ -51,7 +51,7 @@ export class ConfigurationService implements IConfigurationService, ServiceInter
 	 */
 	get<T>(key: keyof QuickDatesSettings): T {
 		const value = this.settings[key] as T;
-		debug(this, `Configuration value retrieved: ${String(key)} = ${JSON.stringify(value)}`);
+		loggerDebug(this, `Configuration value retrieved: ${String(key)} = ${JSON.stringify(value)}`);
 		return value;
 	}
 	/**
@@ -61,11 +61,11 @@ export class ConfigurationService implements IConfigurationService, ServiceInter
 		const oldValue = this.settings[key];
 		
 		if (oldValue === value) {
-			debug(this, `Configuration value unchanged for ${String(key)}, skipping update`);
+			loggerDebug(this, `Configuration value unchanged for ${String(key)}, skipping update`);
 			return;
 		}
 
-		debug(this, `Configuration change: ${String(key)}`, {
+		loggerDebug(this, `Configuration change: ${String(key)}`, {
 			oldValue: JSON.stringify(oldValue),
 			newValue: JSON.stringify(value)
 		});
@@ -87,11 +87,11 @@ export class ConfigurationService implements IConfigurationService, ServiceInter
 			this.eventBus.emit('configuration:changed', changeEvent);
 			this.eventBus.emit(`configuration:${String(key)}:changed`, changeEvent);
 
-			info(this, `Configuration updated and persisted: ${String(key)}`);
+			loggerInfo(this, `Configuration updated and persisted: ${String(key)}`);
 		} catch (error) {
 			// Revert the change if persistence failed - type-safe assignment
 			(this.settings as Record<keyof QuickDatesSettings, unknown>)[key] = oldValue;
-			warn(this, `Failed to persist configuration change for ${String(key)}:`, error);
+			loggerWarn(this, `Failed to persist configuration change for ${String(key)}:`, error);
 			throw error;
 		}
 	}
@@ -100,7 +100,7 @@ export class ConfigurationService implements IConfigurationService, ServiceInter
 	 * Get all configuration values
 	 */
 	getAll(): QuickDatesSettings {
-		debug(this, 'Full configuration retrieved');
+		loggerDebug(this, 'Full configuration retrieved');
 		return { ...this.settings };
 	}
 
@@ -128,7 +128,7 @@ export class ConfigurationService implements IConfigurationService, ServiceInter
 		}
 
 		if (changes.length === 0) {
-			debug(this, 'Batch update contained no actual changes');
+			loggerDebug(this, 'Batch update contained no actual changes');
 			return;
 		}
 
@@ -142,14 +142,14 @@ export class ConfigurationService implements IConfigurationService, ServiceInter
 				this.eventBus.emit(`configuration:${String(change.key)}:changed`, change);
 			}
 
-			info(this, `Batch configuration update completed`, {
+			loggerInfo(this, `Batch configuration update completed`, {
 				changedKeys: changes.map(c => String(c.key)),
 				changeCount: changes.length
 			});
 		} catch (error) {
 			// Revert all changes if persistence failed
 			this.settings = oldSettings;
-			warn(this, 'Failed to persist batch configuration update, changes reverted:', error);
+			loggerWarn(this, 'Failed to persist batch configuration update, changes reverted:', error);
 			throw error;
 		}
 	}
@@ -158,7 +158,7 @@ export class ConfigurationService implements IConfigurationService, ServiceInter
 	 * Subscribe to configuration changes
 	 */
 	subscribe(callback: (event: ConfigurationChangeEvent) => void): () => void {
-		debug(this, 'Configuration change subscriber registered');
+		loggerDebug(this, 'Configuration change subscriber registered');
 		return this.eventBus.on('configuration:changed', callback);
 	}
 
@@ -166,7 +166,7 @@ export class ConfigurationService implements IConfigurationService, ServiceInter
 	 * Subscribe to specific configuration key changes
 	 */
 	subscribeToKey(key: keyof QuickDatesSettings, callback: (event: ConfigurationChangeEvent) => void): () => void {
-		debug(this, `Configuration change subscriber registered for key: ${String(key)}`);
+		loggerDebug(this, `Configuration change subscriber registered for key: ${String(key)}`);
 		return this.eventBus.on(`configuration:${String(key)}:changed`, callback);
 	}
 
@@ -174,7 +174,7 @@ export class ConfigurationService implements IConfigurationService, ServiceInter
 	 * Reset configuration to defaults
 	 */
 	async resetToDefaults(): Promise<void> {
-		info(this, 'Resetting configuration to default values');
+		loggerInfo(this, 'Resetting configuration to default values');
 		await this.updateBatch(DEFAULT_SETTINGS);
 	}
 
@@ -188,15 +188,15 @@ export class ConfigurationService implements IConfigurationService, ServiceInter
 			
 			for (const key of required) {
 				if (this.settings[key] === undefined || this.settings[key] === null) {
-					warn(this, `Configuration validation failed: missing required field ${String(key)}`);
+					loggerWarn(this, `Configuration validation failed: missing required field ${String(key)}`);
 					return false;
 				}
 			}
 
-			debug(this, 'Configuration validation passed');
+			loggerDebug(this, 'Configuration validation passed');
 			return true;
 		} catch (error) {
-			warn(this, 'Configuration validation error:', error);
+			loggerWarn(this, 'Configuration validation error:', error);
 			return false;
 		}
 	}

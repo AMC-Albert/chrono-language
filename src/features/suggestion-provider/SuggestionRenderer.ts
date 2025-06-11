@@ -1,6 +1,7 @@
 import { getDailyNote, getDailyNoteSettings, DEFAULT_DAILY_NOTE_FORMAT } from 'obsidian-daily-notes-interface';
 import { DateParser } from './DateParser';
-import { DateFormatter, getOrCreateDailyNote, debug, info, warn, error, registerLoggerClass } from '@/utils';
+import { DateFormatter, loggerDebug, loggerInfo, loggerWarn, loggerError, registerLoggerClass } from '@/utils';
+import { DailyNotesService } from '@/services';
 import { CLASSES } from '@/constants';
 import { InsertMode, ContentFormat } from '@/types';
 import { TFile, moment, Platform } from 'obsidian';
@@ -11,7 +12,10 @@ import { SuggestionProvider } from './SuggestionProvider';
  * Provides a clean interface for suggestion visualization with highlighting and previews.
  */
 export class SuggestionRenderer {
-	constructor() {
+	private dailyNotesService: DailyNotesService;
+
+	constructor(dailyNotesService: DailyNotesService) {
+		this.dailyNotesService = dailyNotesService;
 		registerLoggerClass(this, 'SuggestionRenderer');
 	}
 
@@ -29,7 +33,7 @@ export class SuggestionRenderer {
 		el: HTMLElement,
 		context?: any	): void {
 		// Log rendering of suggestion
-		debug(this, `Rendering item: ${item}`);
+		loggerDebug(this, `Rendering item: ${item}`);
 		
 		// Derive the current query from passed context (highest priority)
 		const query = context?.context?.query ?? context?.query ?? '';
@@ -43,7 +47,7 @@ export class SuggestionRenderer {
 		
 		if (DateParser.inputHasTimeComponent(item, provider)) {
 			container.addClass(CLASSES.timeRelevantSuggestion);
-			debug(this, `Suggestion has time component: ${item}`);
+			loggerDebug(this, `Suggestion has time component: ${item}`);
 		}
 		
 		// Prepare suggestion text with highlighted query matches
@@ -71,7 +75,7 @@ export class SuggestionRenderer {
                 container.hasAttribute('data-updating')) return;
 				
 			// Log preview update
-			debug(this, `Updating preview for: ${item}`);
+			loggerDebug(this, `Updating preview for: ${item}`);
 
 			container.setAttribute('data-updating', 'true');
 			// Remove all existing preview elements
@@ -81,7 +85,7 @@ export class SuggestionRenderer {
 			const { insertMode, contentFormat } = provider.keyboardHandler.getEffectiveInsertModeAndFormat();
 			const parsedDate = DateParser.parseDate(item, provider);
 			const momentDate = parsedDate ? moment(parsedDate) : moment();
-			debug(this, `Parsed date for: ${item} result: ${parsedDate?.toISOString() || 'null'}`);
+			loggerDebug(this, `Parsed date for: ${item} result: ${parsedDate?.toISOString() || 'null'}`);
 
 			// Use cached daily notes from provider instead of scanning vault on every keystroke
 			provider.getDailyNotes().then(allNotes => {
@@ -89,13 +93,13 @@ export class SuggestionRenderer {
 				container.removeAttribute('data-updating');
             }).catch((err) => {
 				const errorMsg = err instanceof Error ? err.message : String(err);
-				error(this, `Error getting cached daily notes: ${errorMsg}`);
+				loggerError(this, `Error getting cached daily notes: ${errorMsg}`);
 				this.renderPreview(provider, container, item, parsedDate, momentDate, insertMode, contentFormat, null);
 				container.removeAttribute('data-updating');
 			});
 		} catch (e) {
 			const errorMsg = e instanceof Error ? e.message : String(e);
-			error(this, `Error updating preview content: ${errorMsg}`);
+			loggerError(this, `Error updating preview content: ${errorMsg}`);
 			container?.removeAttribute?.('data-updating');
 		}
 	}
@@ -115,7 +119,7 @@ export class SuggestionRenderer {
 			const escaped = query.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
 			const regex = new RegExp(escaped, 'gi');
 			this.highlightMatches(suggestionSpan, item, regex);
-			debug(this, `Highlighted query matches for: ${item}`);
+			loggerDebug(this, `Highlighted query matches for: ${item}`);
 		} else {
 			suggestionSpan.textContent = item;
 		}
@@ -322,7 +326,7 @@ export class SuggestionRenderer {
 				}
 			}
 			provider['closeSuggester']();
-			const file = await getOrCreateDailyNote(provider.app, momentDate, true);
+			const file = await this.dailyNotesService.getOrCreateDailyNote(momentDate, true);
 			if (file) {
 				const newPane = Platform.isMacOS ? event.metaKey : event.ctrlKey;
 				await provider.app.workspace.openLinkText(file.path, '', newPane);

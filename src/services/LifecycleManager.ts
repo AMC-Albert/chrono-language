@@ -1,4 +1,4 @@
-import { debug, info, warn, error } from '@/utils';
+import { loggerDebug, loggerInfo, loggerWarn, loggerError } from '@/utils';
 import type { ServiceInterface, Disposable } from './types';
 import { EventBus } from './EventBus';
 import { ResourceManager } from './ResourceManager';
@@ -61,15 +61,15 @@ export class LifecycleManager implements ServiceInterface {
 	constructor(eventBus: EventBus, resourceManager: ResourceManager) {
 		this.eventBus = eventBus;
 		this.resourceManager = resourceManager;
-		debug(this, 'Lifecycle manager initialized for component state management');
+		loggerDebug(this, 'Lifecycle manager initialized for component state management');
 	}
 
 	async initialize(): Promise<void> {
-		debug(this, 'Lifecycle manager initialization completed');
+		loggerDebug(this, 'Lifecycle manager initialization completed');
 	}
 
 	async dispose(): Promise<void> {
-		debug(this, 'Disposing all managed components');
+		loggerDebug(this, 'Disposing all managed components');
 		
 		const disposePromises: Promise<void>[] = [];
 		
@@ -81,7 +81,7 @@ export class LifecycleManager implements ServiceInterface {
 		
 		await Promise.all(disposePromises);
 		this.components.clear();
-		info(this, 'Lifecycle manager disposed successfully');
+		loggerInfo(this, 'Lifecycle manager disposed successfully');
 	}
 
 	/**
@@ -89,7 +89,7 @@ export class LifecycleManager implements ServiceInterface {
 	 */
 	registerComponent(component: LifecycleAware): void {
 		if (this.components.has(component.name)) {
-			warn(this, `Component ${component.name} is already registered`);
+			loggerWarn(this, `Component ${component.name} is already registered`);
 			return;
 		}
 
@@ -98,7 +98,7 @@ export class LifecycleManager implements ServiceInterface {
 			state: LifecycleState.CREATED
 		});
 
-		debug(this, `Component registered for lifecycle management: ${component.name}`);
+		loggerDebug(this, `Component registered for lifecycle management: ${component.name}`);
 		this.emitLifecycleEvent(component.name, LifecycleState.CREATED, LifecycleState.CREATED);
 	}
 
@@ -112,7 +112,7 @@ export class LifecycleManager implements ServiceInterface {
 		}
 
 		if (entry.state !== LifecycleState.CREATED) {
-			debug(this, `Component ${name} already initialized or in process`);
+			loggerDebug(this, `Component ${name} already initialized or in process`);
 			return entry.initPromise || Promise.resolve();
 		}
 
@@ -124,7 +124,7 @@ export class LifecycleManager implements ServiceInterface {
 		try {
 			await initPromise;
 			this.updateComponentState(name, LifecycleState.READY);
-			info(this, `Component ${name} successfully initialized and ready`);
+			loggerInfo(this, `Component ${name} successfully initialized and ready`);
 		} catch (error) {
 			this.updateComponentState(name, LifecycleState.ERROR);
 			throw error;
@@ -147,9 +147,9 @@ export class LifecycleManager implements ServiceInterface {
 				await entry.component.dispose();
 			}
 			this.updateComponentState(name, LifecycleState.DISPOSED);
-			info(this, `Component ${name} successfully disposed`);
+			loggerInfo(this, `Component ${name} successfully disposed`);
 		} catch (error) {
-			warn(this, `Error disposing component ${name}:`, error);
+			loggerWarn(this, `Error disposing component ${name}:`, error);
 			this.updateComponentState(name, LifecycleState.ERROR);
 		}
 	}
@@ -248,7 +248,7 @@ export class LifecycleManager implements ServiceInterface {
 			try {
 				entry.component.onLifecycleStateChange(oldState, newState);
 			} catch (error) {
-				warn(this, `Error in component lifecycle state change handler for ${name}:`, error);
+				loggerWarn(this, `Error in component lifecycle state change handler for ${name}:`, error);
 			}
 		}
 	}
@@ -268,7 +268,7 @@ export class LifecycleManager implements ServiceInterface {
 		this.eventBus.emit(`lifecycle:${componentName}:stateChanged`, event);
 		this.eventBus.emit(`lifecycle:state:${newState}`, event);
 
-		debug(this, `Component lifecycle state changed: ${componentName}`, {
+		loggerDebug(this, `Component lifecycle state changed: ${componentName}`, {
 			oldState,
 			newState,
 			timestamp: event.timestamp

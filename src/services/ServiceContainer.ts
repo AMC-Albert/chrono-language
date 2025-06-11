@@ -1,4 +1,4 @@
-import { debug, info, warn, error } from '@/utils';
+import { loggerDebug, loggerInfo, loggerWarn, loggerError } from '@/utils';
 import type { ServiceInterface } from './types';
 import type { QuickDatesSettings } from '@/settings';
 import { EventBus } from './EventBus';
@@ -21,7 +21,7 @@ export class ServiceContainer {
 	public readonly configuration: ConfigurationService;
 
 	constructor(plugin: Plugin, initialSettings: QuickDatesSettings) {
-		debug(this, 'Initializing service container for dependency injection');
+		loggerDebug(this, 'Initializing service container for dependency injection');
 
 		// Initialize core services
 		this.eventBus = new EventBus();
@@ -33,7 +33,7 @@ export class ServiceContainer {
 		this.register('resourceManager', this.resourceManager);
 		this.register('configuration', this.configuration);
 
-		info(this, 'Service container initialized with core services', {
+		loggerInfo(this, 'Service container initialized with core services', {
 			coreServices: ['eventBus', 'resourceManager', 'configuration'],
 			totalServices: this.services.size
 		});
@@ -44,16 +44,16 @@ export class ServiceContainer {
 	 */
 	register<T extends ServiceInterface>(name: string, service: T): void {
 		if (this.disposed) {
-			warn(this, `Cannot register service '${name}' after disposal`);
+			loggerWarn(this, `Cannot register service '${name}' after disposal`);
 			return;
 		}
 
 		if (this.services.has(name)) {
-			warn(this, `Service '${name}' is already registered, replacing`);
+			loggerWarn(this, `Service '${name}' is already registered, replacing`);
 		}
 
 		this.services.set(name, service);
-		debug(this, `Service registered: ${name} (total: ${this.services.size})`);
+		loggerDebug(this, `Service registered: ${name} (total: ${this.services.size})`);
 		// Auto-register with resource manager if service has dispose method
 		if ('dispose' in service && typeof service.dispose === 'function') {
 			this.resourceManager.register(service);
@@ -65,7 +65,7 @@ export class ServiceContainer {
 	get<T extends ServiceInterface>(name: string): T | undefined {
 		const service = this.services.get(name);
 		if (!service) {
-			debug(this, `Service '${name}' not found in container`);
+			loggerDebug(this, `Service '${name}' not found in container`);
 			return undefined;
 		}
 		// Type guard: services should always extend ServiceInterface
@@ -86,7 +86,7 @@ export class ServiceContainer {
 		const service = this.services.get(name);
 		if (service) {
 			this.services.delete(name);
-			debug(this, `Service unregistered: ${name} (remaining: ${this.services.size})`);
+			loggerDebug(this, `Service unregistered: ${name} (remaining: ${this.services.size})`);
             // Remove from resource manager if it was auto-registered
 			if ('dispose' in service && typeof service.dispose === 'function') {
 				this.resourceManager.unregister(service);
@@ -101,11 +101,11 @@ export class ServiceContainer {
 	 */
 	async initialize(): Promise<void> {
 		if (this.initialized) {
-			warn(this, 'Service container already initialized');
+			loggerWarn(this, 'Service container already initialized');
 			return;
 		}
 
-		info(this, `Initializing ${this.services.size} services`);
+		loggerInfo(this, `Initializing ${this.services.size} services`);
 		const initPromises: Promise<void>[] = [];
 
 		for (const [name, service] of this.services) {
@@ -114,14 +114,14 @@ export class ServiceContainer {
 				if (result instanceof Promise) {
 					initPromises.push(
 						result.catch(error => {
-							warn(this, `Failed to initialize service '${name}':`, error);
+							loggerWarn(this, `Failed to initialize service '${name}':`, error);
 							throw error;
 						})
 					);
 				}
-				debug(this, `Service initialized: ${name}`);
+				loggerDebug(this, `Service initialized: ${name}`);
 			} catch (initError) {
-				error(this, `Error initializing service '${name}':`, initError);
+				loggerError(this, `Error initializing service '${name}':`, initError);
 				throw initError;
 			}
 		}
@@ -129,16 +129,16 @@ export class ServiceContainer {
 		if (initPromises.length > 0) {
 			try {
 				await Promise.all(initPromises);
-				info(this, 'All async service initializations completed');
+				loggerInfo(this, 'All async service initializations completed');
 			} catch (initError) {
-				error(this, 'Failed to initialize some services:', initError);
+				loggerError(this, 'Failed to initialize some services:', initError);
 				throw initError;
 			}
 		}
 
 		this.initialized = true;
 		this.eventBus.emit('services:initialized', { serviceCount: this.services.size });
-		info(this, 'Service container initialization completed');
+		loggerInfo(this, 'Service container initialization completed');
 	}
 
 	/**
@@ -146,11 +146,11 @@ export class ServiceContainer {
 	 */
 	async dispose(): Promise<void> {
 		if (this.disposed) {
-			warn(this, 'Service container already disposed');
+			loggerWarn(this, 'Service container already disposed');
 			return;
 		}
 
-		info(this, 'Disposing service container and all services');
+		loggerInfo(this, 'Disposing service container and all services');
 		this.disposed = true;
 
 		try {
@@ -160,9 +160,9 @@ export class ServiceContainer {
 			
 			// Clear service registry
 			this.services.clear();
-			info(this, 'Service container disposed successfully');
+			loggerInfo(this, 'Service container disposed successfully');
 		} catch (disposeError) {
-			error(this, 'Error during service container disposal:', disposeError);
+			loggerError(this, 'Error during service container disposal:', disposeError);
 			throw disposeError;
 		}
 	}

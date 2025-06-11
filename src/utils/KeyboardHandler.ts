@@ -10,7 +10,7 @@ import {
 	MODIFIER_KEY,
 	MODIFIER_COMBOS
 } from '../constants';
-import { debug, info, warn, error } from './obsidian-logger';
+import { loggerDebug, loggerInfo, loggerWarn, loggerError } from './obsidian-logger';
 
 /**
  * Callback function type for key state change events
@@ -34,7 +34,7 @@ export class KeyboardHandler {
 		this.scope = scope || null;
 		this.plainTextByDefault = plainTextByDefault;
 		this.setupKeyEventListeners();
-		debug('KeyboardHandler', 'constructor', { 
+		loggerDebug('KeyboardHandler', 'constructor', { 
 			hasScope: !!scope, 
 			plainTextByDefault 
 		});
@@ -221,8 +221,8 @@ export class KeyboardHandler {
 		} else if (MODIFIER_BEHAVIOR.CONTENT_FORMAT_TOGGLE && modString.includes(MODIFIER_BEHAVIOR.CONTENT_FORMAT_TOGGLE)) {
 			contentFormat = ContentFormat.ALTERNATE;
 		}
-		  debug('KeyboardHandler', 'getEffectiveInsertModeAndFormat', `mode: ${insertMode}, format: ${contentFormat}`);
-		
+		loggerDebug('KeyboardHandler', 'getEffectiveInsertModeAndFormat', `mode: ${insertMode}, format: ${contentFormat}`);
+
 		return { insertMode, contentFormat };
 	}
 	

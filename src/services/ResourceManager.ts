@@ -1,4 +1,4 @@
-import { debug, info, warn } from '@/utils';
+import { loggerDebug, loggerInfo, loggerWarn } from '@/utils';
 import type { IResourceManager, ServiceInterface, Disposable } from './types';
 
 /**
@@ -11,11 +11,11 @@ export class ResourceManager implements IResourceManager, ServiceInterface {
 	private disposed = false;
 
 	constructor() {
-		debug(this, 'Resource manager initialized for plugin lifecycle management');
+		loggerDebug(this, 'Resource manager initialized for plugin lifecycle management');
 	}
 
 	async initialize(): Promise<void> {
-		debug(this, 'Resource manager initialization completed');
+		loggerDebug(this, 'Resource manager initialization completed');
 	}
     
 	/**
@@ -23,12 +23,12 @@ export class ResourceManager implements IResourceManager, ServiceInterface {
 	 */
 	register(resource: Disposable): void {
 		if (this.disposed) {
-			warn(this, 'Cannot register resource after disposal');
+			loggerWarn(this, 'Cannot register resource after disposal');
 			return;
 		}
 		
 		this.resources.add(resource);
-		debug(this, `Resource registered for cleanup management (total: ${this.resources.size})`);
+		loggerDebug(this, `Resource registered for cleanup management (total: ${this.resources.size})`);
 	}
 
 	/**
@@ -36,7 +36,7 @@ export class ResourceManager implements IResourceManager, ServiceInterface {
 	 */
 	unregister(resource: Disposable): void {
 		this.resources.delete(resource);
-		debug(this, `Resource unregistered from cleanup management (remaining: ${this.resources.size})`);
+		loggerDebug(this, `Resource unregistered from cleanup management (remaining: ${this.resources.size})`);
 	}
 
 	/**
@@ -51,11 +51,11 @@ export class ResourceManager implements IResourceManager, ServiceInterface {
 	 */
 	async dispose(): Promise<void> {
 		if (this.disposed) {
-			warn(this, 'Resource manager already disposed');
+			loggerWarn(this, 'Resource manager already disposed');
 			return;
 		}
 
-		info(this, `Disposing ${this.resources.size} managed resources`);
+		loggerInfo(this, `Disposing ${this.resources.size} managed resources`);
 		this.disposed = true;
 
 		const disposePromises: Promise<void>[] = [];
@@ -67,21 +67,21 @@ export class ResourceManager implements IResourceManager, ServiceInterface {
 					disposePromises.push(result);
 				}
 			} catch (error) {
-				warn(this, 'Error disposing resource:', error);
+				loggerWarn(this, 'Error disposing resource:', error);
 			}
 		}
 
 		if (disposePromises.length > 0) {
 			try {
 				await Promise.all(disposePromises);
-				info(this, 'All async resource disposals completed');
+				loggerInfo(this, 'All async resource disposals completed');
 			} catch (error) {
-				warn(this, 'Error in async resource disposal:', error);
+				loggerWarn(this, 'Error in async resource disposal:', error);
 			}
 		}
 
 		this.resources.clear();
-		info(this, 'Resource manager disposed successfully');
+		loggerInfo(this, 'Resource manager disposed successfully');
 	}
 
 	/**

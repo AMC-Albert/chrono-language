@@ -1,4 +1,4 @@
-import { debug, info, warn } from '@/utils';
+import { loggerDebug, loggerInfo, loggerWarn } from '@/utils';
 import type { PluginEvent, ServiceInterface } from './types';
 
 /**
@@ -11,11 +11,11 @@ export class EventBus implements ServiceInterface {
 	private onceListeners: Map<string, Set<Function>> = new Map();
 
 	constructor() {
-		debug(this, 'Event bus initialized for plugin-wide event management');
+		loggerDebug(this, 'Event bus initialized for plugin-wide event management');
 	}
 
 	async initialize(): Promise<void> {
-		debug(this, 'Event bus initialization completed');
+		loggerDebug(this, 'Event bus initialization completed');
 	}
 
 	/**
@@ -27,7 +27,7 @@ export class EventBus implements ServiceInterface {
 		}
 		this.listeners.get(eventType)!.add(listener);
 
-		debug(this, `Event listener registered for: ${eventType}`);
+		loggerDebug(this, `Event listener registered for: ${eventType}`);
 
 		// Return unsubscribe function
 		return () => this.off(eventType, listener);
@@ -41,7 +41,7 @@ export class EventBus implements ServiceInterface {
 		}
 		this.onceListeners.get(eventType)!.add(listener);
 
-		debug(this, `One-time event listener registered for: ${eventType}`);
+		loggerDebug(this, `One-time event listener registered for: ${eventType}`);
 
 		// Return unsubscribe function
 		return () => {
@@ -71,7 +71,7 @@ export class EventBus implements ServiceInterface {
 			}
 		}
 
-		debug(this, `Event listener removed for: ${eventType}`);
+		loggerDebug(this, `Event listener removed for: ${eventType}`);
 	}
 
 	/**
@@ -84,7 +84,7 @@ export class EventBus implements ServiceInterface {
 			timestamp: Date.now()
 		};
 
-		debug(this, `Emitting event: ${eventType}`, { hasData: !!data });
+		loggerDebug(this, `Emitting event: ${eventType}`, { hasData: !!data });
 
 		// Notify regular listeners
 		const listeners = this.listeners.get(eventType);
@@ -93,7 +93,7 @@ export class EventBus implements ServiceInterface {
 				try {
 					listener(event);
 				} catch (error) {
-					warn(this, `Error in event listener for ${eventType}:`, error);
+					loggerWarn(this, `Error in event listener for ${eventType}:`, error);
 				}
 			});
 		}
@@ -104,13 +104,13 @@ export class EventBus implements ServiceInterface {
 				try {
 					listener(event);
 				} catch (error) {
-					warn(this, `Error in one-time event listener for ${eventType}:`, error);
+					loggerWarn(this, `Error in one-time event listener for ${eventType}:`, error);
 				}
 			});
 			this.onceListeners.delete(eventType);
 		}
 
-		info(this, `Event ${eventType} processed by ${(listeners?.size || 0) + (onceListeners?.size || 0)} listeners`);
+		loggerInfo(this, `Event ${eventType} processed by ${(listeners?.size || 0) + (onceListeners?.size || 0)} listeners`);
 	}
 
 	/**
@@ -119,11 +119,11 @@ export class EventBus implements ServiceInterface {
 		if (eventType) {
 			this.listeners.delete(eventType);
 			this.onceListeners.delete(eventType);
-			debug(this, `All listeners removed for: ${eventType}`);
+			loggerDebug(this, `All listeners removed for: ${eventType}`);
 		} else {
 			this.listeners.clear();
 			this.onceListeners.clear();
-			debug(this, 'All event listeners cleared');
+			loggerDebug(this, 'All event listeners cleared');
 		}
 	}
 
@@ -139,7 +139,7 @@ export class EventBus implements ServiceInterface {
 	 * Dispose of all listeners
 	 */
 	dispose(): void {
-		info(this, 'Disposing event bus and cleaning up all listeners');
+		loggerInfo(this, 'Disposing event bus and cleaning up all listeners');
 		this.removeAllListeners();
 	}
 }

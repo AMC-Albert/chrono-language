@@ -1,6 +1,7 @@
 import QuickDates from '../../main';
-import { moment, Notice, TFile } from 'obsidian';
-import { getOrCreateDailyNote, DateFormatter, createDailyNoteLink, getAllDailyNotesSafe, KeyboardHandler, debug, info, warn, error, registerLoggerClass } from '@/utils';
+import { moment, Notice, TFile, MarkdownView, App } from 'obsidian';
+import { DateFormatter, KeyboardHandler, loggerDebug, loggerInfo, loggerWarn, loggerError, registerLoggerClass } from '@/utils';
+import { DailyNotesService } from '@/services';
 import { DateParser } from './DateParser';
 import { InsertMode, ContentFormat } from '@/types';
 import { Link } from 'obsidian-dev-utils/obsidian';
@@ -15,7 +16,7 @@ import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
  * Shared suggester for date suggestions. Handles rendering and updating of suggestions.
  */
 export class SuggestionProvider {
-	app: any; // Changed App to any
+	app: App;
 	plugin: QuickDates;
 	// Context for rendering suggestions
 	public contextProvider: { context?: { query: string }; query?: string } = {};
@@ -24,38 +25,36 @@ export class SuggestionProvider {
 	private editorSuggesterRef: EditorSuggester | null = null;
 	private openDailyModalRef: OpenDailyNoteModal | null = null;
 	keyboardHandler: KeyboardHandler;
-	isSuggesterOpen: boolean = false;
-	private holidaySuggestions: string[] = [];
+	isSuggesterOpen: boolean = false;	private holidaySuggestions: string[] = [];
 	private renderer: SuggestionRenderer;
+	private dailyNotesService: DailyNotesService;
 	
 	// Performance optimization: Cache daily notes to avoid vault scanning on every keystroke
 	private dailyNotesCache: Record<string, TFile> | null = null;
 	private dailyNotesCacheTimestamp: number = 0;
 	private readonly CACHE_DURATION_MS = 5000; // Cache for 5 seconds
-	private cacheUpdatePromise: Promise<Record<string, TFile> | null> | null = null;
-	constructor(app: any, plugin: QuickDates) { // Changed App to any
-		debug(this, 'Initializing suggestion provider for date parsing and UI rendering');
+	private cacheUpdatePromise: Promise<Record<string, TFile> | null> | null = null;	constructor(app: App, plugin: QuickDates, dailyNotesService: DailyNotesService) {
+		loggerDebug(this, 'Initializing suggestion provider for date parsing and UI rendering');
 		registerLoggerClass(this, 'SuggestionProvider');
 		
 		this.app = app;
 		this.plugin = plugin;
-		debug(this, 'Setting up keyboard handler for suggestion interactions');
+		this.dailyNotesService = dailyNotesService;
+		loggerDebug(this, 'Setting up keyboard handler for suggestion interactions');
 		// Initialize keyboard handler without requiring a scope
 		this.keyboardHandler = new KeyboardHandler(undefined, plugin.settings.plainTextByDefault);
-		
-		debug(this, 'Initializing suggestion renderer for UI rendering');
+				loggerDebug(this, 'Initializing suggestion renderer for UI rendering');
 		// Initialize the suggestion renderer
-		this.renderer = new SuggestionRenderer();
+		this.renderer = new SuggestionRenderer(dailyNotesService);
+		loggerDebug(this, 'Registering keyboard state change listener for dynamic suggestion updates');
+		// Don't register keyboard listeners immediately - they'll be enabled when suggester opens
+		// this.keyboardHandler.addKeyStateChangeListener(this.handleKeyStateChange);
 		
-		debug(this, 'Registering keyboard state change listener for dynamic suggestion updates');
-		// Register for key state changes
-		this.keyboardHandler.addKeyStateChangeListener(this.handleKeyStateChange);
-		
-		debug(this, 'Initializing holiday suggestions for locale-specific date options');
+		loggerDebug(this, 'Initializing holiday suggestions for locale-specific date options');
 		// Initialize holiday suggestions
 		this.initializeHolidaySuggestions();
 		
-		info(this, 'Suggestion provider ready for date parsing and rendering', {
+		loggerInfo(this, 'Suggestion provider ready for date parsing and rendering', {
 			plainTextByDefault: plugin.settings.plainTextByDefault,
 			holidayLocale: plugin.settings.holidayLocale,
 			cacheEnabled: true,
@@ -96,21 +95,23 @@ export class SuggestionProvider {
 		}
 		try {
 			DateParser.setLocale(locale, this);
-			this.initializeHolidaySuggestions();
+			// Only update suggestions if locale actually changed
+			if (DateParser.getCurrentLocale() === locale) {
+				this.holidaySuggestions = DateParser.getHolidayNames().sort();
+			}
 		} catch (error) {
 			console.error('Failed to update holiday locale:', error);
 			new Notice(`Failed to set holiday locale: ${locale}. Using US locale as fallback.`, 3000);
 			DateParser.setLocale('US', this);
-			this.initializeHolidaySuggestions();
+			this.holidaySuggestions = DateParser.getHolidayNames().sort();
 		}
 	}
-	
 	/**
 	 * Handle key state changes by updating UI
 	 */
 	handleKeyStateChange = (): void => {
-		// Only update previews if suggester is open
-		if (this.isSuggesterOpen) {
+		// Only update previews if suggester is open AND we're in edit mode
+		if (this.isSuggesterOpen && this.isInEditMode()) {
 			// Debounce frequent updates to reduce performance impact
 			if (this.updatePreviewsTimeout) {
 				clearTimeout(this.updatePreviewsTimeout);
@@ -135,12 +136,11 @@ export class SuggestionProvider {
 		const selEl = document.querySelector(`.is-selected .${CLASSES.suggestionContainer}`) as HTMLElement;
 		const raw = selEl?.getAttribute('data-suggestion');
 		if (!raw) return;
-
 		// Attempt to parse as date for daily note
 		const parsed = DateParser.parseDate(raw, this);
 		if (parsed) {
 			const m = moment(parsed);
-			const file = await getOrCreateDailyNote(this.app, m, false);
+			const file = await this.dailyNotesService.getOrCreateDailyNote(m, false);
 			if (file) {
 				await this.app.workspace.openLinkText(file.path, '', newTab);
 			}
@@ -164,9 +164,8 @@ export class SuggestionProvider {
 			editor.replaceRange('', context.start, context.end);
 		}
 	}
-	
-	unload() {
-		this.keyboardHandler.removeKeyStateChangeListener(this.handleKeyStateChange);
+		unload() {
+		this.disableKeyboardListeners();
 		this.currentElements.clear();
 		this.keyboardHandler.unload();
 		this.isSuggesterOpen = false;
@@ -233,9 +232,9 @@ export class SuggestionProvider {
 			this.updateAllPreviews();
 		}
 	}
-
 	getDateSuggestions(context: { query: string }, initialSuggestionsFromCaller?: string[]): string[] {
 		this.isSuggesterOpen = true;
+		this.enableKeyboardListeners();
 
 		const rawQuery = context.query; 
 		const lowerQuery = rawQuery.toLowerCase().trim();
@@ -318,10 +317,10 @@ export class SuggestionProvider {
 
 		return finalSuggestions.slice(0, 15); // Limit total suggestions
 	}
-	
-	renderSuggestionContent(item: string, el: HTMLElement, context?: any) {
+		renderSuggestionContent(item: string, el: HTMLElement, context?: any) {
 		// Show suggestions; no contextProvider needed
 		this.isSuggesterOpen = true;
+		this.enableKeyboardListeners();
 		this.keyboardHandler.resetModifierKeys();
 		this.renderer.renderSuggestionContent(this, item, el, context);
 	}
@@ -339,10 +338,10 @@ export class SuggestionProvider {
 	public setOpenDailyModalRef(ref: OpenDailyNoteModal) {
 		this.openDailyModalRef = ref;
 	}
-
 	// Helper method to close the suggester UI
 	private closeSuggester() {
 		this.isSuggesterOpen = false;
+		this.disableKeyboardListeners();
 		// Close the appropriate parent UI
 		if (this.openDailyModalRef) {
 			this.openDailyModalRef.close();
@@ -362,13 +361,12 @@ export class SuggestionProvider {
 		return this.getCachedDailyNotes();
 	}
 
-	public getFinalInsertText(
-		itemText: string,
+	public getFinalInsertText(		itemText: string,
 		insertMode: InsertMode,
 		contentFormat: ContentFormat,
 		settings: QuickDatesSettings,
 		activeFile: TFile,
-		app: any // Changed App to any
+		app: App
 	): string {
 		const parsedDate = DateParser.parseDate(itemText, this);
 
@@ -403,10 +401,7 @@ export class SuggestionProvider {
 		} else { // InsertMode.LINK for a parsedDate
 			const forceTextAsAlias = contentFormat === ContentFormat.SUGGESTION_TEXT;
 			const useAlternateFormatForAlias = contentFormat === ContentFormat.ALTERNATE;
-			const forceNoAlias = contentFormat === ContentFormat.DAILY_NOTE;
-
-			return createDailyNoteLink(
-				app,
+			const forceNoAlias = contentFormat === ContentFormat.DAILY_NOTE;			return this.dailyNotesService.createDailyNoteLink(
 				settings,
 				activeFile,
 				itemText, 
@@ -459,13 +454,12 @@ export class SuggestionProvider {
 		this.cacheUpdatePromise = null;
 		return result;
 	}
-	
-	/**
+		/**
 	 * Update the daily notes cache
 	 */
 	private async updateDailyNotesCache(): Promise<Record<string, TFile> | null> {
 		try {
-			const result = await getAllDailyNotesSafe(this.app, true, true);
+			const result = await this.dailyNotesService.getAllDailyNotesSafe(true, true);
 			this.dailyNotesCache = result;
 			this.dailyNotesCacheTimestamp = Date.now();
 			return result;
@@ -474,4 +468,44 @@ export class SuggestionProvider {
 			return null;
 		}
 	}
+	/**
+	 * Check if we're currently in edit mode (not reading mode)
+	 */
+	private isInEditMode(): boolean {
+		const activeLeaf = this.app.workspace.activeLeaf;
+		if (!activeLeaf?.view?.getViewType()) return false;
+		
+		// Check if it's a markdown view and in edit mode
+		if (activeLeaf.view.getViewType() === 'markdown') {
+			const markdownView = activeLeaf.view;
+			// Type guard to check if it's a MarkdownView
+			if (markdownView && 'getMode' in markdownView) {
+				return (markdownView as MarkdownView).getMode() === 'source';
+			}
+		}
+		
+		return false;
+	}
+
+	/**
+	 * Enable keyboard listeners when suggester becomes active
+	 */
+	private enableKeyboardListeners(): void {
+		if (!this.keyboardListenersEnabled && this.isInEditMode()) {
+			this.keyboardHandler.addKeyStateChangeListener(this.handleKeyStateChange);
+			this.keyboardListenersEnabled = true;
+		}
+	}
+
+	/**
+	 * Disable keyboard listeners when suggester becomes inactive
+	 */
+	private disableKeyboardListeners(): void {
+		if (this.keyboardListenersEnabled) {
+			this.keyboardHandler.removeKeyStateChangeListener(this.handleKeyStateChange);
+			this.keyboardListenersEnabled = false;
+		}
+	}
+
+	private keyboardListenersEnabled: boolean = false;
 }

@@ -1,7 +1,7 @@
 import { PluginSettingTab, Setting } from 'obsidian';
 import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
 import { MultipleTextComponent } from 'obsidian-dev-utils/obsidian/Components/SettingComponents/MultipleTextComponent';
-import { debug, info, warn, error, registerLoggerClass } from '@/utils';
+import { loggerDebug, loggerInfo, loggerWarn, loggerError, registerLoggerClass } from '@/utils';
 import QuickDates from '../main';
 
 export interface QuickDatesSettings {
@@ -48,17 +48,17 @@ export class QuickDatesSettingTab extends PluginSettingTab {
 		super(app, plugin);
 		this.plugin = plugin;
 		registerLoggerClass(this, 'QuickDatesSettingTab');
-		debug(this, 'Settings tab initialized and ready for user configuration');
+		loggerDebug(this, 'Settings tab initialized and ready for user configuration');
 	}
 
 	display(): void {
-		debug(this, 'Rendering settings tab UI - building user interface elements');
+		loggerDebug(this, 'Rendering settings tab UI - building user interface elements');
 		const { containerEl } = this;
 
-		debug(this, 'Clearing existing settings container content');
+		loggerDebug(this, 'Clearing existing settings container content');
 		containerEl.empty();
 		
-		debug(this, 'Creating primary date format setting control');
+		loggerDebug(this, 'Creating primary date format setting control');
 		new Setting(containerEl)
 			.setName("Primary date format")
 			.setDesc((() => {
@@ -82,7 +82,7 @@ export class QuickDatesSettingTab extends PluginSettingTab {
 					.setPlaceholder(getDailyNoteSettings().format || "YYYY-MM-DD")
 					.setValue(this.plugin.settings.primaryFormat)
 					.onChange(async (value) => {
-						debug(this, 'User modified primary date format setting', { 
+						loggerDebug(this, 'User modified primary date format setting', { 
 							oldValue: this.plugin.settings.primaryFormat,
 							newValue: value || 'using daily note format'
 						});
@@ -166,7 +166,7 @@ export class QuickDatesSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl).setName('Editor suggester').setHeading()
-		debug(this, 'Creating trigger phrase setting control');
+		loggerDebug(this, 'Creating trigger phrase setting control');
 		new Setting(containerEl)
 			.setName("Trigger phrase")
 			.setDesc("Customize the trigger phrase to activate the editor suggester. If empty, the suggester will be disabled. Can be a word or single character.")
@@ -175,14 +175,14 @@ export class QuickDatesSettingTab extends PluginSettingTab {
 					.setPlaceholder("qd")
 					.setValue(this.plugin.settings.triggerPhrase)
 					.onChange(async (value) => {
-						debug(this, 'User modified trigger phrase setting', { 
+						loggerDebug(this, 'User modified trigger phrase setting', { 
 							oldValue: this.plugin.settings.triggerPhrase,
 							newValue: value,
 							suggesterEnabled: !!value
 						});
 						
 						if (!value.trim()) {
-							warn(this, 'User disabled editor suggester by clearing trigger phrase', {
+							loggerWarn(this, 'User disabled editor suggester by clearing trigger phrase', {
 								previousTrigger: this.plugin.settings.triggerPhrase
 							});
 						}
@@ -190,7 +190,7 @@ export class QuickDatesSettingTab extends PluginSettingTab {
 						this.plugin.settings.triggerPhrase = value;
 						await this.plugin.saveSettings();
 						
-						info(this, 'Trigger phrase setting updated successfully', {
+						loggerInfo(this, 'Trigger phrase setting updated successfully', {
 							newTriggerPhrase: value || 'disabled',
 							requiresReload: 'components will reinitialize automatically'
 						});
@@ -333,7 +333,7 @@ export class QuickDatesSettingTab extends PluginSettingTab {
 		initialOpenDailyNoteSuggestionsBox
 			.setPlaceholder("Today\nTomorrow\nYesterday")
 			.setValue(this.plugin.settings.initialOpenDailyNoteSuggestions)			.onChange(async (value) => {
-				debug(this, 'User modified open daily note suggestions', { 
+				loggerDebug(this, 'User modified open daily note suggestions', { 
 					newSuggestionCount: value.filter(item => item.trim().length > 0).length
 				});
 				const suggestions = value.filter(item => item.trim().length > 0);
@@ -343,6 +343,6 @@ export class QuickDatesSettingTab extends PluginSettingTab {
 				await this.plugin.saveSettings();
 			});
 			
-		debug(this, 'Settings tab UI rendering completed - all controls configured and ready for user interaction');
+		loggerDebug(this, 'Settings tab UI rendering completed - all controls configured and ready for user interaction');
 	}
 }
