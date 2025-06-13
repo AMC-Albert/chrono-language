@@ -5,7 +5,7 @@ import { CLASSES } from '@/constants';
 // Effects for adding/clearing trigger phrase decorations
 export const addTriggerDecorationEffect = StateEffect.define<{ from: number, to: number }>();
 export const clearTriggerDecorationsEffect = StateEffect.define<null>();
-export const addSpacerWidgetEffect = StateEffect.define<number>(); // Position for the spacer
+export const addSpacerWidgetEffect = StateEffect.define<{ from: number, to: number }>(); // Position range for the spacer
 
 // Spacer Widget
 class SpacerWidget extends WidgetType {
@@ -38,10 +38,9 @@ export const triggerDecorationStateField = StateField.define<DecorationSet>({
 				return Decoration.none;
 			}
 		}
-
 		// If no clear effect, process other effects
 		let newTriggerDecoInfo: {from: number, to: number} | null = null;
-		let newSpacerPos: number | null = null;
+		let newSpacerPos: {from: number, to: number} | null = null;
 		let hasEffects = false;
 
 		for (const effect of tr.effects) {
@@ -65,12 +64,11 @@ export const triggerDecorationStateField = StateField.define<DecorationSet>({
 				}).range(newTriggerDecoInfo.from, newTriggerDecoInfo.to);
 				decoArray.push(triggerDeco);
 			}
-
 			if (newSpacerPos !== null && newTriggerDecoInfo) { 
 				const spacerWidgetDeco = Decoration.widget({
 					widget: new SpacerWidget(),
-					side: 0 
-				}).range(newSpacerPos);
+					side: 0
+				}).range(newSpacerPos.from, newSpacerPos.to);
 				decoArray.push(spacerWidgetDeco);
 			}
 			

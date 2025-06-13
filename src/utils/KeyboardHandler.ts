@@ -6,7 +6,8 @@ import {
 } from '../types';
 import { 
 	KEY_EVENTS, 
-	KEYS,    MODIFIER_BEHAVIOR,
+	KEYS,
+	MODIFIER_BEHAVIOR,
 	MODIFIER_KEY,
 	MODIFIER_COMBOS
 } from '../constants';
@@ -29,11 +30,13 @@ export class KeyboardHandler {
 	private keyState: Record<string, boolean> = { Control: false, Shift: false, Alt: false };
 	private keyStateChangeListeners: KeyStateChangeCallback[] = [];
 	private spaceKeyHandlers: SpaceKeyEventHandler[] = [];
-	private backspaceKeyHandlers: ((event: KeyboardEvent) => boolean)[] = [];
-	private tabKeyHandlers: ((event: KeyboardEvent) => boolean)[] = [];    constructor(scope?: Scope, plainTextByDefault: boolean = false) {
+	private tabKeyHandlers: ((event: KeyboardEvent) => boolean)[] = [];
+	
+	// Store references to registered scope handlers for cleanup
+	private registeredHandlers: any[] = [];constructor(scope?: Scope, plainTextByDefault: boolean = false) {
 		this.scope = scope || null;
 		this.plainTextByDefault = plainTextByDefault;
-		this.setupKeyEventListeners();
+		this.setupScopeKeyHandlers();
 		loggerDebug('KeyboardHandler', 'constructor', { 
 			hasScope: !!scope, 
 			plainTextByDefault 
@@ -49,40 +52,33 @@ export class KeyboardHandler {
 	}
 	private notifyKeyStateChangeListeners(): void {
 		this.keyStateChangeListeners.forEach(cb => cb());
+	}	private setupScopeKeyHandlers(): void {
+		if (!this.scope) return;
+		
+		// Register space key handler (no modifiers)
+		const spaceHandler = this.scope.register([], 'Space', (event: KeyboardEvent) => {
+			return this.handleSpaceKeyEvent(event);
+		});
+		this.registeredHandlers.push(spaceHandler);
+		
+		// Register Tab key handler
+		const tabHandler = this.scope.register([], 'Tab', (event: KeyboardEvent) => {
+			return this.handleTabKeyEvent(event);
+		});
+		this.registeredHandlers.push(tabHandler);
+		
+		// NOTE: Backspace is NOT registered globally here - it should only be handled
+		// when the suggester is open and specific conditions are met
+		// This prevents interfering with normal backspace functionality
+		
+		// Set up modifier key tracking using document events (needed for state tracking)
+		document.addEventListener(KEY_EVENTS.KEYDOWN, this.handleModifierKeyEvent, true);
+		document.addEventListener(KEY_EVENTS.KEYUP, this.handleModifierKeyEvent, true);
 	}
-	private setupKeyEventListeners(): void {
-		document.addEventListener(KEY_EVENTS.KEYDOWN, this.handleKeyEvent, true);
-		document.addEventListener(KEY_EVENTS.KEYUP, this.handleKeyEvent, true);
-	}
-	private handleKeyEvent = (event: KeyboardEvent): void => {
+	
+	private handleModifierKeyEvent = (event: KeyboardEvent): void => {
 		const key = event.key;
 		const isKeyDown = event.type === KEY_EVENTS.KEYDOWN;
-		
-		// Handle space key intercept if this is a keydown event
-		if (isKeyDown && key === ' ') {
-			// Only intercept pure space (no modifiers); shift+space, ctrl+space, etc. go to CodeMirror scope
-			if (!event.shiftKey && !event.ctrlKey && !event.altKey) {
-				if (this.handleSpaceKeyEvent(event)) {
-					event.preventDefault();
-					event.stopImmediatePropagation();
-				}
-			}
-		}
-
-		// Handle Tab key for auto-completion
-		if (isKeyDown && key === KEYS.TAB) {
-			if (this.handleTabKeyEvent(event)) {
-				event.preventDefault();
-				event.stopImmediatePropagation();
-			}
-		}
-
-		if (isKeyDown && key === 'Backspace') {
-			if (this.handleBackspaceKeyEvent(event)) {
-				event.preventDefault();
-				event.stopImmediatePropagation();
-			}
-		}
 		
 		if (key === KEYS.CONTROL || key === KEYS.SHIFT || key === KEYS.ALT) {
 			if (this.keyState[key] !== isKeyDown) {
@@ -119,30 +115,13 @@ export class KeyboardHandler {
 		}
 		return false; // No handler prevented the event
 	}
-
-	private handleBackspaceKeyEvent(event: KeyboardEvent): boolean {
-		for (const handler of this.backspaceKeyHandlers) {
-			if (handler(event)) {
-				return true;
-			}
-		}
-		return false;
-	}
 	
 	/**
 	 * Registers a handler for space key events
 	 * @param handler Function that returns true if the space key was handled
 	 */
 	registerSpaceKeyHandler(handler: SpaceKeyEventHandler): void {
-		this.spaceKeyHandlers.push(handler);
-	}
-	
-	/**
-	 * Registers a handler for backspace key events
-	 */
-	registerBackspaceKeyHandler(handler: (event: KeyboardEvent) => boolean): void {
-		this.backspaceKeyHandlers.push(handler);
-	}
+		this.spaceKeyHandlers.push(handler);	}
 	
 	/**
 	 * Unregisters a space key event handler
@@ -152,16 +131,6 @@ export class KeyboardHandler {
 		const index = this.spaceKeyHandlers.indexOf(handler);
 		if (index !== -1) {
 			this.spaceKeyHandlers.splice(index, 1);
-		}
-	}
-	
-	/**
-	 * Unregisters a backspace key event handler
-	 */
-	unregisterBackspaceKeyHandler(handler: (event: KeyboardEvent) => boolean): void {
-		const index = this.backspaceKeyHandlers.indexOf(handler);
-		if (index !== -1) {
-			this.backspaceKeyHandlers.splice(index, 1);
 		}
 	}
 
@@ -186,14 +155,14 @@ export class KeyboardHandler {
 	update(settings: Partial<{ plainTextByDefault: boolean }>): void {
 		if (settings.plainTextByDefault !== undefined) this.plainTextByDefault = settings.plainTextByDefault;
 	}
-	
-	/**
+		/**
 	 * Registers Enter key handlers for all modifier combinations
 	 */
 	registerEnterKeyHandlers(callback: (event: KeyboardEvent) => boolean): void {
 		if (!this.scope) return;
 		MODIFIER_COMBOS.forEach(mods => {
-			this.scope!.register(mods, KEYS.ENTER, callback);
+			const handler = this.scope!.register(mods, KEYS.ENTER, callback);
+			this.registeredHandlers.push(handler);
 		});
 	}
 
@@ -202,9 +171,10 @@ export class KeyboardHandler {
 	 */
 	registerDailyNoteKeyHandlers(shiftSpaceHandler: (event: KeyboardEvent) => boolean, ctrlShiftSpaceHandler: (event: KeyboardEvent) => boolean): void {
 		if (!this.scope) return;
-		this.scope.register([MODIFIER_KEY.SHIFT], KEYS.SPACE, shiftSpaceHandler);
-		this.scope.register([MODIFIER_KEY.CTRL, MODIFIER_KEY.SHIFT], KEYS.SPACE, ctrlShiftSpaceHandler);
-	}    getEffectiveInsertModeAndFormat(event?: KeyboardEvent): { insertMode: InsertMode, contentFormat: ContentFormat } {
+		const shiftHandler = this.scope.register([MODIFIER_KEY.SHIFT], 'Space', shiftSpaceHandler);
+		const ctrlShiftHandler = this.scope.register([MODIFIER_KEY.CTRL, MODIFIER_KEY.SHIFT], 'Space', ctrlShiftSpaceHandler);
+		this.registeredHandlers.push(shiftHandler, ctrlShiftHandler);
+	}getEffectiveInsertModeAndFormat(event?: KeyboardEvent): { insertMode: InsertMode, contentFormat: ContentFormat } {
 		const ctrl = event ? event.ctrlKey : this.keyState[KEYS.CONTROL];
 		const shift = event ? event.shiftKey : this.keyState[KEYS.SHIFT];
 		const alt = event ? event.altKey : this.keyState[KEYS.ALT];
@@ -230,12 +200,21 @@ export class KeyboardHandler {
 		this.keyState = { Control: false, Shift: false, Alt: false };
 		this.notifyKeyStateChangeListeners();
 	}
-	
-	unload(): void {
-		document.removeEventListener(KEY_EVENTS.KEYDOWN, this.handleKeyEvent, true);
-		document.removeEventListener(KEY_EVENTS.KEYUP, this.handleKeyEvent, true);
+		unload(): void {
+		// Remove document event listeners for modifier keys
+		document.removeEventListener(KEY_EVENTS.KEYDOWN, this.handleModifierKeyEvent, true);
+		document.removeEventListener(KEY_EVENTS.KEYUP, this.handleModifierKeyEvent, true);
+		
+		// Unregister all scope handlers
+		if (this.scope) {
+			this.registeredHandlers.forEach(handler => {
+				this.scope?.unregister(handler);
+			});
+		}
+		this.registeredHandlers = [];
+		// Clear arrays
 		this.keyStateChangeListeners = [];
 		this.spaceKeyHandlers = [];
-		this.backspaceKeyHandlers = [];
+		this.tabKeyHandlers = [];
 	}
 }

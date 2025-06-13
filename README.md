@@ -8,7 +8,7 @@ This plugin is extremely customizable and flexible. Read the settings descriptio
 
 ## Highlights
 
-⭐ Powerful, responsive, and informative inline suggester that supports multiple insertion modes (link, plain text, alternate formats, timestamps, etc.) using modifier keys, and even open the selected daily note from here.
+⭐ Responsive and informative inline suggester that supports multiple insertion modes (link, plain text, alternate formats, timestamps, etc.) using modifier keys, and even open the selected daily note from here.
 
 Type `qd` (customizable in settings) to get started:
 

@@ -12,6 +12,7 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
 	plugin: QuickDates;
 	private suggester: SuggestionProvider;
 	private dailyNotesService: DailyNotesService;
+	private inputElement: HTMLInputElement | null = null;
 	constructor(app: any, plugin: QuickDates, dailyNotesService: DailyNotesService) {
 		super(app);
 		loggerDebug(this, 'Initializing daily note modal for quick date-based note access');
@@ -45,15 +46,39 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
 	onOpen(): void {
 		loggerDebug(this, 'Opening daily note modal and setting up keyboard handlers');
 		super.onOpen();
-		const input = this.modalEl.querySelector('.prompt-input') as HTMLInputElement;
-		if (input) {
-			loggerDebug(this, 'Adding tab key handler for autocomplete functionality');
-			input.addEventListener('keydown', this.handleTabKey, true);
+		
+		// Try using scope if available, otherwise fall back to addEventListener
+		if (this.scope) {
+			loggerDebug(this, 'Using scope-based Tab key handler for autocomplete functionality');
+			this.scope.register([], 'Tab', (event: KeyboardEvent) => {
+				this.handleTabKey(event);
+				return false; // Let the event continue to be processed normally if not handled
+			});
 		} else {
-			loggerWarn(this, 'Unable to find prompt input element for keyboard handler setup');
+			// Fallback to direct event listener if scope is not available
+			const input = this.modalEl.querySelector('.prompt-input') as HTMLInputElement;
+			if (input) {
+				loggerDebug(this, 'Using direct event listener for Tab key handler (scope not available)');
+				this.inputElement = input;
+				input.addEventListener('keydown', this.handleTabKey, true);
+			} else {
+				loggerWarn(this, 'Unable to find prompt input element for keyboard handler setup');
+			}
 		}
 		loggerInfo(this, 'Daily note modal opened and ready for user input');
 	}
+
+	onClose(): void {
+		loggerDebug(this, 'Closing daily note modal and cleaning up event listeners');
+		// Only clean up direct event listeners (scope handlers are automatically cleaned up)
+		if (this.inputElement) {
+			this.inputElement.removeEventListener('keydown', this.handleTabKey, true);
+			this.inputElement = null;
+		}
+		super.onClose();
+		loggerInfo(this, 'Daily note modal closed and cleaned up successfully');
+	}
+
 	private handleTabKey = (event: KeyboardEvent): void => {
 		if (event.key === 'Tab') {
 			loggerDebug(this, 'Tab key pressed - attempting autocomplete with first suggestion');
@@ -98,6 +123,7 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
 	getItemText(item: string): string {
 		return item;
 	}
+
 	renderSuggestion(item: FuzzyMatch<string>, el: HTMLElement) {
 		const query = (this.modalEl.querySelector(".prompt-input") as HTMLInputElement)?.value || "";
 		loggerDebug(this, 'Rendering suggestion in modal UI', { 
@@ -106,7 +132,9 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
 			hasMatch: !!item.match
 		});
 		this.suggester.renderSuggestionContent(item.item, el, { context: { query } }); // setOpenDailyModalRef already applied
-	}	async onChooseItem(item: string): Promise<void> {
+	}
+
+	async onChooseItem(item: string): Promise<void> {
 		loggerInfo(this, 'User selected suggestion - processing date and opening note', { selectedItem: item });
 		try {
 			loggerDebug(this, 'Parsing user-selected date suggestion');
@@ -125,7 +153,8 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
 				parsedDate: parsed.toISOString(),
 				momentFormatted: moment(parsed).format('YYYY-MM-DD')
 			});
-					// Open the file in active leaf
+
+			// Open the file in active leaf
 			loggerDebug(this, 'Attempting to get or create daily note for parsed date');
 			const dailyNotesService = this.getDailyNotesService();
 			const file = await dailyNotesService.getOrCreateDailyNote(moment(parsed), true);

@@ -1,6 +1,5 @@
 import { Editor, EditorPosition, EditorSuggest, EditorSuggestContext } from 'obsidian';
 import { EditorView } from '@codemirror/view';
-import { StateEffect } from '@codemirror/state'; 
 import QuickDates from '../../main';
 import { addTriggerDecorationEffect, addSpacerWidgetEffect, safelyClearDecorations } from './decorations';
 import { SuggestionProvider } from '../suggestion-provider';
@@ -20,18 +19,17 @@ export class EditorSuggester extends EditorSuggest<string> {
 
 	// For tracking state after a suggestion is selected to prevent immediate re-trigger on an earlier phrase
 	private lastReplacedTriggerStart: { line: number, ch: number } | null = null;
-	private lastInsertionEnd: { line: number, ch: number } | null = null;
-
-	private decoratedEditorView: EditorView | null = null; // To track editor view with active decorations
+	private lastInsertionEnd: { line: number, ch: number } | null = null;	private decoratedEditorView: EditorView | null = null; // To track editor view with active decorations
 	private firstSpaceBlocked = false; // Track if we've already blocked the first space
 	private shouldInsertSpaceOnOpen: boolean = false; // Flag to insert space when suggester opens
 	private suggestionChosen = false;
 	private lastContext: EditorSuggestContext | null = null;
 	private cleanupEnd: EditorPosition | null = null;
-
 	// Handler references for daily note keybinds
 	private openDailySameTabHandler: any = null;
-	private openDailyNewTabHandler: any = null;	constructor(plugin: QuickDates, dailyNotesService: DailyNotesService) {
+	private openDailyNewTabHandler: any = null;
+
+	constructor(plugin: QuickDates, dailyNotesService: DailyNotesService) {
 		super(plugin.app);
 		this.plugin = plugin;
 		this.dailyNotesService = dailyNotesService;
@@ -57,11 +55,10 @@ export class EditorSuggester extends EditorSuggest<string> {
 		
 		this.suggester = new SuggestionProvider(this.app, this.plugin, this.dailyNotesService);
 		this.suggester.setEditorSuggesterRef(this);
-
 		loggerDebug(this, 'Registering keyboard event handlers for suggester interaction');
 		this.keyboardHandler.registerEnterKeyHandlers(this.handleSelectionKey);
 		this.registerDailyNoteKeybinds();
-		this.keyboardHandler.registerBackspaceKeyHandler(this.handleBackspaceKey);
+		// Note: Backspace is registered dynamically when suggester opens to avoid interfering with normal editing
 		this.keyboardHandler.registerTabKeyHandler(this.handleTabKey);
 		
 		loggerDebug(this, 'Setting up key state change listeners for dynamic instruction updates');
@@ -90,29 +87,6 @@ export class EditorSuggester extends EditorSuggest<string> {
 		if (event.shiftKey) event.preventDefault();
 		this.suggestionChosen = true;
 		return this.suggestions.useSelectedItem(event);
-	};
-
-	/**
-	 * Handles backspace key events to remove auto-inserted space
-	 * Returns true if the event was handled (should be prevented)
-	 */
-	private handleBackspaceKey = (event: KeyboardEvent): boolean => {
-		if (!this.isOpen || !this.context) return false;
-		const editorView = this.context.editor.cm;
-		if (!editorView) return false;
-		const query = this.context.query;
-		if (query === '') {
-			this.suggestionChosen = true; // prevent cleanup of trigger when removing space
-			const { line, ch } = this.context.end;
-			const off = this.context.editor.posToOffset({ line, ch });
-			// Remove the inserted space before context.end
-			editorView.dispatch({ changes: { from: off - 1, to: off, insert: '' } });
-			// Clear decorations and close
-			this.clearDecorations();
-			this.close();
-			return true;
-		}
-		return false;
 	};
 
 	/**
@@ -237,15 +211,18 @@ export class EditorSuggester extends EditorSuggest<string> {
 			this.context.end = { line: this.context.start.line, ch: insertCh + 1 };
 			this.shouldInsertSpaceOnOpen = false;
 		}
-
 		// Apply decorations only when the suggester is actually open
 		this.applyTriggerDecorations();
+		
+		// Add targeted backspace listener to detect removal of auto-inserted space
+		document.addEventListener('keydown', this.handleAutoSpaceBackspace, true);
 	}
-
 	// Clear decorations when suggester is closed
 	close() {
 		// Always clear decorations first when closing
 		this.clearDecorations();
+				// Remove backspace listener when closing
+		document.removeEventListener('keydown', this.handleAutoSpaceBackspace, true);
 		
 		// Reset flags
 		this.firstSpaceBlocked = false;
@@ -276,6 +253,53 @@ export class EditorSuggester extends EditorSuggest<string> {
 		this.lastInsertionEnd = null;
 	}
 
+	/**
+	 * Targeted backspace handler that detects removal of auto-inserted space
+	 * and closes the suggester while cleaning up the trigger phrase
+	 */
+	private handleAutoSpaceBackspace = (event: KeyboardEvent): void => {
+		// Only handle backspace with no modifiers when suggester is open
+		if (event.key !== 'Backspace' || event.shiftKey || event.ctrlKey || event.altKey || !this.isOpen || !this.context) {
+			return;
+		}
+
+		const editor = this.context.editor;
+		const cursor = editor.getCursor();
+		const query = this.context.query;
+		
+		// Check if user is about to backspace the auto-inserted space
+		// This happens when:
+		// 1. Query is empty (no characters after trigger)
+		// 2. Cursor is right after the trigger phrase + space
+		if (query === '') {
+			const expectedSpacePos = {
+				line: this.context.start.line,
+				ch: this.context.start.ch + this.plugin.settings.triggerPhrase.length + 1
+			};
+			
+			if (cursor.line === expectedSpacePos.line && cursor.ch === expectedSpacePos.ch) {
+				// User wants to remove the auto-inserted space - interpret this as canceling the suggester
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				
+				// Remove both the space and the trigger phrase entirely
+				const triggerStart = this.context.start;
+				const spaceEnd = { line: triggerStart.line, ch: triggerStart.ch + this.plugin.settings.triggerPhrase.length + 1 };
+				
+				editor.replaceRange('', triggerStart, spaceEnd);
+				
+				// Mark as suggestion chosen to prevent cleanup issues
+				this.suggestionChosen = true;
+				
+				// Close the suggester
+				this.close();
+				
+				return;
+			}
+		}
+		// For all other cases, let backspace work normally
+	};
+
 	// Apply decorations based on current context
 	private applyTriggerDecorations(): void {
 		if (!this.isOpen || !this.context) return;
@@ -283,19 +307,17 @@ export class EditorSuggester extends EditorSuggest<string> {
 		const editor = this.context.editor;
 		const triggerPhrase = this.plugin.settings.triggerPhrase;
 		if (!editor.cm || !triggerPhrase) return;
-		
 		// Clear any existing decorations first
 		this.clearDecorations();
 		
 		// Only apply new decorations if the suggester is open
 		const triggerStartOffset = editor.posToOffset(this.context.start);
 		const triggerEndOffset = triggerStartOffset + triggerPhrase.length;
-		const effects: StateEffect<any>[] = [addTriggerDecorationEffect.of({ from: triggerStartOffset, to: triggerEndOffset })];
-		
+		const effects = [addTriggerDecorationEffect.of({ from: triggerStartOffset, to: triggerEndOffset })];
 		const query = this.context.query;
 		// Maintain a spacer widget at trigger end when query is empty
 		if (query === '') {
-			effects.push(addSpacerWidgetEffect.of(triggerEndOffset));
+			effects.push(addSpacerWidgetEffect.of({ from: triggerEndOffset, to: triggerEndOffset }));
 		}
 
 		try {
@@ -309,7 +331,8 @@ export class EditorSuggester extends EditorSuggest<string> {
 			this.decoratedEditorView = null;
 		}
 	}
-		onTrigger(cursor: EditorPosition, editor: Editor): EditorSuggestContext | null {
+
+	onTrigger(cursor: EditorPosition, editor: Editor): EditorSuggestContext | null {
 		loggerDebug(this, 'Evaluating trigger conditions at cursor position', { 
 			line: cursor.line, 
 			ch: cursor.ch 
