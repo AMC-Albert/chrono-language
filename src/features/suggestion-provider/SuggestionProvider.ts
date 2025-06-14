@@ -1,6 +1,7 @@
 import QuickDates from '../../main';
 import { moment, Notice, TFile, MarkdownView, App } from 'obsidian';
-import { DateFormatter, KeyboardHandler, loggerDebug, loggerInfo, loggerWarn, loggerError, registerLoggerClass } from '@/utils';
+import { DateFormatter, KeyboardHandler } from '@/utils';
+import { getDailyNoteSettings, getDailyNote, DEFAULT_DAILY_NOTE_FORMAT } from 'obsidian-daily-notes-interface';
 import { DailyNotesService } from '@/services';
 import { DateParser } from './DateParser';
 import { InsertMode, ContentFormat } from '@/types';
@@ -10,7 +11,6 @@ import { CLASSES } from '@/constants';
 import { SuggestionRenderer } from './SuggestionRenderer';
 import { EditorSuggester } from '../editor-suggester';
 import { OpenDailyNoteModal } from '../open-daily-note';
-import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
 
 /**
  * Shared suggester for date suggestions. Handles rendering and updating of suggestions.
@@ -28,42 +28,48 @@ export class SuggestionProvider {
 	isSuggesterOpen: boolean = false;
 	private parsedDateCache: Map<string, Date | null> = new Map(); // Cache for parsed dates
 	private formattedTextCache: Map<string, string> = new Map(); // Cache for formatted text
+	// Pre-computed cache for common initial suggestions
+	private initialSuggestionsCache: Map<string, {
+		parsedDate: Date | null;
+		formattedText: Map<string, string>; // keyed by insert mode + content format combination
+	}> = new Map();
+	
 	private holidaySuggestions: string[] = [];
 	private renderer: SuggestionRenderer;
 	private dailyNotesService: DailyNotesService;
-	
 	// Performance optimization: Cache daily notes to avoid vault scanning on every keystroke
 	private dailyNotesCache: Record<string, TFile> | null = null;
-	private dailyNotesCacheTimestamp: number = 0;	private readonly CACHE_DURATION_MS = 5000; // Cache for 5 seconds
+	private dailyNotesCacheTimestamp: number = 0;
+	private readonly CACHE_DURATION_MS = 300000; // Cache for 5 minutes (300 seconds)
 	private cacheUpdatePromise: Promise<Record<string, TFile> | null> | null = null;
+
 	constructor(app: App, plugin: QuickDates, dailyNotesService: DailyNotesService, keyboardHandler?: KeyboardHandler) {
-		loggerDebug(this, 'Initializing suggestion provider for date parsing and UI rendering');
-		registerLoggerClass(this, 'SuggestionProvider');
-		
 		this.app = app;
 		this.plugin = plugin;
 		this.dailyNotesService = dailyNotesService;
-		loggerDebug(this, 'Setting up keyboard handler for suggestion interactions');
+		
 		// Use provided keyboard handler or create a new one
 		this.keyboardHandler = keyboardHandler || new KeyboardHandler(undefined, plugin.settings.plainTextByDefault);
 		this.ownKeyboardHandler = !keyboardHandler; // We own it if we created it
-				loggerDebug(this, 'Initializing suggestion renderer for UI rendering');
+		
 		// Initialize the suggestion renderer
 		this.renderer = new SuggestionRenderer(dailyNotesService);
-		loggerDebug(this, 'Registering keyboard state change listener for dynamic suggestion updates');
+		
+		// Pre-compute common initial suggestions for faster rendering
+		this.preComputeInitialSuggestions();
+		
+		// Force a warmup to ensure cache is populated
+		setTimeout(() => {
+			this.warmCache();
+			// Also warm up the daily notes cache in the background
+			this.updateCacheInBackground();
+		}, 100);
+		
 		// Don't register keyboard listeners immediately - they'll be enabled when suggester opens
 		// this.keyboardHandler.addKeyStateChangeListener(this.handleKeyStateChange);
 		
-		loggerDebug(this, 'Initializing holiday suggestions for locale-specific date options');
 		// Initialize holiday suggestions
 		this.initializeHolidaySuggestions();
-		
-		loggerInfo(this, 'Suggestion provider ready for date parsing and rendering', {
-			plainTextByDefault: plugin.settings.plainTextByDefault,
-			holidayLocale: plugin.settings.holidayLocale,
-			cacheEnabled: true,
-			cacheDurationMs: this.CACHE_DURATION_MS
-		});
 		
 		// Register vault events to invalidate cache when files are added/deleted/renamed
 		this.registerVaultEvents();
@@ -110,6 +116,7 @@ export class SuggestionProvider {
 			this.holidaySuggestions = DateParser.getHolidayNames().sort();
 		}
 	}
+
 	/**
 	 * Handle key state changes by updating UI
 	 */
@@ -168,6 +175,7 @@ export class SuggestionProvider {
 			editor.replaceRange('', context.start, context.end);
 		}
 	}
+
 	unload() {
 		this.disableKeyboardListeners();
 		this.currentElements.clear();
@@ -223,7 +231,8 @@ export class SuggestionProvider {
 
 	/**
 	 * Update settings and force re-render
-	 */	updateSettings(settings: { 
+	 */
+	updateSettings(settings: { 
 		keyBindings?: Record<string, string>; 
 		plainTextByDefault?: boolean;
 		holidayLocale?: string;
@@ -234,12 +243,17 @@ export class SuggestionProvider {
 			this.updateHolidayLocale(settings.holidayLocale);
 		}
 		
+		// Refresh pre-cached suggestions when settings change
+		this.refreshPreCachedSuggestions();
+		
 		if (this.isSuggesterOpen) {
 			this.updateAllPreviews();
 		}
-	}getDateSuggestions(context: { query: string }, initialSuggestionsFromCaller?: string[]): string[] {
+	}
+
+	getDateSuggestions(context: { query: string }, initialSuggestionsFromCaller?: string[]): string[] {
 		this.isSuggesterOpen = true;
-		this.clearParsedDateCache(); // Clear cache for new suggestions
+		// Don't clear cache - we want to preserve pre-cached suggestions for performance
 		this.enableKeyboardListeners();
 
 		const rawQuery = context.query;
@@ -322,11 +336,66 @@ export class SuggestionProvider {
 		});
 
 		return finalSuggestions.slice(0, 15); // Limit total suggestions
-	}	renderSuggestionContent(item: string, el: HTMLElement, context?: any) {
+	}
+
+	/**
+	 * Manually trigger cache warming
+	 */
+	public warmCache(): void {
+		this.preComputeInitialSuggestions();
+	}
+
+	/**
+	 * Cached wrapper for getFormattedDateText that uses pre-computed values when available
+	 */
+	public getFormattedDateText(
+		itemText: string,
+		momentDate: moment.Moment,
+		settings: QuickDatesSettings,
+		contentFormat: ContentFormat,
+		dailySettings: any,
+		insertMode?: InsertMode // Add insertMode parameter
+	): string {
+		// Get current insert mode if not provided
+		const currentInsertMode = insertMode || this.keyboardHandler.getEffectiveInsertModeAndFormat().insertMode;
+		
+		// Use the correct key format: InsertMode-ContentFormat
+		const cacheKey = `${currentInsertMode}-${contentFormat}`;
+				// Check initial suggestions cache first for common items
+		const cachedInitial = this.initialSuggestionsCache.get(itemText);
+		if (cachedInitial) {
+			if (cachedInitial.formattedText.has(cacheKey)) {
+				const cached = cachedInitial.formattedText.get(cacheKey)!;
+				return cached;
+			}
+		}
+		
+		// Check regular cache
+		const fullCacheKey = `${itemText}-${cacheKey}`;
+		if (this.formattedTextCache.has(fullCacheKey)) {
+			const cached = this.formattedTextCache.get(fullCacheKey)!;
+			return cached;
+		}
+		
+		// Format and cache
+		const formatted = DateFormatter.getFormattedDateText(
+			itemText,
+			momentDate,
+			settings,
+			contentFormat,
+			dailySettings,
+			this
+		);
+		
+		this.formattedTextCache.set(fullCacheKey, formatted);
+		return formatted;
+	}
+
+	renderSuggestionContent(item: string, el: HTMLElement, context?: any) {
 		// Show suggestions; no contextProvider needed
 		this.isSuggesterOpen = true;
 		this.enableKeyboardListeners();
-		this.keyboardHandler.resetModifierKeys();
+		// Don't reset modifier keys here - preserve the state that was active when triggering the suggester
 		this.renderer.renderSuggestionContent(this, item, el, context);
 	}
 
@@ -347,6 +416,8 @@ export class SuggestionProvider {
 	private closeSuggester() {
 		this.isSuggesterOpen = false;
 		this.disableKeyboardListeners();
+		// Reset modifier keys when suggester closes to ensure clean state for next time
+		this.keyboardHandler.resetModifierKeys();
 		// Close the appropriate parent UI
 		if (this.openDailyModalRef) {
 			this.openDailyModalRef.close();
@@ -365,15 +436,16 @@ export class SuggestionProvider {
 	public async getDailyNotes(): Promise<Record<string, TFile> | null> {
 		return this.getCachedDailyNotes();
 	}
-
-	public getFinalInsertText(		itemText: string,
+	public getFinalInsertText(
+		itemText: string,
 		insertMode: InsertMode,
 		contentFormat: ContentFormat,
 		settings: QuickDatesSettings,
 		activeFile: TFile,
 		app: App
 	): string {
-		const parsedDate = DateParser.parseDate(itemText, this);
+		// Use cached parsed date if available
+		const parsedDate = this.getCachedParsedDate(itemText);
 
 		if (!parsedDate) { // itemText is not a parsable date string
 			if (insertMode === InsertMode.PLAINTEXT) {
@@ -393,20 +465,21 @@ export class SuggestionProvider {
 
 		const momentDate = moment(parsedDate);
 		const dailySettings = getDailyNoteSettings();
-
 		if (insertMode === InsertMode.PLAINTEXT) {
-			return DateFormatter.getFormattedDateText(
+			// Use cached formatted text if available
+			return this.getFormattedDateText(
 				itemText,
 				momentDate,
 				settings,
 				contentFormat,
 				dailySettings,
-				this
+				insertMode // Pass the insert mode
 			);
 		} else { // InsertMode.LINK for a parsedDate
 			const forceTextAsAlias = contentFormat === ContentFormat.SUGGESTION_TEXT;
 			const useAlternateFormatForAlias = contentFormat === ContentFormat.ALTERNATE;
-			const forceNoAlias = contentFormat === ContentFormat.DAILY_NOTE;			return this.dailyNotesService.createDailyNoteLink(
+			const forceNoAlias = contentFormat === ContentFormat.DAILY_NOTE;
+			return this.dailyNotesService.createDailyNoteLink(
 				settings,
 				activeFile,
 				itemText, 
@@ -422,10 +495,81 @@ export class SuggestionProvider {
 	 */
 	private registerVaultEvents(): void {
 		if (this.app?.vault) {
-			this.app.vault.on('create', this.invalidateCache.bind(this));
-			this.app.vault.on('delete', this.invalidateCache.bind(this));
-			this.app.vault.on('rename', this.invalidateCache.bind(this));
+			// Only invalidate cache for daily notes-related file changes
+			this.app.vault.on('create', this.onFileChange.bind(this));
+			this.app.vault.on('delete', this.onFileChange.bind(this));
+			this.app.vault.on('rename', this.onFileRename.bind(this));
 		}
+	}
+	
+	/**
+	 * Handle file creation and deletion events
+	 */
+	private onFileChange(file: TFile): void {
+		if (this.isDailyNote(file)) {
+			this.invalidateCache();
+			// Optionally trigger a background cache update
+			this.updateCacheInBackground();
+		}
+	}
+	
+	/**
+	 * Handle file rename events
+	 */
+	private onFileRename(file: TFile, oldPath: string): void {
+		if (this.isDailyNote(file) || this.isDailyNotePath(oldPath)) {
+			this.invalidateCache();
+			this.updateCacheInBackground();
+		}
+	}
+	
+	/**
+	 * Check if a file is likely a daily note based on its path and name
+	 */
+	private isDailyNote(file: TFile): boolean {
+		if (!file || file.extension !== 'md') return false;
+		
+		const dailyNoteSettings = getDailyNoteSettings();
+		const format = dailyNoteSettings.format || DEFAULT_DAILY_NOTE_FORMAT;
+		const folder = dailyNoteSettings.folder || '';
+		
+		// Check if file is in the daily notes folder
+		if (folder && !file.path.startsWith(folder)) return false;
+		
+		// Check if filename matches daily note format pattern
+		const basename = file.basename;
+		// Simple heuristic: daily notes typically contain date patterns
+		const datePattern = /\d{4}[-_]\d{2}[-_]\d{2}|\d{2}[-_]\d{2}[-_]\d{4}|\d{8}/;
+		return datePattern.test(basename);
+	}
+	
+	/**
+	 * Check if a path is likely a daily note path
+	 */
+	private isDailyNotePath(path: string): boolean {
+		if (!path || !path.endsWith('.md')) return false;
+		
+		const dailyNoteSettings = getDailyNoteSettings();
+		const folder = dailyNoteSettings.folder || '';
+		
+		// Check if path is in the daily notes folder
+		if (folder && !path.startsWith(folder)) return false;
+		
+		// Check if path contains date patterns
+		const datePattern = /\d{4}[-_]\d{2}[-_]\d{2}|\d{2}[-_]\d{2}[-_]\d{4}|\d{8}/;
+		return datePattern.test(path);
+	}
+	
+	/**
+	 * Update cache in the background without blocking
+	 */
+	private updateCacheInBackground(): void {
+		// Defer cache update to avoid blocking current operations
+		setTimeout(() => {
+			this.getCachedDailyNotes().catch(() => {
+				// Ignore errors, cache will be updated on next request
+			});
+		}, 100);
 	}
 	
 	/**
@@ -459,7 +603,8 @@ export class SuggestionProvider {
 		this.cacheUpdatePromise = null;
 		return result;
 	}
-		/**
+
+	/**
 	 * Update the daily notes cache
 	 */
 	private async updateDailyNotesCache(): Promise<Record<string, TFile> | null> {
@@ -473,6 +618,7 @@ export class SuggestionProvider {
 			return null;
 		}
 	}
+
 	/**
 	 * Check if we're currently in edit mode (not reading mode)
 	 */
@@ -511,18 +657,7 @@ export class SuggestionProvider {
 			this.keyboardListenersEnabled = false;
 		}
 	}
-
 	private keyboardListenersEnabled: boolean = false;
-	/**
-	 * Get a cached parsed date or parse and cache it
-	 */
-	getCachedParsedDate(item: string): Date | null {
-		if (!this.parsedDateCache.has(item)) {
-			const parsedDate = DateParser.parseDate(item, this);
-			this.parsedDateCache.set(item, parsedDate);
-		}
-		return this.parsedDateCache.get(item) || null;
-	}
 
 	/**
 	 * Get cached formatted text or format and cache it
@@ -541,5 +676,129 @@ export class SuggestionProvider {
 	clearParsedDateCache(): void {
 		this.parsedDateCache.clear();
 		this.formattedTextCache.clear();
+	}
+
+	/**
+	 * Get cached parsed date if available, otherwise parse and cache
+	 */
+	public getCachedParsedDate(item: string): Date | null {
+		// Check initial suggestions cache first for common items
+		const cachedInitial = this.initialSuggestionsCache.get(item);
+		if (cachedInitial) {
+			return cachedInitial.parsedDate;
+		}
+		
+		// Check regular cache
+		if (this.parsedDateCache.has(item)) {
+			return this.parsedDateCache.get(item)!;
+		}
+		
+		// Parse and cache
+		const parsed = DateParser.parseDate(item, this);
+		this.parsedDateCache.set(item, parsed);
+		return parsed;
+	}
+	
+	/**
+	 * Get cached formatted text if available, otherwise format and cache
+	 */
+	public getCachedOrFormattedText(
+		item: string,
+		insertMode: InsertMode,
+		contentFormat: ContentFormat,
+		momentDate: moment.Moment,
+		settings: QuickDatesSettings,
+		dailySettings: any
+	): string {
+		const cacheKey = `${insertMode}-${contentFormat}`;
+		
+		// Check initial suggestions cache first for common items
+		const cachedInitial = this.initialSuggestionsCache.get(item);
+		if (cachedInitial && cachedInitial.formattedText.has(cacheKey)) {
+			return cachedInitial.formattedText.get(cacheKey)!;
+		}
+		
+		// Check regular cache
+		const fullCacheKey = `${item}-${cacheKey}`;
+		if (this.formattedTextCache.has(fullCacheKey)) {
+			return this.formattedTextCache.get(fullCacheKey)!;
+		}
+		
+		// Format and cache
+		let formatted: string;
+		if (insertMode === InsertMode.PLAINTEXT) {
+			formatted = DateFormatter.getFormattedDateText(
+				item,
+				momentDate,
+				settings,
+				contentFormat,
+				dailySettings,
+				this
+			);
+		} else {
+			// For links, return the item text as-is since link formatting happens elsewhere
+			formatted = item;
+		}
+		
+		this.formattedTextCache.set(fullCacheKey, formatted);
+		return formatted;
+	}
+	
+	/**
+	 * Pre-compute common initial suggestions to eliminate parsing delays
+	 */
+	private preComputeInitialSuggestions(): void {
+		// Use the actual initial suggestions from settings, not hardcoded defaults
+		const commonSuggestions = this.plugin.settings.initialEditorSuggestions || ['Today', 'Tomorrow', 'Yesterday'];
+		
+		for (const suggestion of commonSuggestions) {
+			const parsedDate = DateParser.parseDate(suggestion, this);
+			const formattedText = new Map<string, string>();
+			
+			// Pre-compute for all insert mode and format combinations
+			const combinations = [
+				{ insertMode: InsertMode.LINK, contentFormat: ContentFormat.PRIMARY },
+				{ insertMode: InsertMode.LINK, contentFormat: ContentFormat.ALTERNATE },
+				{ insertMode: InsertMode.LINK, contentFormat: ContentFormat.SUGGESTION_TEXT },
+				{ insertMode: InsertMode.PLAINTEXT, contentFormat: ContentFormat.PRIMARY },
+				{ insertMode: InsertMode.PLAINTEXT, contentFormat: ContentFormat.ALTERNATE },
+				{ insertMode: InsertMode.PLAINTEXT, contentFormat: ContentFormat.SUGGESTION_TEXT },
+			];
+					for (const { insertMode, contentFormat } of combinations) {
+				const cacheKey = `${insertMode}-${contentFormat}`;
+				try {
+					const settings = this.plugin.settings;
+					const momentDate = parsedDate ? moment(parsedDate) : moment();
+					const dailySettings = getDailyNoteSettings();
+					
+					// Format the text using DateFormatter for all combinations
+					const formatted = DateFormatter.getFormattedDateText(
+						suggestion,
+						momentDate,
+						settings,
+						contentFormat,
+						dailySettings,
+						this
+					);
+					formattedText.set(cacheKey, formatted);
+				} catch (error) {
+					console.warn(`Failed to pre-compute suggestion: ${suggestion} with ${cacheKey}`, error);
+					// Skip if formatting fails, will fall back to regular processing
+				}
+			}
+					this.initialSuggestionsCache.set(suggestion, {
+				parsedDate,
+				formattedText
+			});
+		}
+	}
+
+	/**
+	 * Refresh pre-cached suggestions if settings have changed
+	 */
+	public refreshPreCachedSuggestions(): void {
+		this.initialSuggestionsCache.clear();
+		this.formattedTextCache.clear(); // Clear formatted text cache to reflect new settings
+		this.preComputeInitialSuggestions();
 	}
 }

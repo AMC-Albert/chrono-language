@@ -33,7 +33,10 @@ export class KeyboardHandler {
 	private tabKeyHandlers: ((event: KeyboardEvent) => boolean)[] = [];
 	
 	// Store references to registered scope handlers for cleanup
-	private registeredHandlers: any[] = [];constructor(scope?: Scope, plainTextByDefault: boolean = false) {
+	private registeredHandlers: any[] = [];
+	
+	// For debounced logging - only log when state changes
+	private lastLoggedState: { insertMode: InsertMode; contentFormat: ContentFormat } | null = null;constructor(scope?: Scope, plainTextByDefault: boolean = false) {
 		this.scope = scope || null;
 		this.plainTextByDefault = plainTextByDefault;
 		this.setupScopeKeyHandlers();
@@ -155,7 +158,8 @@ export class KeyboardHandler {
 	update(settings: Partial<{ plainTextByDefault: boolean }>): void {
 		if (settings.plainTextByDefault !== undefined) this.plainTextByDefault = settings.plainTextByDefault;
 	}
-		/**
+
+	/**
 	 * Registers Enter key handlers for all modifier combinations
 	 */
 	registerEnterKeyHandlers(callback: (event: KeyboardEvent) => boolean): void {
@@ -174,7 +178,9 @@ export class KeyboardHandler {
 		const shiftHandler = this.scope.register([MODIFIER_KEY.SHIFT], 'Space', shiftSpaceHandler);
 		const ctrlShiftHandler = this.scope.register([MODIFIER_KEY.CTRL, MODIFIER_KEY.SHIFT], 'Space', ctrlShiftSpaceHandler);
 		this.registeredHandlers.push(shiftHandler, ctrlShiftHandler);
-	}getEffectiveInsertModeAndFormat(event?: KeyboardEvent): { insertMode: InsertMode, contentFormat: ContentFormat } {
+	}
+	
+	getEffectiveInsertModeAndFormat(event?: KeyboardEvent): { insertMode: InsertMode, contentFormat: ContentFormat } {
 		const ctrl = event ? event.ctrlKey : this.keyState[KEYS.CONTROL];
 		const shift = event ? event.shiftKey : this.keyState[KEYS.SHIFT];
 		const alt = event ? event.altKey : this.keyState[KEYS.ALT];
@@ -191,18 +197,30 @@ export class KeyboardHandler {
 		} else if (MODIFIER_BEHAVIOR.CONTENT_FORMAT_TOGGLE && modString.includes(MODIFIER_BEHAVIOR.CONTENT_FORMAT_TOGGLE)) {
 			contentFormat = ContentFormat.ALTERNATE;
 		}
-		loggerDebug('KeyboardHandler', 'getEffectiveInsertModeAndFormat', `mode: ${insertMode}, format: ${contentFormat}`);
+		
+		// Only log when the state actually changes
+		const currentState = { insertMode, contentFormat };
+		if (!this.lastLoggedState || 
+		    this.lastLoggedState.insertMode !== currentState.insertMode || 
+		    this.lastLoggedState.contentFormat !== currentState.contentFormat) {
+			loggerDebug('KeyboardHandler', 'getEffectiveInsertModeAndFormat', `mode: ${insertMode}, format: ${contentFormat}`);
+			this.lastLoggedState = currentState;
+		}
 
 		return { insertMode, contentFormat };
 	}
-		resetModifierKeys(): void {
+
+	resetModifierKeys(): void {
 		const hasChanges = this.keyState.Control || this.keyState.Shift || this.keyState.Alt;
 		this.keyState = { Control: false, Shift: false, Alt: false };
+		// Clear logged state so next call will log the new state
+		this.lastLoggedState = null;
 		if (hasChanges) {
 			this.notifyKeyStateChangeListeners();
 		}
 	}
-		unload(): void {
+
+	unload(): void {
 		// Remove document event listeners for modifier keys
 		document.removeEventListener(KEY_EVENTS.KEYDOWN, this.handleModifierKeyEvent, true);
 		document.removeEventListener(KEY_EVENTS.KEYUP, this.handleModifierKeyEvent, true);

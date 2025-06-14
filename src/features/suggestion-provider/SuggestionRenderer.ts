@@ -1,6 +1,6 @@
 import { getDailyNote, getDailyNoteSettings, DEFAULT_DAILY_NOTE_FORMAT } from 'obsidian-daily-notes-interface';
 import { DateParser } from './DateParser';
-import { DateFormatter, loggerDebug, loggerInfo, loggerWarn, loggerError, registerLoggerClass } from '@/utils';
+import { DateFormatter, loggerDebug, loggerError, registerLoggerClass } from '@/utils';
 import { DailyNotesService } from '@/services';
 import { CLASSES } from '@/constants';
 import { InsertMode, ContentFormat } from '@/types';
@@ -12,13 +12,10 @@ import { SuggestionProvider } from './SuggestionProvider';
  * Provides a clean interface for suggestion visualization with highlighting and previews.
  */
 export class SuggestionRenderer {
-	private dailyNotesService: DailyNotesService;
-
-	constructor(dailyNotesService: DailyNotesService) {
-		this.dailyNotesService = dailyNotesService;
+	private dailyNotesService: DailyNotesService;	constructor(dailyNotesService: DailyNotesService) {
 		registerLoggerClass(this, 'SuggestionRenderer');
+		this.dailyNotesService = dailyNotesService;
 	}
-
 	/**
 	 * Renders the main suggestion content with highlighting and initial preview.
 	 * 
@@ -32,50 +29,103 @@ export class SuggestionRenderer {
 		item: string,
 		el: HTMLElement,
 		context?: any	): void {
-		// Log rendering of suggestion
-		loggerDebug(this, `Rendering item: ${item}`);
-		
 		// Derive the current query from passed context (highest priority)
 		const query = context?.context?.query ?? context?.query ?? '';
-		// Update provider context for subsequent preview updates
-		provider.contextProvider = { context: { query }, query };
+		// Update provider context for subsequent preview updates		provider.contextProvider = { context: { query }, query };
 		
-		const container = el.createEl('div', {
-			cls: [CLASSES.suggestionContainer],
-			attr: { 'data-suggestion': item }
-		});
+		const { insertMode, contentFormat } = provider.keyboardHandler.getEffectiveInsertModeAndFormat();
 		
-		if (DateParser.inputHasTimeComponent(item, provider)) {
-			container.addClass(CLASSES.timeRelevantSuggestion);
+		// Optimized rendering: batch DOM operations and use cached values
+		const fragment = document.createDocumentFragment();
+		const container = document.createElement('div');
+		container.className = CLASSES.suggestionContainer;
+		container.setAttribute('data-suggestion', item);
+		
+		// Check for time component once and cache the result
+		const hasTimeComponent = DateParser.inputHasTimeComponent(item, provider);
+		if (hasTimeComponent) {
+			container.classList.add(CLASSES.timeRelevantSuggestion);
 			loggerDebug(this, `Suggestion has time component: ${item}`);
 		}
 		
-		// Prepare suggestion text with highlighted query matches
-		const suggestionSpan = this.createHighlightedSuggestionSpan(item, query.trim());		container.appendChild(suggestionSpan);
-		
-		provider.currentElements.set(item, container);
-		
-		// Render preview content immediately and synchronously
-		const { insertMode, contentFormat } = provider.keyboardHandler.getEffectiveInsertModeAndFormat();
+		// Get cached values upfront to minimize repeated calls
 		const parsedDate = provider.getCachedParsedDate(item);
 		const momentDate = parsedDate ? moment(parsedDate) : moment();
 		
-		// Render preview immediately without daily notes for instant visual feedback
+		// Create suggestion text with highlighting (batch operations)
+		const suggestionSpan = this.createHighlightedSuggestionSpan(item, query.trim());
+		container.appendChild(suggestionSpan);
+		
+		// Render preview immediately and synchronously using cached values
 		this.renderPreview(provider, container, item, parsedDate, momentDate, insertMode, contentFormat, null);
 		
-		// Then update asynchronously with daily notes if needed (in background)
-		provider.getDailyNotes().then(allNotes => {
-			if (allNotes && Object.keys(allNotes).length > 0 && parsedDate) {
-				const dailyNoteExists = getDailyNote(momentDate, allNotes);
-				if (dailyNoteExists) {
-					const existingPreviews = container.querySelectorAll('.' + CLASSES.suggestionPreview);
-					existingPreviews.forEach(previewNode => previewNode.remove());
-					this.renderPreview(provider, container, item, parsedDate, momentDate, insertMode, contentFormat, allNotes);
+		// Add to fragment and then to DOM in one operation
+		fragment.appendChild(container);
+		el.appendChild(fragment);		// Register container after DOM insertion
+		provider.currentElements.set(item, container);
+		
+		// Check for existing daily notes with improved caching (should be fast now)
+		this.updateDailyNotesInfoAsync(provider, item, el);
+	}
+
+	/**
+	 * Updates daily notes information asynchronously to avoid blocking the initial render
+	 */
+	private updateDailyNotesInfoAsync(provider: SuggestionProvider, item: string, parentElement: HTMLElement): void {
+		// Defer this operation to the next event loop to avoid blocking initial render
+		setTimeout(() => {
+			provider.getDailyNotes().then(allNotes => {
+				const container = parentElement.querySelector('[data-suggestion]') as HTMLElement;
+				if (!container || !container.isConnected) return;
+				
+				const parsedDate = provider.getCachedParsedDate(item);
+				if (allNotes && Object.keys(allNotes).length > 0 && parsedDate) {
+					const momentDate = moment(parsedDate);
+					const dailyNoteExists = getDailyNote(momentDate, allNotes);
+					if (dailyNoteExists) {
+						// Re-render with daily note info
+						const existingPreviews = container.querySelectorAll('.' + CLASSES.suggestionPreview);
+						existingPreviews.forEach(previewNode => previewNode.remove());
+						
+						const { insertMode, contentFormat } = provider.keyboardHandler.getEffectiveInsertModeAndFormat();
+						this.renderPreview(provider, container, item, parsedDate, momentDate, insertMode, contentFormat, allNotes);
+					}
 				}
+			}).catch(() => {
+				// Ignore errors, already rendered without daily notes
+			});		}, 0); // Defer to next event loop
+	}
+
+	/**
+	 * Check for a specific daily note without scanning all daily notes
+	 */
+	private checkSpecificDailyNoteAsync(provider: SuggestionProvider, item: string, parentElement: HTMLElement): void {
+		// Defer to next event loop to avoid blocking initial render
+		setTimeout(() => {
+			const container = parentElement.querySelector('[data-suggestion]') as HTMLElement;
+			if (!container || !container.isConnected) return;
+			
+			const parsedDate = provider.getCachedParsedDate(item);
+			if (!parsedDate) return;
+			
+			const momentDate = moment(parsedDate);
+			const dailyNoteSettings = getDailyNoteSettings();
+			const expectedFilename = momentDate.format(dailyNoteSettings.format || DEFAULT_DAILY_NOTE_FORMAT);
+			
+			// Check if a file with this name exists in the daily notes folder
+			const dailyNotesFolder = dailyNoteSettings.folder || '';
+			const expectedPath = dailyNotesFolder ? `${dailyNotesFolder}/${expectedFilename}.md` : `${expectedFilename}.md`;
+			
+			const existingFile = provider.app.vault.getAbstractFileByPath(expectedPath);
+			if (existingFile && existingFile instanceof provider.app.vault.adapter.constructor.prototype.constructor) {
+				// Daily note exists - update styling to indicate this
+				const existingPreviews = container.querySelectorAll('.' + CLASSES.suggestionPreview);
+				existingPreviews.forEach(preview => {
+					preview.removeClass(CLASSES.unresolvedLink);
+					preview.removeClass(CLASSES.unresolvedText);
+				});
 			}
-		}).catch(() => {
-			// Ignore errors, already rendered without daily notes
-		});
+		}, 100); // Small delay to avoid blocking initial render
 	}
 
 	/**
@@ -103,13 +153,11 @@ export class SuggestionRenderer {
 			existingPreviews.forEach(previewNode => previewNode.remove());			const { insertMode, contentFormat } = provider.keyboardHandler.getEffectiveInsertModeAndFormat();
 			const parsedDate = provider.getCachedParsedDate(item);
 			const momentDate = parsedDate ? moment(parsedDate) : moment();
-			loggerDebug(this, `Parsed date for: ${item} result: ${parsedDate?.toISOString() || 'null'}`);
-
-			// Render preview immediately without daily notes info for faster response
+			loggerDebug(this, `Parsed date for: ${item} result: ${parsedDate?.toISOString() || 'null'}`);			// Render preview immediately without daily notes info for faster response
 			this.renderPreview(provider, container, item, parsedDate, momentDate, insertMode, contentFormat, null);
 			container.removeAttribute('data-updating');
 			
-			// Then check if daily notes would affect the display and update if necessary
+			// Check daily notes with improved caching (should be fast now)
 			provider.getDailyNotes().then(allNotes => {
 				// Only re-render if we have daily notes that might show existence indicators
 				if (allNotes && Object.keys(allNotes).length > 0 && parsedDate) {
@@ -265,8 +313,7 @@ export class SuggestionRenderer {
 	 * @param momentDate The moment.js date object
 	 * @param contentFormat The content format
 	 * @param suggestionPreviewClass CSS classes for styling
-	 */
-	private appendReadableDatePreview(
+	 */	private appendReadableDatePreview(
 		provider: SuggestionProvider,
 		container: HTMLElement,
 		item: string, 
@@ -275,13 +322,14 @@ export class SuggestionRenderer {
 		suggestionPreviewClass: string[]
 	): void {
 		const dailySettings = getDailyNoteSettings();
-		let text = DateFormatter.getFormattedDateText(
+		const { insertMode } = provider.keyboardHandler.getEffectiveInsertModeAndFormat();
+		const text = provider.getFormattedDateText(
 			item,
 			momentDate,
 			provider.plugin.settings,
 			contentFormat,
 			dailySettings,
-			provider
+			insertMode // Pass the insert mode
 		);
 
 		// Highlight matching characters in bold
@@ -329,16 +377,16 @@ export class SuggestionRenderer {
 		item: string,
 		contentFormat: ContentFormat,
 		suggestionPreviewClass: string[]
-	): void {
-		container.createEl('span', { text: '↳ ' });
+	): void {		container.createEl('span', { text: '↳ ' });
 		const dailySettings = getDailyNoteSettings();
-		const readableText = DateFormatter.getFormattedDateText(
+		const { insertMode } = provider.keyboardHandler.getEffectiveInsertModeAndFormat();
+		const readableText = provider.getFormattedDateText(
 			item,
 			momentDate,
 			provider.plugin.settings,
 			contentFormat,
 			dailySettings,
-			provider
+			insertMode // Use cached version instead of direct DateFormatter call
 		);
 
 		const linkEl = container.createEl('a', {

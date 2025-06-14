@@ -316,13 +316,7 @@ export class EditorSuggester extends EditorSuggest<string> {
 			// Handle any dispatch errors silently
 		}
 	}
-
 	onTrigger(cursor: EditorPosition, editor: Editor): EditorSuggestContext | null {
-		loggerDebug(this, 'Evaluating trigger conditions at cursor position', { 
-			line: cursor.line, 
-			ch: cursor.ch 
-		});
-		
 		this.suggestionChosen = false;
 		const triggerPhrase = this.plugin.settings.triggerPhrase;
 		
@@ -333,11 +327,6 @@ export class EditorSuggester extends EditorSuggest<string> {
 			this.firstSpaceBlocked = false;
 			return null;
 		}
-		
-		loggerDebug(this, 'Analyzing text context for trigger phrase match', { 
-			triggerPhrase,
-			triggerHappy: this.plugin.settings.triggerHappy
-		});
 		
 		const result = parseTriggerContext(
 			cursor,
@@ -351,19 +340,12 @@ export class EditorSuggester extends EditorSuggest<string> {
 		
 		this.lastReplacedTriggerStart = null;
 		this.lastInsertionEnd = null;
-		
+
 		if (!result) {
-			loggerDebug(this, 'No valid trigger context detected at current position');
 			this.firstSpaceBlocked = false;
 			return null;
 		}
-		
-		loggerDebug(this, 'Valid trigger context detected - preparing suggestion interface', { 
-			startPosition: result.start, 
-			endPosition: result.end, 
-			currentQuery: result.query,
-			shouldInsertSpace: result.shouldInsertSpaceOnOpen
-		});
+		loggerDebug(this, 'Valid trigger context detected - preparing suggestion interface');
 		
 		this.shouldInsertSpaceOnOpen = result.shouldInsertSpaceOnOpen;
 		this.firstSpaceBlocked = result.firstSpaceBlocked;
@@ -380,8 +362,7 @@ export class EditorSuggester extends EditorSuggest<string> {
 		this.cleanupEnd = { line: result.start.line, ch: result.start.ch + triggerPhrase.length };
 		
 		loggerInfo(this, 'Creating suggestion context for date parsing interface', {
-			activeFile: activeFile.path,
-			triggerDetected: triggerPhrase,
+			activeFile: activeFile.name,
 			queryLength: result.query.length
 		});
 		const ctx: EditorSuggestContext = {
@@ -497,4 +478,15 @@ export class EditorSuggester extends EditorSuggest<string> {
 			this.openDailyNewTabHandler = this.scope.register([MODIFIER_KEY.CTRL, MODIFIER_KEY.SHIFT], KEYS.SPACE, this.handleDailyNoteNewTab.bind(this));
 		}
 	}
+
+	/**
+	 * Get the suggestion provider for debugging
+	 */
+	public getSuggestionProvider(): SuggestionProvider | null {
+		return this.suggester;
+	}
+
+	/**
+	 * Handle key state changes by updating UI
+	 */
 }
