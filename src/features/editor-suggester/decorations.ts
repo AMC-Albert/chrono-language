@@ -1,29 +1,10 @@
 import { StateField, StateEffect, Range, Transaction } from '@codemirror/state';
-import { EditorView, Decoration, WidgetType, DecorationSet } from '@codemirror/view';
+import { EditorView, Decoration, DecorationSet } from '@codemirror/view';
 import { CLASSES } from '@/constants';
 
 // Effects for adding/clearing trigger phrase decorations
 export const addTriggerDecorationEffect = StateEffect.define<{ from: number, to: number }>();
 export const clearTriggerDecorationsEffect = StateEffect.define<null>();
-export const addSpacerWidgetEffect = StateEffect.define<{ from: number, to: number }>(); // Position range for the spacer
-
-// Spacer Widget
-class SpacerWidget extends WidgetType {
-	toDOM() {
-		const span = document.createElement('span');
-		// Empty spacer to allow cursor placement without inserting invisible characters
-		return span;
-	}
-
-	eq(other: SpacerWidget) {
-		return false; // Always re-render for simplicity, or implement proper check
-	}
-
-	// Allow all events (including backspace) to pass through to the editor
-	ignoreEvent() {
-		return true;
-	}
-}
 
 // StateField to manage the decorations
 export const triggerDecorationStateField = StateField.define<DecorationSet>({
@@ -37,45 +18,24 @@ export const triggerDecorationStateField = StateField.define<DecorationSet>({
 				// Always clear decorations when the clear effect is dispatched
 				return Decoration.none;
 			}
-		}
-		// If no clear effect, process other effects
+		}		// If no clear effect, process trigger decoration effects
 		let newTriggerDecoInfo: {from: number, to: number} | null = null;
-		let newSpacerPos: {from: number, to: number} | null = null;
-		let hasEffects = false;
 
 		for (const effect of tr.effects) {
 			if (effect.is(addTriggerDecorationEffect)) {
 				newTriggerDecoInfo = effect.value;
-				hasEffects = true;
-			} else if (effect.is(addSpacerWidgetEffect)) {
-				newSpacerPos = effect.value;
-				hasEffects = true;
+				break; // Only need one trigger decoration
 			}
 		}
 
-		// If we have new decoration effects to apply
-		if (hasEffects) {
-			const decoArray: Range<Decoration>[] = [];
+		// If we have a new trigger decoration to apply
+		if (newTriggerDecoInfo) {
+			const triggerDeco = Decoration.mark({
+				class: CLASSES.activeTrigger,
+				attributes: { 'data-chrono-trigger': 'true', 'spellcheck': 'false' },
+			}).range(newTriggerDecoInfo.from, newTriggerDecoInfo.to);
 			
-			if (newTriggerDecoInfo) {
-				const triggerDeco = Decoration.mark({
-					class: CLASSES.activeTrigger,
-					attributes: { 'data-chrono-trigger': 'true', 'spellcheck': 'false' },
-				}).range(newTriggerDecoInfo.from, newTriggerDecoInfo.to);
-				decoArray.push(triggerDeco);
-			}
-			if (newSpacerPos !== null && newTriggerDecoInfo) { 
-				const spacerWidgetDeco = Decoration.widget({
-					widget: new SpacerWidget(),
-					side: 0
-				}).range(newSpacerPos.from, newSpacerPos.to);
-				decoArray.push(spacerWidgetDeco);
-			}
-			
-			if (decoArray.length === 0) {
-				return Decoration.none;
-			}
-			return Decoration.set(decoArray, true);
+			return Decoration.set([triggerDeco], true);
 		}
 
 		// If document changed, map the decorations to new positions

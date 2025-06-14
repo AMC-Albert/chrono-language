@@ -1,7 +1,7 @@
 import { Notice, FuzzySuggestModal, FuzzyMatch, moment } from "obsidian";
 import QuickDates from "../../main";
 import { SuggestionProvider, DateParser } from "../suggestion-provider";
-import { loggerDebug, loggerInfo, loggerWarn, loggerError, registerLoggerClass } from "@/utils";
+import { KeyboardHandler, loggerDebug, loggerInfo, loggerWarn, loggerError, registerLoggerClass } from "@/utils";
 import { DailyNotesService } from "@/services";
 import { ERRORS } from "@/constants";
 
@@ -12,22 +12,25 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
 	plugin: QuickDates;
 	private suggester: SuggestionProvider;
 	private dailyNotesService: DailyNotesService;
+	private keyboardHandler: KeyboardHandler;
 	private inputElement: HTMLInputElement | null = null;
 	constructor(app: any, plugin: QuickDates, dailyNotesService: DailyNotesService) {
 		super(app);
 		loggerDebug(this, 'Initializing daily note modal for quick date-based note access');
 		registerLoggerClass(this, 'OpenDailyNoteModal');
-		
-		this.plugin = plugin;
+				this.plugin = plugin;
 		this.dailyNotesService = dailyNotesService;
 		loggerDebug(this, 'Creating suggestion provider for date parsing and rendering');
+		
+		// Initialize keyboard handler for modifier key detection
+		this.keyboardHandler = new KeyboardHandler(this.scope, plugin.settings.plainTextByDefault);
 		
 		// Get DailyNotesService
 		if (!this.dailyNotesService) {
 			throw new Error('DailyNotesService not available');
 		}
 		
-		this.suggester = new SuggestionProvider(this.app, this.plugin, this.dailyNotesService);		this.suggester.setOpenDailyModalRef(this);
+		this.suggester = new SuggestionProvider(this.app, this.plugin, this.dailyNotesService, this.keyboardHandler);this.suggester.setOpenDailyModalRef(this);
 		this.setPlaceholder('Enter a date or relative time...');
 		
 		loggerInfo(this, 'Daily note modal ready for user interaction', {
@@ -67,7 +70,6 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
 		}
 		loggerInfo(this, 'Daily note modal opened and ready for user input');
 	}
-
 	onClose(): void {
 		loggerDebug(this, 'Closing daily note modal and cleaning up event listeners');
 		// Only clean up direct event listeners (scope handlers are automatically cleaned up)
@@ -75,6 +77,8 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
 			this.inputElement.removeEventListener('keydown', this.handleTabKey, true);
 			this.inputElement = null;
 		}
+		// Clean up keyboard handler
+		this.keyboardHandler.unload();
 		super.onClose();
 		loggerInfo(this, 'Daily note modal closed and cleaned up successfully');
 	}

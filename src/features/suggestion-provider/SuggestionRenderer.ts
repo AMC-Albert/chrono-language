@@ -51,11 +51,31 @@ export class SuggestionRenderer {
 		}
 		
 		// Prepare suggestion text with highlighted query matches
-		const suggestionSpan = this.createHighlightedSuggestionSpan(item, query.trim());
-		container.appendChild(suggestionSpan);
+		const suggestionSpan = this.createHighlightedSuggestionSpan(item, query.trim());		container.appendChild(suggestionSpan);
 		
 		provider.currentElements.set(item, container);
-		provider.updatePreviewContent(item, container);
+		
+		// Render preview content immediately and synchronously
+		const { insertMode, contentFormat } = provider.keyboardHandler.getEffectiveInsertModeAndFormat();
+		const parsedDate = provider.getCachedParsedDate(item);
+		const momentDate = parsedDate ? moment(parsedDate) : moment();
+		
+		// Render preview immediately without daily notes for instant visual feedback
+		this.renderPreview(provider, container, item, parsedDate, momentDate, insertMode, contentFormat, null);
+		
+		// Then update asynchronously with daily notes if needed (in background)
+		provider.getDailyNotes().then(allNotes => {
+			if (allNotes && Object.keys(allNotes).length > 0 && parsedDate) {
+				const dailyNoteExists = getDailyNote(momentDate, allNotes);
+				if (dailyNoteExists) {
+					const existingPreviews = container.querySelectorAll('.' + CLASSES.suggestionPreview);
+					existingPreviews.forEach(previewNode => previewNode.remove());
+					this.renderPreview(provider, container, item, parsedDate, momentDate, insertMode, contentFormat, allNotes);
+				}
+			}
+		}).catch(() => {
+			// Ignore errors, already rendered without daily notes
+		});
 	}
 
 	/**
@@ -80,22 +100,37 @@ export class SuggestionRenderer {
 			container.setAttribute('data-updating', 'true');
 			// Remove all existing preview elements
 			const existingPreviews = container.querySelectorAll('.' + CLASSES.suggestionPreview);
-			existingPreviews.forEach(previewNode => previewNode.remove());
-			
-			const { insertMode, contentFormat } = provider.keyboardHandler.getEffectiveInsertModeAndFormat();
-			const parsedDate = DateParser.parseDate(item, provider);
+			existingPreviews.forEach(previewNode => previewNode.remove());			const { insertMode, contentFormat } = provider.keyboardHandler.getEffectiveInsertModeAndFormat();
+			const parsedDate = provider.getCachedParsedDate(item);
 			const momentDate = parsedDate ? moment(parsedDate) : moment();
 			loggerDebug(this, `Parsed date for: ${item} result: ${parsedDate?.toISOString() || 'null'}`);
 
-			// Use cached daily notes from provider instead of scanning vault on every keystroke
+			// Render preview immediately without daily notes info for faster response
+			this.renderPreview(provider, container, item, parsedDate, momentDate, insertMode, contentFormat, null);
+			container.removeAttribute('data-updating');
+			
+			// Then check if daily notes would affect the display and update if necessary
 			provider.getDailyNotes().then(allNotes => {
-				this.renderPreview(provider, container, item, parsedDate, momentDate, insertMode, contentFormat, allNotes);
-				container.removeAttribute('data-updating');
+				// Only re-render if we have daily notes that might show existence indicators
+				if (allNotes && Object.keys(allNotes).length > 0 && parsedDate) {
+					const dailyNoteSettings = getDailyNoteSettings();
+					const dailyNoteExists = getDailyNote(momentDate, allNotes);
+					
+					// Only re-render if a daily note actually exists (affects visual indicators)
+					if (dailyNoteExists) {
+						// Clear existing preview and re-render with daily note info
+						const existingPreviews = container.querySelectorAll('.' + CLASSES.suggestionPreview);
+						existingPreviews.forEach(previewNode => previewNode.remove());
+						
+						container.setAttribute('data-updating', 'true');
+						this.renderPreview(provider, container, item, parsedDate, momentDate, insertMode, contentFormat, allNotes);
+						container.removeAttribute('data-updating');
+					}
+				}
             }).catch((err) => {
 				const errorMsg = err instanceof Error ? err.message : String(err);
 				loggerError(this, `Error getting cached daily notes: ${errorMsg}`);
-				this.renderPreview(provider, container, item, parsedDate, momentDate, insertMode, contentFormat, null);
-				container.removeAttribute('data-updating');
+				// Already rendered without daily notes, so no need to do anything
 			});
 		} catch (e) {
 			const errorMsg = e instanceof Error ? e.message : String(e);

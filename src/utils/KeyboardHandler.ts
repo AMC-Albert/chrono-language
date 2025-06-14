@@ -195,10 +195,12 @@ export class KeyboardHandler {
 
 		return { insertMode, contentFormat };
 	}
-	
-	resetModifierKeys(): void {
+		resetModifierKeys(): void {
+		const hasChanges = this.keyState.Control || this.keyState.Shift || this.keyState.Alt;
 		this.keyState = { Control: false, Shift: false, Alt: false };
-		this.notifyKeyStateChangeListeners();
+		if (hasChanges) {
+			this.notifyKeyStateChangeListeners();
+		}
 	}
 		unload(): void {
 		// Remove document event listeners for modifier keys

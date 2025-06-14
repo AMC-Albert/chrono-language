@@ -1,12 +1,11 @@
 import { Editor, EditorPosition, EditorSuggest, EditorSuggestContext } from 'obsidian';
-import { EditorView } from '@codemirror/view';
 import QuickDates from '../../main';
-import { addTriggerDecorationEffect, addSpacerWidgetEffect, safelyClearDecorations } from './decorations';
 import { SuggestionProvider } from '../suggestion-provider';
 import { KeyboardHandler, loggerDebug, loggerInfo, loggerWarn, loggerError, registerLoggerClass } from '@/utils';
 import { KEYS, CLASSES, getInstructionDefinitions, MODIFIER_KEY } from '@/constants';
 import { parseTriggerContext } from './trigger-parser';
 import { DailyNotesService } from '@/services';
+import { addTriggerDecorationEffect, clearTriggerDecorationsEffect, safelyClearDecorations } from './decorations';
 
 /**
  * A suggester for the editor that provides date parsing suggestions
@@ -19,7 +18,8 @@ export class EditorSuggester extends EditorSuggest<string> {
 
 	// For tracking state after a suggestion is selected to prevent immediate re-trigger on an earlier phrase
 	private lastReplacedTriggerStart: { line: number, ch: number } | null = null;
-	private lastInsertionEnd: { line: number, ch: number } | null = null;	private decoratedEditorView: EditorView | null = null; // To track editor view with active decorations
+	private lastInsertionEnd: { line: number, ch: number } | null = null;
+
 	private firstSpaceBlocked = false; // Track if we've already blocked the first space
 	private shouldInsertSpaceOnOpen: boolean = false; // Flag to insert space when suggester opens
 	private suggestionChosen = false;
@@ -48,12 +48,12 @@ export class EditorSuggester extends EditorSuggest<string> {
 		loggerDebug(this, 'Setting up keyboard handlers and suggestion provider components');
 		
 		this.keyboardHandler = new KeyboardHandler(this.scope, this.plugin.settings.plainTextByDefault);
-				// Get DailyNotesService
+		// Get DailyNotesService
 		if (!this.dailyNotesService) {
 			throw new Error('DailyNotesService not available');
 		}
 		
-		this.suggester = new SuggestionProvider(this.app, this.plugin, this.dailyNotesService);
+		this.suggester = new SuggestionProvider(this.app, this.plugin, this.dailyNotesService, this.keyboardHandler);
 		this.suggester.setEditorSuggesterRef(this);
 		loggerDebug(this, 'Registering keyboard event handlers for suggester interaction');
 		this.keyboardHandler.registerEnterKeyHandlers(this.handleSelectionKey);
@@ -164,22 +164,9 @@ export class EditorSuggester extends EditorSuggest<string> {
 			holidayLocale: this.plugin.settings.holidayLocale,
 		});
 	}
-
 	unload() {
-		this.clearDecorations();
 		this.suggester?.unload();
 		this.keyboardHandler.unload();
-	}
-
-	private clearDecorations(editorViewToClear?: EditorView) {
-		const view = editorViewToClear || this.decoratedEditorView;
-		if (view) {
-			// Use the safer function to clear decorations
-			safelyClearDecorations(view);
-			if (this.decoratedEditorView === view) {
-				this.decoratedEditorView = null;
-			}
-		}
 	}
 
 	// Track when the suggester is opened
@@ -217,11 +204,14 @@ export class EditorSuggester extends EditorSuggest<string> {
 		// Add targeted backspace listener to detect removal of auto-inserted space
 		document.addEventListener('keydown', this.handleAutoSpaceBackspace, true);
 	}
+
 	// Clear decorations when suggester is closed
 	close() {
 		// Always clear decorations first when closing
-		this.clearDecorations();
-				// Remove backspace listener when closing
+		if (this.context?.editor?.cm) {
+			safelyClearDecorations(this.context.editor.cm);
+		}
+		// Remove backspace listener when closing
 		document.removeEventListener('keydown', this.handleAutoSpaceBackspace, true);
 		
 		// Reset flags
@@ -307,28 +297,23 @@ export class EditorSuggester extends EditorSuggest<string> {
 		const editor = this.context.editor;
 		const triggerPhrase = this.plugin.settings.triggerPhrase;
 		if (!editor.cm || !triggerPhrase) return;
+		
 		// Clear any existing decorations first
-		this.clearDecorations();
+		safelyClearDecorations(editor.cm);
 		
 		// Only apply new decorations if the suggester is open
 		const triggerStartOffset = editor.posToOffset(this.context.start);
 		const triggerEndOffset = triggerStartOffset + triggerPhrase.length;
 		const effects = [addTriggerDecorationEffect.of({ from: triggerStartOffset, to: triggerEndOffset })];
-		const query = this.context.query;
-		// Maintain a spacer widget at trigger end when query is empty
-		if (query === '') {
-			effects.push(addSpacerWidgetEffect.of({ from: triggerEndOffset, to: triggerEndOffset }));
-		}
 
 		try {
 			if (editor.cm.dom.isConnected) {
 				editor.cm.dispatch({
 					effects: effects
 				});
-				this.decoratedEditorView = editor.cm;
 			}
 		} catch (e) {
-			this.decoratedEditorView = null;
+			// Handle any dispatch errors silently
 		}
 	}
 

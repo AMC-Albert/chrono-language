@@ -23,17 +23,20 @@ export class SuggestionProvider {
 	currentElements: Map<string, HTMLElement> = new Map();
 	// Parent UI references for closing
 	private editorSuggesterRef: EditorSuggester | null = null;
-	private openDailyModalRef: OpenDailyNoteModal | null = null;
-	keyboardHandler: KeyboardHandler;
-	isSuggesterOpen: boolean = false;	private holidaySuggestions: string[] = [];
+	private openDailyModalRef: OpenDailyNoteModal | null = null;	keyboardHandler: KeyboardHandler;
+	private ownKeyboardHandler: boolean; // Track if we own the keyboard handler
+	isSuggesterOpen: boolean = false;
+	private parsedDateCache: Map<string, Date | null> = new Map(); // Cache for parsed dates
+	private formattedTextCache: Map<string, string> = new Map(); // Cache for formatted text
+	private holidaySuggestions: string[] = [];
 	private renderer: SuggestionRenderer;
 	private dailyNotesService: DailyNotesService;
 	
 	// Performance optimization: Cache daily notes to avoid vault scanning on every keystroke
 	private dailyNotesCache: Record<string, TFile> | null = null;
-	private dailyNotesCacheTimestamp: number = 0;
-	private readonly CACHE_DURATION_MS = 5000; // Cache for 5 seconds
-	private cacheUpdatePromise: Promise<Record<string, TFile> | null> | null = null;	constructor(app: App, plugin: QuickDates, dailyNotesService: DailyNotesService) {
+	private dailyNotesCacheTimestamp: number = 0;	private readonly CACHE_DURATION_MS = 5000; // Cache for 5 seconds
+	private cacheUpdatePromise: Promise<Record<string, TFile> | null> | null = null;
+	constructor(app: App, plugin: QuickDates, dailyNotesService: DailyNotesService, keyboardHandler?: KeyboardHandler) {
 		loggerDebug(this, 'Initializing suggestion provider for date parsing and UI rendering');
 		registerLoggerClass(this, 'SuggestionProvider');
 		
@@ -41,8 +44,9 @@ export class SuggestionProvider {
 		this.plugin = plugin;
 		this.dailyNotesService = dailyNotesService;
 		loggerDebug(this, 'Setting up keyboard handler for suggestion interactions');
-		// Initialize keyboard handler without requiring a scope
-		this.keyboardHandler = new KeyboardHandler(undefined, plugin.settings.plainTextByDefault);
+		// Use provided keyboard handler or create a new one
+		this.keyboardHandler = keyboardHandler || new KeyboardHandler(undefined, plugin.settings.plainTextByDefault);
+		this.ownKeyboardHandler = !keyboardHandler; // We own it if we created it
 				loggerDebug(this, 'Initializing suggestion renderer for UI rendering');
 		// Initialize the suggestion renderer
 		this.renderer = new SuggestionRenderer(dailyNotesService);
@@ -164,10 +168,13 @@ export class SuggestionProvider {
 			editor.replaceRange('', context.start, context.end);
 		}
 	}
-		unload() {
+	unload() {
 		this.disableKeyboardListeners();
 		this.currentElements.clear();
-		this.keyboardHandler.unload();
+		// Only unload keyboard handler if we own it (not shared)
+		if (this.ownKeyboardHandler) {
+			this.keyboardHandler.unload();
+		}
 		this.isSuggesterOpen = false;
 		
 		// Clear any pending preview update timeouts
@@ -216,8 +223,7 @@ export class SuggestionProvider {
 
 	/**
 	 * Update settings and force re-render
-	 */
-	updateSettings(settings: { 
+	 */	updateSettings(settings: { 
 		keyBindings?: Record<string, string>; 
 		plainTextByDefault?: boolean;
 		holidayLocale?: string;
@@ -231,12 +237,12 @@ export class SuggestionProvider {
 		if (this.isSuggesterOpen) {
 			this.updateAllPreviews();
 		}
-	}
-	getDateSuggestions(context: { query: string }, initialSuggestionsFromCaller?: string[]): string[] {
+	}getDateSuggestions(context: { query: string }, initialSuggestionsFromCaller?: string[]): string[] {
 		this.isSuggesterOpen = true;
+		this.clearParsedDateCache(); // Clear cache for new suggestions
 		this.enableKeyboardListeners();
 
-		const rawQuery = context.query; 
+		const rawQuery = context.query;
 		const lowerQuery = rawQuery.toLowerCase().trim();
 
 		const baseInitialSuggestions = initialSuggestionsFromCaller || []; 
@@ -316,8 +322,7 @@ export class SuggestionProvider {
 		});
 
 		return finalSuggestions.slice(0, 15); // Limit total suggestions
-	}
-		renderSuggestionContent(item: string, el: HTMLElement, context?: any) {
+	}	renderSuggestionContent(item: string, el: HTMLElement, context?: any) {
 		// Show suggestions; no contextProvider needed
 		this.isSuggesterOpen = true;
 		this.enableKeyboardListeners();
@@ -508,4 +513,33 @@ export class SuggestionProvider {
 	}
 
 	private keyboardListenersEnabled: boolean = false;
+	/**
+	 * Get a cached parsed date or parse and cache it
+	 */
+	getCachedParsedDate(item: string): Date | null {
+		if (!this.parsedDateCache.has(item)) {
+			const parsedDate = DateParser.parseDate(item, this);
+			this.parsedDateCache.set(item, parsedDate);
+		}
+		return this.parsedDateCache.get(item) || null;
+	}
+
+	/**
+	 * Get cached formatted text or format and cache it
+	 */
+	getCachedFormattedText(cacheKey: string, formatFunction: () => string): string {
+		if (!this.formattedTextCache.has(cacheKey)) {
+			const formattedText = formatFunction();
+			this.formattedTextCache.set(cacheKey, formattedText);
+		}
+		return this.formattedTextCache.get(cacheKey) || '';
+	}
+
+	/**
+	 * Clear the parsed date cache (call when suggestion list changes)
+	 */
+	clearParsedDateCache(): void {
+		this.parsedDateCache.clear();
+		this.formattedTextCache.clear();
+	}
 }
