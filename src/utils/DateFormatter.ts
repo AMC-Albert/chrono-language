@@ -17,7 +17,7 @@ export class DateFormatter {
 		item: string, 
 		settings: QuickDatesSettings, 
 		momentDate: moment.Moment,
-		context?: any
+		context?: unknown
 	): boolean {
 		return (
 			settings.timeOnly &&
@@ -37,7 +37,7 @@ export class DateFormatter {
 		settings: QuickDatesSettings, // For formats, timeFormat, timeOnly
 		contentFormat: ContentFormat,
 		dailyNoteSettings: ReturnType<typeof getDailyNoteSettings>, // Explicit type for daily note settings
-		context?: any // Optional context for logging (typically 'this' from calling class)
+		context?: unknown // Optional context for logging (typically 'this' from calling class)
 	): string {
 		const logContext = context || 'DateFormatter';
 		loggerDebug(logContext, `Processing ${itemText} -> ${contentFormat}`);

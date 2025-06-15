@@ -30,7 +30,7 @@ export interface ConfigurationChangeEvent<T = unknown> {
 
 export interface PluginEvent {
 	type: string;
-	data?: any;
+	data?: unknown;
 	source?: string;
 	timestamp: number;
 }
@@ -40,7 +40,7 @@ export interface ErrorContext {
 	component: string;
 	operation: string;
 	userAction?: string;
-	data?: any;
+	data?: unknown;
 	timestamp?: Date;
 }
 

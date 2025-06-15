@@ -4,8 +4,13 @@ import { DateFormatter, loggerDebug, loggerError, registerLoggerClass } from '@/
 import { DailyNotesService } from '@/services';
 import { CLASSES } from '@/constants';
 import { InsertMode, ContentFormat } from '@/types';
-import { TFile, moment, Platform } from 'obsidian';
+import { TFile, moment, Platform, EditorSuggestContext } from 'obsidian';
 import { SuggestionProvider } from './SuggestionProvider';
+
+interface SuggestionContext {
+	context?: EditorSuggestContext | { query: string };
+	query?: string;
+}
 
 /**
  * Handles rendering and preview updates for date suggestions.
@@ -28,16 +33,18 @@ export class SuggestionRenderer {
 		provider: SuggestionProvider,
 		item: string,
 		el: HTMLElement,
-		context?: any	): void {
+		context?: SuggestionContext	): void {
 		// Derive the current query from passed context (highest priority)
-		const query = context?.context?.query ?? context?.query ?? '';
-		// Update provider context for subsequent preview updates		provider.contextProvider = { context: { query }, query };
-		
+		const query = 'query' in (context?.context || {}) ? context?.context?.query ?? context?.query ?? '' : context?.query ?? '';
+		// Update provider context for subsequent preview updates
+		provider.contextProvider = { context: context?.context, query };
+
 		const { insertMode, contentFormat } = provider.keyboardHandler.getEffectiveInsertModeAndFormat();
 		
 		// Optimized rendering: batch DOM operations and use cached values
-		const fragment = document.createDocumentFragment();
-		const container = document.createElement('div');
+		const fragment = createFragment();
+		
+		const container = createDiv();
 		container.className = CLASSES.suggestionContainer;
 		container.setAttribute('data-suggestion', item);
 		
@@ -73,7 +80,7 @@ export class SuggestionRenderer {
 	 */
 	private updateDailyNotesInfoAsync(provider: SuggestionProvider, item: string, parentElement: HTMLElement): void {
 		// Defer this operation to the next event loop to avoid blocking initial render
-		setTimeout(() => {
+		window.setTimeout(() => {
 			provider.getDailyNotes().then(allNotes => {
 				const container = parentElement.querySelector('[data-suggestion]') as HTMLElement;
 				if (!container || !container.isConnected) return;
@@ -93,7 +100,8 @@ export class SuggestionRenderer {
 				}
 			}).catch(() => {
 				// Ignore errors, already rendered without daily notes
-			});		}, 0); // Defer to next event loop
+			});
+		}, 0); // Defer to next event loop
 	}
 
 	/**
@@ -101,7 +109,7 @@ export class SuggestionRenderer {
 	 */
 	private checkSpecificDailyNoteAsync(provider: SuggestionProvider, item: string, parentElement: HTMLElement): void {
 		// Defer to next event loop to avoid blocking initial render
-		setTimeout(() => {
+		window.setTimeout(() => {
 			const container = parentElement.querySelector('[data-suggestion]') as HTMLElement;
 			if (!container || !container.isConnected) return;
 			
@@ -115,9 +123,9 @@ export class SuggestionRenderer {
 			// Check if a file with this name exists in the daily notes folder
 			const dailyNotesFolder = dailyNoteSettings.folder || '';
 			const expectedPath = dailyNotesFolder ? `${dailyNotesFolder}/${expectedFilename}.md` : `${expectedFilename}.md`;
-			
+
 			const existingFile = provider.app.vault.getAbstractFileByPath(expectedPath);
-			if (existingFile && existingFile instanceof provider.app.vault.adapter.constructor.prototype.constructor) {
+			if (existingFile && existingFile instanceof TFile) {
 				// Daily note exists - update styling to indicate this
 				const existingPreviews = container.querySelectorAll('.' + CLASSES.suggestionPreview);
 				existingPreviews.forEach(preview => {
@@ -195,7 +203,7 @@ export class SuggestionRenderer {
 	 * @returns The created HTML span element
 	 */
 	private createHighlightedSuggestionSpan(item: string, query: string): HTMLSpanElement {
-		const suggestionSpan = document.createElement('span');
+		const suggestionSpan = createSpan();
 		suggestionSpan.className = CLASSES.suggestionText;
 		
 		if (query) {
@@ -225,7 +233,7 @@ export class SuggestionRenderer {
 			if (match.index > lastIndex) {
 				el.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
 			}
-			const bold = document.createElement('b');
+			const bold = createEl('b');
 			bold.textContent = match[0];
 			el.appendChild(bold);
 			lastIndex = match.index + match[0].length;
@@ -330,21 +338,19 @@ export class SuggestionRenderer {
 			contentFormat,
 			dailySettings,
 			insertMode // Pass the insert mode
-		);
-
-		// Highlight matching characters in bold
+		);		// Highlight matching characters in bold
 		const context = provider.contextProvider;
 		let query = '';
-		if (context && context.context && context.context.query) {
+		if (context?.context && 'query' in context.context) {
 			query = context.context.query;
-		} else if (context && context.query) {
+		} else if (context?.query) {
 			query = context.query;
 		}
 
 		const trimmedQuery = query.trim();
 
 		// create span and append matches
-		const span = document.createElement('span');
+		const span = createSpan();
 		span.className = suggestionPreviewClass.join(' ');
 		if (trimmedQuery.length > 0) {
 			const escaped = trimmedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -398,15 +404,12 @@ export class SuggestionRenderer {
 				rel: 'noopener nofollow' 
 			}
 		});
-		
-		linkEl.addEventListener('click', async (event) => {
+				linkEl.addEventListener('click', async (event) => {
 			event.preventDefault();
 			event.stopPropagation();
-			if (provider.contextProvider) {
-				const context = provider.contextProvider.context;
-				if (context) {
-					provider.cleanupTriggerPhrase(context);
-				}
+			if (provider.contextProvider?.context && 'editor' in provider.contextProvider.context) {
+				// Only call cleanup if we have a full EditorSuggestContext
+				provider.cleanupTriggerPhrase(provider.contextProvider.context as EditorSuggestContext);
 			}
 			provider['closeSuggester']();
 			const file = await this.dailyNotesService.getOrCreateDailyNote(momentDate, true);

@@ -1,4 +1,4 @@
-import { Editor, MarkdownView, Notice, moment } from 'obsidian';
+import { Editor, MarkdownView, Notice, moment, App } from 'obsidian';
 import { DateParser } from '../suggestion-provider';
 import { DateFormatter, loggerDebug, loggerInfo, loggerWarn, loggerError, registerLoggerClass } from '@/utils';
 import { DailyNotesService } from '@/services';
@@ -46,10 +46,10 @@ function stripFormattingWithMap(line: string): { text: string; map: number[] } {
  * Provides comprehensive date manipulation functionality for Quick Dates plugin
  */
 export class DateCommands {
-	private app: any;
+	private app: App;
 	private settings: QuickDatesSettings;
 	private dailyNotesService: DailyNotesService;
-	constructor(app: any, settings: QuickDatesSettings, dailyNotesService: DailyNotesService) {
+	constructor(app: App, settings: QuickDatesSettings, dailyNotesService: DailyNotesService) {
 		this.app = app;
 		this.settings = settings;
 		this.dailyNotesService = dailyNotesService;

@@ -1,4 +1,4 @@
-import { Plugin, Editor, MarkdownView } from 'obsidian';
+import { Plugin, Editor, MarkdownView, App, PluginManifest } from 'obsidian';
 import { QuickDatesSettings, QuickDatesSettingTab, DEFAULT_SETTINGS } from '@/settings';
 import { EditorSuggester, OpenDailyNoteModal, DateCommands } from '@/features';
 import { triggerDecorationStateField } from '@/features/editor-suggester/decorations';
@@ -12,7 +12,7 @@ export default class QuickDates extends Plugin {
 	dateCommands: DateCommands;
 	dailyNotesService: DailyNotesService;
 
-	constructor(app: any, manifest: any) {
+	constructor(app: App, manifest: PluginManifest) {
 		super(app, manifest);
 		initLogger(this);
 		registerLoggerClass(this, 'QuickDates');

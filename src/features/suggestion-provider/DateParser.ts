@@ -3,17 +3,19 @@ import Holidays from 'date-holidays';
 import { COMMON_STRINGS, DAYS_OF_THE_WEEK, MONTHS_OF_THE_YEAR, TIME_OF_DAY_PHRASES, HOLIDAY_ALIASES } from '@/constants';
 import { loggerDebug, loggerInfo, loggerWarn, loggerError } from '@/utils';
 
+interface HolidayData {
+	name: string;
+	date: string;
+}
+
 /**
  * Enhanced date parsing that adds additional capabilities to chrono
  * - If text starts with a number, prepends "in " to handle relative dates better
  * - If text ends with a number, appends " days" to handle relative dates better
  * - Supports holiday names across different locales
- *
- * NOTE: This parser is used by multiple features (suggestion-provider, open-daily-note, helpers, etc.).
- * If you refactor or move this file, update all relevant imports.
  */
 export class DateParser {
-	private static holidaysInstance: any = null;
+	private static holidaysInstance: Holidays | null = null;
 	private static holidayCache: Map<string, { name: string, dates: Date[] }> = new Map();
 	private static currentYear = new Date().getFullYear();
 	private static currentLocale = 'US';
@@ -247,7 +249,7 @@ export class DateParser {
 	 * Initialize holidays with specific locale
 	 * @param locale Locale code (e.g., 'US', 'GB', 'DE')
 	 */
-	static initHolidays(locale: string = 'US', context?: any): void {
+	static initHolidays(locale: string = 'US', context?: unknown): void {
 		const logContext = context || 'DateParser';
 		loggerDebug(logContext, 'initHolidays', { locale });
 		if (!locale) {
@@ -295,21 +297,23 @@ export class DateParser {
 		
 		loggerInfo('DateParser', `holiday cache refreshed, total entries: ${this.holidayCache.size}`);
 	}
-	
+
 	/**
 	 * Process holidays for multiple years
 	 */
 	private static processHolidaysForYears(years: number[]): void {
+		if (!this.holidaysInstance) return;
+		
 		years.forEach(year => {
-			const holidays = this.holidaysInstance.getHolidays(year);
+			const holidays = this.holidaysInstance!.getHolidays(year);
 			holidays.forEach(this.addHolidayToCache.bind(this));
 		});
 	}
-	
+
 	/**
 	 * Add a holiday to the cache
 	 */
-	private static addHolidayToCache(holiday: any): void {
+	private static addHolidayToCache(holiday: HolidayData): void {
 		const name = holiday.name;
 		const lowerName = name.toLowerCase();
 		const date = new Date(holiday.date);
@@ -347,7 +351,8 @@ export class DateParser {
 	/**
 	 * Set or update the locale for holiday detection
 	 * @param locale Locale code (e.g., 'US', 'GB', 'DE')
-	 */	static setLocale(locale: string, context?: any): void {
+	 */
+	static setLocale(locale: string, context?: unknown): void {
 		if (!locale) {
 			this.holidaysInstance = null;
 			this.holidayCache.clear();
@@ -435,7 +440,7 @@ export class DateParser {
 	 * Determines if the input string contains a time component or time-related phrase.
 	 * This checks for explicit times (e.g., 3pm, 14:00), time-of-day phrases, or 'now'.
 	 */
-	static inputHasTimeComponent(text: string, context?: any): boolean {
+	static inputHasTimeComponent(text: string, context?: unknown): boolean {
 		if (!text) return false;
 		const lowerTrimmed = text.trim().toLowerCase();
 
@@ -490,7 +495,7 @@ export class DateParser {
 	/**
 	 * Parse a date string with enhanced capabilities
 	 */
-	static parseDate(text: string, context?: any): Date | null {
+	static parseDate(text: string, context?: unknown): Date | null {
 		const logContext = typeof context === 'string' ? context : 'DateParser';
 		loggerDebug(logContext, `Parsing text: ${text}`);
 
@@ -515,7 +520,7 @@ export class DateParser {
 	 * @param input User's current input text (case-sensitive for generation).
 	 * @returns Array of pattern-generated suggestions.
 	 */
-	static getPatternSuggestions(input: string, context?: any): string[] {
+	static getPatternSuggestions(input: string, context?: unknown): string[] {
 		const logContext = context || 'DateParser';
 		loggerDebug(logContext, 'getPatternSuggestions', { input });
 

@@ -1,4 +1,4 @@
-import { PluginSettingTab, Setting } from 'obsidian';
+import { PluginSettingTab, Setting, App } from 'obsidian';
 import { getDailyNoteSettings } from 'obsidian-daily-notes-interface';
 import { MultipleTextComponent } from 'obsidian-dev-utils/obsidian/Components/SettingComponents/MultipleTextComponent';
 import { loggerDebug, loggerInfo, loggerWarn, loggerError, registerLoggerClass } from '@/utils';
@@ -44,7 +44,7 @@ export class QuickDatesSettingTab extends PluginSettingTab {
 	plugin: QuickDates;
 	hideFoldersSetting: HTMLElement;
 
-	constructor(app: any, plugin: QuickDates) {
+	constructor(app: App, plugin: QuickDates) {
 		super(app, plugin);
 		this.plugin = plugin;
 		registerLoggerClass(this, 'QuickDatesSettingTab');
@@ -57,12 +57,12 @@ export class QuickDatesSettingTab extends PluginSettingTab {
 
 		loggerDebug(this, 'Clearing existing settings container content');
 		containerEl.empty();
-		
+
 		loggerDebug(this, 'Creating primary date format setting control');
 		new Setting(containerEl)
 			.setName("Primary date format")
 			.setDesc((() => {
-				const fragment = document.createDocumentFragment();
+				const fragment = createFragment();
 				fragment.createSpan({
 					text: "Specify your primary human-readable date format. Refer to "
 				});
@@ -94,7 +94,7 @@ export class QuickDatesSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Alternate date format")
 			.setDesc((() => {
-				const fragment = document.createDocumentFragment();
+				const fragment = createFragment();
 				fragment.createSpan({
 					text: "Specify your alternate human-readable date format. It will be used for link aliases and plain text dates (when the "
 				});
@@ -116,7 +116,7 @@ export class QuickDatesSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 		.setName("Holiday locale (IANA country code)")
 		.setDesc((() => {
-			const fragment = document.createDocumentFragment();
+			const fragment = createFragment();
 			fragment.createSpan({
 				text: "Set your country/region code to show region-specific holidays (IANA format, e.g. 'US', 'GB', 'DE'). Set to empty to disable holiday suggestions."
 			});
@@ -213,7 +213,7 @@ export class QuickDatesSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Insert plain text by default")
 			.setDesc((() => {
-				const fragment = document.createDocumentFragment();
+				const fragment = createFragment();
 				fragment.createSpan({ text: "When enabled, insert suggestions as plain text by default, and use the " });
 				const boldCtrl = fragment.createEl("b");
 				boldCtrl.textContent = "ctrl";
@@ -234,7 +234,7 @@ export class QuickDatesSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Swap 'Open note' keybinds")
 			.setDesc((() => {
-				const fragment = document.createDocumentFragment();
+				const fragment = createFragment();
 				fragment.createSpan({ text: "Swap " });
 				const boldShiftSpace = fragment.createEl("b");
 				boldShiftSpace.textContent = "shift+space";

@@ -1,4 +1,4 @@
-import { Scope } from 'obsidian';
+import { Scope, KeymapEventHandler } from 'obsidian';
 import { 
 	InsertMode,
 	ContentFormat,
@@ -31,9 +31,9 @@ export class KeyboardHandler {
 	private keyStateChangeListeners: KeyStateChangeCallback[] = [];
 	private spaceKeyHandlers: SpaceKeyEventHandler[] = [];
 	private tabKeyHandlers: ((event: KeyboardEvent) => boolean)[] = [];
-	
+
 	// Store references to registered scope handlers for cleanup
-	private registeredHandlers: any[] = [];
+	private registeredHandlers: KeymapEventHandler[] = [];
 	
 	// For debounced logging - only log when state changes
 	private lastLoggedState: { insertMode: InsertMode; contentFormat: ContentFormat } | null = null;constructor(scope?: Scope, plainTextByDefault: boolean = false) {

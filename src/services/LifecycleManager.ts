@@ -6,8 +6,8 @@ import { ResourceManager } from './ResourceManager';
 /**
  * Type guard to check if a component implements the Disposable interface
  */
-function isDisposable(obj: any): obj is Disposable {
-	return obj && typeof obj.dispose === 'function';
+function isDisposable(obj: unknown): obj is Disposable {
+	return obj != null && typeof obj === 'object' && 'dispose' in obj && typeof (obj as any).dispose === 'function';
 }
 
 /**
@@ -197,20 +197,20 @@ export class LifecycleManager implements ServiceInterface {
 		}
 
 		return new Promise((resolve, reject) => {
-			const timeoutId = setTimeout(() => {
+			const timeoutId = window.setTimeout(() => {
 				reject(new Error(`Timeout waiting for component ${name} to be ready`));
 			}, timeout);
 
 			const checkState = () => {
 				const currentState = this.getComponentState(name);
 				if (currentState === LifecycleState.READY) {
-					clearTimeout(timeoutId);
+					window.clearTimeout(timeoutId);
 					resolve();
 				} else if (currentState === LifecycleState.ERROR) {
-					clearTimeout(timeoutId);
+					window.clearTimeout(timeoutId);
 					reject(new Error(`Component ${name} entered error state`));
 				} else {
-					setTimeout(checkState, 100);
+					window.setTimeout(checkState, 100);
 				}
 			};
 

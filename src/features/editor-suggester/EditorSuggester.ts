@@ -1,4 +1,4 @@
-import { Editor, EditorPosition, EditorSuggest, EditorSuggestContext } from 'obsidian';
+import { Editor, EditorPosition, EditorSuggest, EditorSuggestContext, KeymapEventHandler } from 'obsidian';
 import QuickDates from '../../main';
 import { SuggestionProvider } from '../suggestion-provider';
 import { KeyboardHandler, loggerDebug, loggerInfo, loggerWarn, loggerError, registerLoggerClass } from '@/utils';
@@ -24,10 +24,9 @@ export class EditorSuggester extends EditorSuggest<string> {
 	private shouldInsertSpaceOnOpen: boolean = false; // Flag to insert space when suggester opens
 	private suggestionChosen = false;
 	private lastContext: EditorSuggestContext | null = null;
-	private cleanupEnd: EditorPosition | null = null;
-	// Handler references for daily note keybinds
-	private openDailySameTabHandler: any = null;
-	private openDailyNewTabHandler: any = null;
+	private cleanupEnd: EditorPosition | null = null;	// Handler references for daily note keybinds
+	private openDailySameTabHandler: KeymapEventHandler | null = null;
+	private openDailyNewTabHandler: KeymapEventHandler | null = null;
 
 	constructor(plugin: QuickDates, dailyNotesService: DailyNotesService) {
 		super(plugin.app);
@@ -174,7 +173,7 @@ export class EditorSuggester extends EditorSuggest<string> {
 		super.open();
 		this.suggester?.setEditorSuggesterRef(this);
 		// Add a unique class to the newly opened suggestion container
-		setTimeout(() => {
+		window.setTimeout(() => {
 			const containers = document.body.querySelectorAll('.suggestion-container');
 			const last = containers[containers.length - 1];
 			if (last) last.classList.add(CLASSES.suggester);
@@ -385,9 +384,9 @@ export class EditorSuggester extends EditorSuggest<string> {
 	}
 
 	renderSuggestion(item: string, el: HTMLElement) {
-		// Forward current query context for highlighting
+		// Forward current query context for highlighting, including full context for cleanup
 		const query = this.context?.query ?? '';
-		this.suggester?.renderSuggestionContent(item, el, { context: { query } });
+		this.suggester?.renderSuggestionContent(item, el, { context: this.context ?? undefined, query });
 	}
 
 	selectSuggestion(item: string, event: KeyboardEvent | MouseEvent): void {

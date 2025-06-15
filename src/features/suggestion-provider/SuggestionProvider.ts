@@ -1,5 +1,5 @@
 import QuickDates from '../../main';
-import { moment, Notice, TFile, MarkdownView, App } from 'obsidian';
+import { moment, Notice, TFile, MarkdownView, App, EditorSuggestContext } from 'obsidian';
 import { DateFormatter, KeyboardHandler } from '@/utils';
 import { getDailyNoteSettings, getDailyNote, DEFAULT_DAILY_NOTE_FORMAT } from 'obsidian-daily-notes-interface';
 import { DailyNotesService } from '@/services';
@@ -17,9 +17,8 @@ import { OpenDailyNoteModal } from '../open-daily-note';
  */
 export class SuggestionProvider {
 	app: App;
-	plugin: QuickDates;
-	// Context for rendering suggestions
-	public contextProvider: { context?: { query: string }; query?: string } = {};
+	plugin: QuickDates;	// Context for rendering suggestions
+	public contextProvider: { context?: EditorSuggestContext | { query: string }; query?: string } = {};
 	currentElements: Map<string, HTMLElement> = new Map();
 	// Parent UI references for closing
 	private editorSuggesterRef: EditorSuggester | null = null;
@@ -59,7 +58,7 @@ export class SuggestionProvider {
 		this.preComputeInitialSuggestions();
 		
 		// Force a warmup to ensure cache is populated
-		setTimeout(() => {
+		window.setTimeout(() => {
 			this.warmCache();
 			// Also warm up the daily notes cache in the background
 			this.updateCacheInBackground();
@@ -125,19 +124,19 @@ export class SuggestionProvider {
 		if (this.isSuggesterOpen && this.isInEditMode()) {
 			// Debounce frequent updates to reduce performance impact
 			if (this.updatePreviewsTimeout) {
-				clearTimeout(this.updatePreviewsTimeout);
+				window.clearTimeout(this.updatePreviewsTimeout);
 			}
-			this.updatePreviewsTimeout = setTimeout(() => {
+			this.updatePreviewsTimeout = window.setTimeout(() => {
 				this.updateAllPreviews();
 				this.updatePreviewsTimeout = null;
 			}, 50); // 50ms debounce
 		}
 	};
 	
-	private updatePreviewsTimeout: NodeJS.Timeout | null = null;
+	private updatePreviewsTimeout: number | null = null;
 
 	// Handle daily note opening actions
-	public async handleDailyNoteAction(e: KeyboardEvent, newTab: boolean, context?: any) {
+	public async handleDailyNoteAction(e: KeyboardEvent, newTab: boolean, context?: EditorSuggestContext) {
 		e.preventDefault();
 		e.stopImmediatePropagation();
 
@@ -167,7 +166,7 @@ export class SuggestionProvider {
 		this.closeSuggester();
 	}
 	
-	public cleanupTriggerPhrase(context?: any): void { // context is EditorSuggestContext from EditorSuggester
+	public cleanupTriggerPhrase(context?: EditorSuggestContext): void { // context is EditorSuggestContext from EditorSuggester
 		if (context?.editor && context.start && context.end) {
 			const editor = context.editor;
 			// Replace the original trigger phrase and query using context.start and context.end
@@ -187,7 +186,7 @@ export class SuggestionProvider {
 		
 		// Clear any pending preview update timeouts
 		if (this.updatePreviewsTimeout) {
-			clearTimeout(this.updatePreviewsTimeout);
+			window.clearTimeout(this.updatePreviewsTimeout);
 			this.updatePreviewsTimeout = null;
 		}
 		
@@ -353,7 +352,7 @@ export class SuggestionProvider {
 		momentDate: moment.Moment,
 		settings: QuickDatesSettings,
 		contentFormat: ContentFormat,
-		dailySettings: any,
+		dailySettings: ReturnType<typeof getDailyNoteSettings>,
 		insertMode?: InsertMode // Add insertMode parameter
 	): string {
 		// Get current insert mode if not provided
@@ -391,7 +390,7 @@ export class SuggestionProvider {
 		return formatted;
 	}
 
-	renderSuggestionContent(item: string, el: HTMLElement, context?: any) {
+	renderSuggestionContent(item: string, el: HTMLElement, context?: { context?: EditorSuggestContext | { query: string }; query?: string }) {
 		// Show suggestions; no contextProvider needed
 		this.isSuggesterOpen = true;
 		this.enableKeyboardListeners();
@@ -565,7 +564,7 @@ export class SuggestionProvider {
 	 */
 	private updateCacheInBackground(): void {
 		// Defer cache update to avoid blocking current operations
-		setTimeout(() => {
+		window.setTimeout(() => {
 			this.getCachedDailyNotes().catch(() => {
 				// Ignore errors, cache will be updated on next request
 			});
@@ -623,18 +622,10 @@ export class SuggestionProvider {
 	 * Check if we're currently in edit mode (not reading mode)
 	 */
 	private isInEditMode(): boolean {
-		const activeLeaf = this.app.workspace.activeLeaf;
-		if (!activeLeaf?.view?.getViewType()) return false;
-		
-		// Check if it's a markdown view and in edit mode
-		if (activeLeaf.view.getViewType() === 'markdown') {
-			const markdownView = activeLeaf.view;
-			// Type guard to check if it's a MarkdownView
-			if (markdownView && 'getMode' in markdownView) {
-				return (markdownView as MarkdownView).getMode() === 'source';
-			}
+		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+		if (view) {
+			return view.getMode() === 'source';
 		}
-		
 		return false;
 	}
 
@@ -708,7 +699,7 @@ export class SuggestionProvider {
 		contentFormat: ContentFormat,
 		momentDate: moment.Moment,
 		settings: QuickDatesSettings,
-		dailySettings: any
+		dailySettings: ReturnType<typeof getDailyNoteSettings>
 	): string {
 		const cacheKey = `${insertMode}-${contentFormat}`;
 		

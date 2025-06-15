@@ -1,4 +1,4 @@
-import { Notice, FuzzySuggestModal, FuzzyMatch, moment } from "obsidian";
+import { Notice, FuzzySuggestModal, FuzzyMatch, moment, App } from "obsidian";
 import QuickDates from "../../main";
 import { SuggestionProvider, DateParser } from "../suggestion-provider";
 import { KeyboardHandler, loggerDebug, loggerInfo, loggerWarn, loggerError, registerLoggerClass } from "@/utils";
@@ -14,7 +14,7 @@ export class OpenDailyNoteModal extends FuzzySuggestModal<string> {
 	private dailyNotesService: DailyNotesService;
 	private keyboardHandler: KeyboardHandler;
 	private inputElement: HTMLInputElement | null = null;
-	constructor(app: any, plugin: QuickDates, dailyNotesService: DailyNotesService) {
+	constructor(app: App, plugin: QuickDates, dailyNotesService: DailyNotesService) {
 		super(app);
 		loggerDebug(this, 'Initializing daily note modal for quick date-based note access');
 		registerLoggerClass(this, 'OpenDailyNoteModal');

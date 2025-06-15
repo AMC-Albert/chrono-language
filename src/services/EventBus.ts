@@ -77,7 +77,7 @@ export class EventBus implements ServiceInterface {
 	/**
 	 * Emit an event to all subscribers
 	 */
-	emit(eventType: string, data?: any): void {
+	emit(eventType: string, data?: unknown): void {
 		const event: PluginEvent = {
 			type: eventType,
 			data,
