@@ -565,10 +565,10 @@ export class DateParser {
 						suggestions: generatedItems
 					});
 				}
-				
+
 				generatedItems.forEach(s => suggestions.add(s));
 			} catch (error) {
-				error(logContext, 'Error in suggestion generator', {
+				loggerError(logContext, 'Error in suggestion generator', {
 					priority: generator.priority,
 					error,
 					generator: generator.pattern?.toString?.() || 'function'

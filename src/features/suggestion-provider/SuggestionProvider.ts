@@ -1,5 +1,5 @@
 import QuickDates from '../../main';
-import { moment, Notice, TFile, MarkdownView, App, EditorSuggestContext } from 'obsidian';
+import { moment, Notice, TFile, TAbstractFile, MarkdownView, App, EditorSuggestContext } from 'obsidian';
 import { DateFormatter, KeyboardHandler } from '@/utils';
 import { getDailyNoteSettings, getDailyNote, DEFAULT_DAILY_NOTE_FORMAT } from 'obsidian-daily-notes-interface';
 import { DailyNotesService } from '@/services';
@@ -495,17 +495,17 @@ export class SuggestionProvider {
 	private registerVaultEvents(): void {
 		if (this.app?.vault) {
 			// Only invalidate cache for daily notes-related file changes
-			this.app.vault.on('create', this.onFileChange.bind(this));
-			this.app.vault.on('delete', this.onFileChange.bind(this));
-			this.app.vault.on('rename', this.onFileRename.bind(this));
+			this.app.vault.on('create', (file: TAbstractFile) => this.onFileChange(file));
+			this.app.vault.on('delete', (file: TAbstractFile) => this.onFileChange(file));
+			this.app.vault.on('rename', (file: TAbstractFile, oldPath: string) => this.onFileRename(file, oldPath));
 		}
 	}
 	
 	/**
 	 * Handle file creation and deletion events
 	 */
-	private onFileChange(file: TFile): void {
-		if (this.isDailyNote(file)) {
+	private onFileChange(file: TAbstractFile): void {
+		if (file instanceof TFile && this.isDailyNote(file)) {
 			this.invalidateCache();
 			// Optionally trigger a background cache update
 			this.updateCacheInBackground();
@@ -515,8 +515,8 @@ export class SuggestionProvider {
 	/**
 	 * Handle file rename events
 	 */
-	private onFileRename(file: TFile, oldPath: string): void {
-		if (this.isDailyNote(file) || this.isDailyNotePath(oldPath)) {
+	private onFileRename(file: TAbstractFile, oldPath: string): void {
+		if (file instanceof TFile && (this.isDailyNote(file) || this.isDailyNotePath(oldPath))) {
 			this.invalidateCache();
 			this.updateCacheInBackground();
 		}

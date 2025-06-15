@@ -13,7 +13,7 @@ import { addTriggerDecorationEffect, clearTriggerDecorationsEffect, safelyClearD
 export class EditorSuggester extends EditorSuggest<string> {
 	plugin: QuickDates;
 	private suggester: SuggestionProvider | null = null;
-	private keyboardHandler: KeyboardHandler;
+	private keyboardHandler!: KeyboardHandler;
 	private dailyNotesService: DailyNotesService;
 
 	// For tracking state after a suggestion is selected to prevent immediate re-trigger on an earlier phrase

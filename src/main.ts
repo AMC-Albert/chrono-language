@@ -1,4 +1,4 @@
-import { Plugin, Editor, MarkdownView, App, PluginManifest } from 'obsidian';
+import { Plugin, Editor, MarkdownView, App, PluginManifest, MarkdownFileInfo } from 'obsidian';
 import { QuickDatesSettings, QuickDatesSettingTab, DEFAULT_SETTINGS } from '@/settings';
 import { EditorSuggester, OpenDailyNoteModal, DateCommands } from '@/features';
 import { triggerDecorationStateField } from '@/features/editor-suggester/decorations';
@@ -7,9 +7,9 @@ import { DailyNotesService } from '@/services';
 
 export default class QuickDates extends Plugin {
 	name = 'QuickDates';
-	settings: QuickDatesSettings;
-	editorSuggester: EditorSuggester;
-	dateCommands: DateCommands;
+	settings!: QuickDatesSettings;
+	editorSuggester!: EditorSuggester;
+	dateCommands!: DateCommands;
 	dailyNotesService: DailyNotesService;
 
 	constructor(app: App, manifest: PluginManifest) {
@@ -77,9 +77,11 @@ export default class QuickDates extends Plugin {
 		this.addCommand({
 			id: 'parse-date-as-link',
 			name: 'Convert selected text to date link',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
+			editorCallback: (editor: Editor, ctx: MarkdownView | MarkdownFileInfo) => {
 				loggerDebug(this, 'User executed convert-to-link command');
-				return this.dateCommands.parseDateAsLink(editor, view);
+				if (ctx instanceof MarkdownView) {
+					return this.dateCommands.parseDateAsLink(editor, ctx);
+				}
 			}
 		});
 
@@ -87,9 +89,11 @@ export default class QuickDates extends Plugin {
 		this.addCommand({
 			id: 'parse-date-as-text',
 			name: 'Convert selected text to plain-text date',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
+			editorCallback: (editor: Editor, ctx: MarkdownView | MarkdownFileInfo) => {
 				loggerDebug(this, 'User executed convert-to-text command');
-				return this.dateCommands.parseDateAsText(editor, view);
+				if (ctx instanceof MarkdownView) {
+					return this.dateCommands.parseDateAsText(editor, ctx);
+				}
 			}
 		});
 
@@ -97,9 +101,11 @@ export default class QuickDates extends Plugin {
 		this.addCommand({
 			id: 'parse-all-dates-as-links',
 			name: 'Convert all dates in note to date links',
-			editorCallback: async (editor: Editor, view: MarkdownView) => {
+			editorCallback: async (editor: Editor, ctx: MarkdownView | MarkdownFileInfo) => {
 				loggerDebug(this, 'User executed convert-all-to-links command');
-				await this.dateCommands.parseAllDatesAsLinks(editor, view);
+				if (ctx instanceof MarkdownView) {
+					await this.dateCommands.parseAllDatesAsLinks(editor, ctx);
+				}
 			}
 		});
 
@@ -107,9 +113,11 @@ export default class QuickDates extends Plugin {
 		this.addCommand({
 			id: 'parse-all-dates-as-text',
 			name: 'Convert all dates in note to plain-text dates',
-			editorCallback: async (editor: Editor, view: MarkdownView) => {
+			editorCallback: async (editor: Editor, ctx: MarkdownView | MarkdownFileInfo) => {
 				loggerDebug(this, 'User executed convert-all-to-text command');
-				await this.dateCommands.parseAllDatesAsText(editor, view);
+				if (ctx instanceof MarkdownView) {
+					await this.dateCommands.parseAllDatesAsText(editor, ctx);
+				}
 			}
 		});
 
@@ -117,9 +125,11 @@ export default class QuickDates extends Plugin {
 		this.addCommand({
 			id: 'parse-date-as-link-keep-alias',
 			name: 'Convert selected text to date link (keep original text as alias)',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
+			editorCallback: (editor: Editor, ctx: MarkdownView | MarkdownFileInfo) => {
 				loggerDebug(this, 'User executed convert-to-link-keep-alias command');
-				return this.dateCommands.parseDateAsLinkKeepOriginalTextAlias(editor, view);
+				if (ctx instanceof MarkdownView) {
+					return this.dateCommands.parseDateAsLinkKeepOriginalTextAlias(editor, ctx);
+				}
 			}
 		});
 
@@ -127,11 +137,14 @@ export default class QuickDates extends Plugin {
 		this.addCommand({
 			id: 'parse-all-dates-as-links-keep-alias',
 			name: 'Convert all dates in note to date links (keep original text as alias)',
-			editorCallback: async (editor: Editor, view: MarkdownView) => {
+			editorCallback: async (editor: Editor, ctx: MarkdownView | MarkdownFileInfo) => {
 				loggerDebug(this, 'User executed convert-all-to-links-keep-alias command');
-				await this.dateCommands.parseAllDatesAsLinksKeepOriginalTextAlias(editor, view);
+				if (ctx instanceof MarkdownView) {
+					await this.dateCommands.parseAllDatesAsLinksKeepOriginalTextAlias(editor, ctx);
+				}
 			}
-		});		loggerDebug(this, 'Registering daily note command: open daily note modal');
+		});
+		loggerDebug(this, 'Registering daily note command: open daily note modal');
 		this.addCommand({
 			id: 'open-daily-note',
 			name: 'Open daily note',

@@ -42,7 +42,7 @@ export const DEFAULT_SETTINGS: QuickDatesSettings = {
 
 export class QuickDatesSettingTab extends PluginSettingTab {
 	plugin: QuickDates;
-	hideFoldersSetting: HTMLElement;
+	hideFoldersSetting!: HTMLElement;
 
 	constructor(app: App, plugin: QuickDates) {
 		super(app, plugin);
