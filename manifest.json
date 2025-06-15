@@ -1,7 +1,7 @@
 {
 	"id": "quick-dates",
 	"name": "Quick Dates",
-	"version": "1.1.5",
+	"version": "1.1.6",
 	"minAppVersion": "1.8.10",
 	"description": "Link to and jump between daily notes fast, using a responsive suggestion system. Convert selected plain-text dates to links, and even process entire notes at once.",
 	"author": "Albert O'Shea",
