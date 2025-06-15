@@ -28,6 +28,7 @@ export class DailyNotesService implements ServiceInterface {
 	async dispose(): Promise<void> {
 		loggerDebug(this, 'Daily notes service disposed');
 	}
+
 	/**
 	 * Gets formatted text for a date suggestion based on content format
 	 * This is a simplified version for daily notes service use
@@ -61,7 +62,23 @@ export class DailyNotesService implements ServiceInterface {
 				break;
 		}
 		
-		return momentDate.format(baseFormatString);
+		let formattedDate = momentDate.format(baseFormatString);
+		
+		// Add timestamp logic (same as DateFormatter.getFormattedDateText)
+		const isItemTimeRelevant = DateParser.inputHasTimeComponent(itemText);
+		if (settings.timeFormat && settings.timeFormat.trim() !== "" && isItemTimeRelevant) {
+			const timeString = momentDate.format(settings.timeFormat);
+			const separator = settings.timeSeparator || " ";
+			formattedDate = formattedDate + separator + timeString;
+			
+			loggerDebug(this, 'getFormattedDateText', 'Appended time to alias', {
+				formattedDate: momentDate.format(baseFormatString),
+				timeString,
+				result: formattedDate
+			});
+		}
+		
+		return formattedDate;
 	}
 
 	/**
