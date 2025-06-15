@@ -70,8 +70,8 @@ export class DailyNotesService implements ServiceInterface {
 			const timeString = momentDate.format(settings.timeFormat);
 			const separator = settings.timeSeparator || " ";
 			formattedDate = formattedDate + separator + timeString;
-			
-			loggerDebug(this, 'getFormattedDateText', 'Appended time to alias', {
+
+			loggerDebug(this, 'Appended time to alias', {
 				formattedDate: momentDate.format(baseFormatString),
 				timeString,
 				result: formattedDate
@@ -160,7 +160,7 @@ export class DailyNotesService implements ServiceInterface {
 		useAlternateFormat = false,
 		forceNoAlias = false
 	): string {    
-		loggerDebug(this, 'CreateDailyNoteLink', {
+		loggerDebug(this, {
 			dateText,
 			forceTextAsAlias,
 			useAlternateFormat,
@@ -173,7 +173,7 @@ export class DailyNotesService implements ServiceInterface {
 			const parsedDate = DateParser.parseDate(dateText);
 			// If parsing failed, default to today
 			if (!parsedDate) {
-				loggerWarn(this, 'CreateDailyNoteLink', 'Failed to parse date, using today', { dateText });
+				loggerWarn(this, 'Failed to parse date, using today', { dateText });
 				momentDate = moment();
 			} else {
 				momentDate = moment(parsedDate);
@@ -195,7 +195,7 @@ export class DailyNotesService implements ServiceInterface {
 			momentDate // Pass the parsed date object
 		);
 		
-		loggerDebug(this, 'createDailyNoteLink', 'Creating daily note link', {
+		loggerDebug(this, 'Creating daily note link', {
 			targetPath,
 			alias,
 			parsedDate: momentDate.toISOString()
@@ -211,7 +211,7 @@ export class DailyNotesService implements ServiceInterface {
 			isEmbed: false
 		});
 
-		loggerInfo(this, 'createDailyNoteLink', 'Created daily note link', { dateText, link });
+		loggerInfo(this, 'Created daily note link', { dateText, link });
 		return link;
 	}
 
@@ -250,7 +250,7 @@ export class DailyNotesService implements ServiceInterface {
 		shouldOpen = false,
 		silent = false
 	): Promise<TFile | null> {
-		loggerDebug(this, 'getOrCreateDailyNote', {
+		loggerDebug(this, 'Getting daily note', {
 			date: momentDate.toISOString(),
 			shouldOpen,
 			silent
@@ -261,7 +261,7 @@ export class DailyNotesService implements ServiceInterface {
 		// Check if the daily note exists
 		const allNotes = await this.getAllDailyNotesSafe(true, silent);
 		if (!allNotes) {
-			loggerWarn(this, 'getOrCreateDailyNote', 'failed to get daily notes', {});
+			loggerWarn(this, 'Failed to get daily notes', {});
 			return null;
 		}
 		
@@ -269,25 +269,25 @@ export class DailyNotesService implements ServiceInterface {
 		
 		// Create the note if it doesn't exist
 		if (!dailyNote) {
-			loggerInfo(this, 'getOrCreateDailyNote', 'daily note does not exist, creating', {
+			loggerInfo(this, 'Daily note does not exist, creating', {
 				date: momentDate.toISOString()
 			});
 			
 			dailyNote = await createDailyNote(momentDate);
 			if (!dailyNote) {
-				loggerError(this, 'getOrCreateDailyNote', 'failed to create daily note', {
+				loggerError(this, 'Failed to create daily note', {
 					date: momentDate.toISOString()
 				});
 				if (!silent) new Notice(ERRORS.FAILED_CREATE_NOTE);
 				return null;
 			}
 
-			loggerInfo(this, 'getOrCreateDailyNote', 'created daily note', {
+			loggerInfo(this, 'created daily note', {
 				date: momentDate.toISOString(),
 				path: dailyNote.path 
 			});
 		} else {
-			loggerDebug(this, 'getOrCreateDailyNote', 'daily note already exists', { 
+			loggerDebug(this, 'Daily note already exists', {
 				date: momentDate.toISOString(),
 				path: dailyNote.path 
 			});
@@ -296,14 +296,14 @@ export class DailyNotesService implements ServiceInterface {
 		// Get TFile using FileSystem utility
 		const obsidianFile = FileSystem.getFileOrNull(this.app, dailyNote.path);
 		if (!obsidianFile) {
-			loggerError(this, 'getOrCreateDailyNote', 'failed to find created note file', { path: dailyNote.path });
+			loggerError(this, 'Failed to find created note file', { path: dailyNote.path });
 			if (!silent) new Notice(ERRORS.FAILED_FIND_NOTE);
 			return null;
 		}
 		
 		// Open the note if requested
 		if (shouldOpen) {
-			loggerDebug(this, 'getOrCreateDailyNote', 'opening daily note', { path: obsidianFile.path });
+			loggerDebug(this, 'Opening daily note', { path: obsidianFile.path });
 			await this.app.workspace.getLeaf().openFile(obsidianFile);
 		}
 		
